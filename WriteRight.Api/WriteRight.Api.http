@@ -1,0 +1,6 @@
+@WriteRight.Api_HostAddress = http://localhost:5056
+
+GET {{WriteRight.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

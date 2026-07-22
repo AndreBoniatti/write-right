@@ -1,0 +1,217 @@
+@page "/"
+@inject WriteRightApiClient Api
+
+<PageTitle>WriteRight — Praticar</PageTitle>
+
+<h1 class="mb-4">✍️ Praticar escrita</h1>
+
+@if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@if (step == Step.Setup)
+{
+    <div class="card p-3" style="max-width: 640px;">
+        <div class="row g-3">
+            <div class="col-6">
+                <label class="form-label">Traduzir de</label>
+                <select class="form-select" @bind="source">
+                    @foreach (var l in Enum.GetValues<Language>())
+                    {
+                        <option value="@l">@LangName(l)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="form-label">para</label>
+                <select class="form-select" @bind="target">
+                    @foreach (var l in Enum.GetValues<Language>())
+                    {
+                        <option value="@l">@LangName(l)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="form-label">Nº de palavras</label>
+                <input type="number" class="form-control" @bind="wordCount" min="20" max="200" />
+            </div>
+            <div class="col-6">
+                <label class="form-label">Nível (CEFR)</label>
+                <select class="form-select" @bind="level">
+                    @foreach (var lv in Enum.GetValues<CefrLevel>())
+                    {
+                        <option value="@lv">@lv</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12">
+                <label class="form-label">Tema (opcional)</label>
+                <input class="form-control" @bind="theme" placeholder="ex.: viagem, trabalho, comida…" />
+            </div>
+            <div class="col-12">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="focus" @bind="focusOnWeaknesses" />
+                    <label class="form-check-label" for="focus">
+                        Focar nas minhas fraquezas (usa o perfil pra mirar o exercício)
+                    </label>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-primary mt-3" @onclick="Generate" disabled="@loading">
+            @(loading ? "Gerando…" : "Gerar exercício")
+        </button>
+    </div>
+}
+else if (step == Step.Translate && exercise is not null)
+{
+    <div class="card p-3 mb-3">
+        <h5 class="text-muted">Traduza este texto (@LangName(exercise.SourceLanguage) → @LangName(exercise.TargetLanguage))</h5>
+        <p class="lead mb-0">@exercise.SourceText</p>
+    </div>
+
+    <textarea class="form-control mb-3" rows="6" @bind="translation" @bind:event="oninput"
+              placeholder="Escreva sua tradução aqui…"></textarea>
+
+    <button class="btn btn-primary" @onclick="Correct"
+            disabled="@(loading || string.IsNullOrWhiteSpace(translation))">
+        @(loading ? "Corrigindo…" : "Corrigir")
+    </button>
+    <button class="btn btn-outline-secondary ms-2" @onclick="Reset" disabled="@loading">Cancelar</button>
+}
+else if (step == Step.Result && correction is not null)
+{
+    <div class="card p-3 mb-3 border-success">
+        <h5>✅ Texto corrigido</h5>
+        <p class="lead mb-0">@correction.CorrectedText</p>
+    </div>
+
+    <h5 class="mb-3">@correction.Errors.Count erro(s) encontrado(s)</h5>
+    @foreach (var e in correction.Errors)
+    {
+        <div class="card p-2 mb-2" style="max-width: 720px;">
+            <div>
+                <span class="badge @SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                <span class="badge bg-secondary">@ErrorCatalog.Info(e.Category).LabelPt</span>
+            </div>
+            <div class="mt-1">
+                <s class="text-danger">@e.Original</s> → <strong class="text-success">@e.Correction</strong>
+            </div>
+            <div class="text-muted small mt-1">@e.Explanation</div>
+        </div>
+    }
+
+    <div class="alert alert-info mt-3" style="max-width: 720px;">@correction.OverallComment</div>
+    <button class="btn btn-primary" @onclick="Reset">Novo exercício</button>
+}
+
+@code {
+    private enum Step { Setup, Translate, Result }
+    private Step step = Step.Setup;
+
+    // Formulário
+    private Language source = Language.Portuguese;
+    private Language target = Language.English;
+    private int wordCount = 60;
+    private CefrLevel level = CefrLevel.B1;
+    private string? theme;
+    private bool focusOnWeaknesses = true;
+
+    // Estado do exercício
+    private GeneratedExercise? exercise;
+    private string translation = "";
+    private CorrectionResult? correction;
+
+    private bool loading;
+    private string? error;
+
+    private async Task Generate()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            IReadOnlyList<ErrorCategory>? focus = null;
+            if (focusOnWeaknesses)
+            {
+                var profile = await Api.GetProfileAsync();
+                if (profile.ByCategory.Count > 0)
+                    focus = profile.ByCategory.Take(3).Select(c => c.Category).ToList();
+            }
+
+            var req = new ExerciseGenerationRequest(
+                source, target, wordCount, level,
+                string.IsNullOrWhiteSpace(theme) ? null : theme, focus);
+
+            exercise = await Api.GenerateAsync(req);
+            translation = "";
+            step = Step.Translate;
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task Correct()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            var req = new CorrectionRequest(
+                exercise!.SourceLanguage, exercise.TargetLanguage,
+                exercise.SourceText, translation, exercise.Level, exercise.Theme);
+
+            correction = await Api.CorrectAsync(req);
+            step = Step.Result;
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void Reset()
+    {
+        step = Step.Setup;
+        exercise = null;
+        correction = null;
+        translation = "";
+        error = null;
+    }
+
+    private static string LangName(Language l) => l switch
+    {
+        Language.Portuguese => "Português",
+        Language.English => "Inglês",
+        _ => l.ToString(),
+    };
+
+    private static string SeverityLabel(ErrorSeverity s) => s switch
+    {
+        ErrorSeverity.BreaksMeaning => "Quebra o sentido",
+        ErrorSeverity.Understandable => "Compreensível",
+        ErrorSeverity.Polish => "Lapidação",
+        _ => s.ToString(),
+    };
+
+    private static string SeverityClass(ErrorSeverity s) => s switch
+    {
+        ErrorSeverity.BreaksMeaning => "bg-danger",
+        ErrorSeverity.Understandable => "bg-warning text-dark",
+        ErrorSeverity.Polish => "bg-info text-dark",
+        _ => "bg-secondary",
+    };
+
+    private static string Friendly(Exception ex) =>
+        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056) e a API key foi setada?";
+}

@@ -1,0 +1,66 @@
+@page "/profile"
+@inject WriteRightApiClient Api
+
+<PageTitle>WriteRight — Meu perfil</PageTitle>
+
+<h1 class="mb-4">📊 Meu perfil de fraquezas</h1>
+
+@if (loading)
+{
+    <p>Carregando…</p>
+}
+else if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (profile is not null)
+{
+    <p class="text-muted">@profile.TotalAttempts exercício(s) · @profile.TotalErrors erro(s) no total</p>
+
+    @if (profile.ByCategory.Count == 0)
+    {
+        <div class="alert alert-info">
+            Ainda não há dados. Faça alguns exercícios em <a href="">Praticar</a>!
+        </div>
+    }
+    else
+    {
+        <div style="max-width: 640px;">
+            @foreach (var c in profile.ByCategory)
+            {
+                var pct = profile.TotalErrors == 0 ? 0 : (int)(100.0 * c.Count / profile.TotalErrors);
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>@ErrorCatalog.Info(c.Category).LabelPt</span>
+                        <span class="text-muted">@c.Count</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-danger" style="width:@(pct)%"></div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private ErrorProfile? profile;
+    private bool loading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            profile = await Api.GetProfileAsync();
+        }
+        catch (Exception ex)
+        {
+            error = $"Não deu pra carregar o perfil: {ex.Message}. (A API está rodando?)";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="WriteRight.Api/WriteRight.Api.csproj" />
+  <Project Path="WriteRight.Client/WriteRight.Client.csproj" />
+  <Project Path="WriteRight.Shared/WriteRight.Shared.csproj" />
+</Solution>
