@@ -21,4 +21,10 @@
     <ProjectReference Include="..\WriteRight.Shared\WriteRight.Shared.csproj" />
   </ItemGroup>
 
+  <!-- Expõe os tipos internal (prompts, schemas, opções de JSON) pro projeto de
+       testes, pra os testes exercitarem o contrato real sem tornar isso API pública. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="WriteRight.Tests" />
+  </ItemGroup>
+
 </Project>

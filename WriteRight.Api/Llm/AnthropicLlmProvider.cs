@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Anthropic;
 using Anthropic.Models.Messages;
 using Microsoft.Extensions.Options;
@@ -14,12 +13,6 @@ namespace WriteRight.Api.Llm;
 /// </summary>
 public sealed class AnthropicLlmProvider : ILlmProvider
 {
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
-
     private readonly LlmOptions _options;
 
     public AnthropicLlmProvider(IOptions<LlmOptions> options)
@@ -45,7 +38,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         });
 
         var json = FirstText(response);
-        var text = JsonSerializer.Deserialize<GeneratedText>(json, JsonOpts)?.Text
+        var text = JsonSerializer.Deserialize<GeneratedText>(json, LlmJson.Options)?.Text
             ?? throw new InvalidOperationException("Falha ao desserializar o texto gerado.");
 
         return new GeneratedExercise(
@@ -70,7 +63,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         });
 
         var json = FirstText(response);
-        return JsonSerializer.Deserialize<CorrectionResult>(json, JsonOpts)
+        return JsonSerializer.Deserialize<CorrectionResult>(json, LlmJson.Options)
             ?? throw new InvalidOperationException("Falha ao desserializar a correção da IA.");
     }
 
