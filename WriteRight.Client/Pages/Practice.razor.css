@@ -1,0 +1,6 @@
+/* Texto de origem / corrigido um pouco menor que o .lead padrão,
+   pra ocupar menos altura com os cards empilhados. */
+.lead {
+    font-size: 1.05rem;
+    line-height: 1.55;
+}
