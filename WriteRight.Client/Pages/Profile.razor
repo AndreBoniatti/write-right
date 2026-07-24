@@ -3,7 +3,9 @@
 
 <PageTitle>WriteRight — Meu perfil</PageTitle>
 
-<h1 class="mb-4">📊 Meu perfil de fraquezas</h1>
+<h1 class="mb-4 d-flex align-items-center gap-2">
+    <Icon Name="chart" Size="26" /> Meu perfil de fraquezas
+</h1>
 
 @if (loading)
 {
@@ -15,7 +17,7 @@ else if (error is not null)
 }
 else if (profile is not null)
 {
-    <p class="text-muted">@profile.TotalAttempts exercício(s) · @profile.TotalErrors erro(s) no total</p>
+    <p class="text-muted">@profile.TotalAttempts prática(s) concluída(s) · @profile.TotalErrors erro(s) no total</p>
 
     @if (profile.ByCategory.Count == 0)
     {
@@ -35,7 +37,7 @@ else if (profile is not null)
                         <span class="text-muted">@c.Count</span>
                     </div>
                     <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-danger" style="width:@(pct)%"></div>
+                        <div class="progress-bar" style="width:@(pct)%"></div>
                     </div>
                 </div>
             }

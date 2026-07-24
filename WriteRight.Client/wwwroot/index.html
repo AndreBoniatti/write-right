@@ -1,16 +1,39 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WriteRight.Client</title>
+    <title>WriteRight</title>
     <base href="/" />
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="WriteRight.Client.styles.css" rel="stylesheet" />
+
+    <!-- Tema claro/escuro: aplica o atributo ANTES do body pintar (sem flash).
+         Preferência salva > preferência do sistema. Exposto pro ThemeToggle. -->
+    <script>
+        window.writerightTheme = {
+            get: function () {
+                return document.documentElement.getAttribute('data-theme') || 'light';
+            },
+            set: function (t) {
+                try { localStorage.setItem('wr-theme', t); } catch (e) { }
+                document.documentElement.setAttribute('data-theme', t);
+                document.documentElement.setAttribute('data-bs-theme', t);
+            }
+        };
+        (function () {
+            var saved = null;
+            try { saved = localStorage.getItem('wr-theme'); } catch (e) { }
+            var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            window.writerightTheme.set(saved || (prefersDark ? 'dark' : 'light'));
+        })();
+    </script>
+
     <script type="importmap"></script>
 </head>
 

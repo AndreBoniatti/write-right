@@ -1,40 +1,299 @@
-html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+/* ============================================================
+   WriteRight — design system
+   Pegada tech/soft, clean. Claro por padrão; escuro via
+   [data-theme="dark"] no <html> (definido em index.html).
+   Tudo em variáveis pra ajustar o tema num lugar só.
+   ============================================================ */
+
+/* Inter (variable, latin) — self-hosted, sem CDN. Cobre os acentos do PT. */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('../fonts/inter-variable.woff2') format('woff2');
 }
 
-h1:focus {
+:root {
+    /* Superfícies */
+    --wr-bg: #f5f6fb;
+    --wr-surface: #ffffff;
+    --wr-surface-2: #eef0f7;
+    --wr-border: #e5e7f0;
+
+    /* Texto */
+    --wr-text: #1a1e2b;
+    --wr-text-muted: #6b7280;
+
+    /* Acento (violeta/indigo — pegada tech) */
+    --wr-primary: #6a5cff;
+    --wr-primary-strong: #5647e6;
+    --wr-primary-soft: rgba(106, 92, 255, 0.10);
+    --wr-on-primary: #ffffff;
+    --wr-gradient: linear-gradient(135deg, #6a5cff 0%, #8f7bff 100%);
+
+    /* Semânticos */
+    --wr-success: #12a150;
+    --wr-success-soft: rgba(18, 161, 80, 0.12);
+    --wr-warning: #c2740a;
+    --wr-warning-soft: rgba(217, 119, 6, 0.14);
+    --wr-danger: #e5484d;
+    --wr-danger-soft: rgba(229, 72, 77, 0.12);
+    --wr-info: #0e8fd6;
+    --wr-info-soft: rgba(14, 143, 214, 0.12);
+
+    /* Forma */
+    --wr-radius: 14px;
+    --wr-radius-sm: 9px;
+    --wr-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+    --wr-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+
+    color-scheme: light;
+}
+
+[data-theme="dark"] {
+    --wr-bg: #0c0e18;
+    --wr-surface: #141726;
+    --wr-surface-2: #1c2032;
+    --wr-border: #282d42;
+
+    --wr-text: #e7e9f2;
+    --wr-text-muted: #99a1ba;
+
+    --wr-primary: #8b7bff;
+    --wr-primary-strong: #a394ff;
+    --wr-primary-soft: rgba(139, 123, 255, 0.16);
+    --wr-on-primary: #ffffff;
+    --wr-gradient: linear-gradient(135deg, #7d6bff 0%, #9a8bff 100%);
+
+    --wr-success: #34d399;
+    --wr-success-soft: rgba(52, 211, 153, 0.15);
+    --wr-warning: #fbbf24;
+    --wr-warning-soft: rgba(251, 191, 36, 0.15);
+    --wr-danger: #ff6b6f;
+    --wr-danger-soft: rgba(255, 107, 111, 0.15);
+    --wr-info: #38bdf8;
+    --wr-info-soft: rgba(56, 189, 248, 0.15);
+
+    --wr-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.4);
+    --wr-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+
+    color-scheme: dark;
+}
+
+/* ── Base ──────────────────────────────────────────────── */
+
+html, body {
+    font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--wr-bg);
+    color: var(--wr-text);
+}
+
+body {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--wr-text);
+    font-weight: 650;
+    letter-spacing: -0.015em;
+}
+
+h1 { font-size: 1.75rem; }
+h1:focus { outline: none; }
+
+a { color: var(--wr-primary); text-decoration: none; }
+a:hover { color: var(--wr-primary-strong); }
+
+.text-muted { color: var(--wr-text-muted) !important; }
+
+.content {
+    padding-top: 1.75rem;
+    padding-bottom: 3rem;
+}
+
+/* ── Cards ─────────────────────────────────────────────── */
+
+.card {
+    background-color: var(--wr-surface);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    box-shadow: var(--wr-shadow-sm);
+    color: var(--wr-text);
+}
+
+.card.border-success { border-color: var(--wr-success); }
+
+/* ── Botões ────────────────────────────────────────────── */
+
+.btn {
+    border-radius: var(--wr-radius-sm);
+    font-weight: 550;
+    padding: 0.5rem 1.05rem;
+    border: 1px solid transparent;
+    transition: filter .15s ease, background-color .15s ease, color .15s ease, border-color .15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.btn-sm { padding: 0.32rem 0.65rem; font-size: 0.82rem; }
+
+.btn-primary {
+    background: var(--wr-gradient);
+    border: none;
+    color: var(--wr-on-primary);
+    box-shadow: 0 3px 12px rgba(106, 92, 255, 0.30);
+}
+.btn-primary:hover, .btn-primary:active, .btn-primary:focus {
+    filter: brightness(1.06);
+    color: var(--wr-on-primary);
+}
+
+.btn-outline-secondary {
+    background: var(--wr-surface);
+    border-color: var(--wr-border);
+    color: var(--wr-text-muted);
+}
+.btn-outline-secondary:hover {
+    background: var(--wr-surface-2);
+    border-color: var(--wr-border);
+    color: var(--wr-text);
+}
+
+.btn-outline-danger {
+    background: var(--wr-surface);
+    border-color: var(--wr-border);
+    color: var(--wr-danger);
+}
+.btn-outline-danger:hover {
+    background: var(--wr-danger-soft);
+    border-color: var(--wr-danger);
+    color: var(--wr-danger);
+}
+
+.btn-danger {
+    background: var(--wr-danger);
+    border: none;
+    color: #fff;
+}
+.btn-danger:hover { filter: brightness(1.05); color: #fff; }
+
+/* ── Foco (anel suave no lugar do azul do template) ──────── */
+
+.btn:focus, .btn:focus-visible,
+.form-control:focus, .form-select:focus, .form-check-input:focus {
+    box-shadow: 0 0 0 3px var(--wr-primary-soft);
+    border-color: var(--wr-primary);
     outline: none;
 }
 
-a, .btn-link {
-    color: #0071c1;
+/* ── Formulários ───────────────────────────────────────── */
+
+.form-control, .form-select {
+    background-color: var(--wr-surface);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius-sm);
+    color: var(--wr-text);
+    padding: 0.55rem 0.8rem;
+}
+.form-control::placeholder { color: var(--wr-text-muted); opacity: 0.7; }
+
+.form-label {
+    color: var(--wr-text-muted);
+    font-size: 0.82rem;
+    font-weight: 550;
+    margin-bottom: 0.3rem;
 }
 
-.btn-primary {
-    color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+.form-check-input {
+    background-color: var(--wr-surface);
+    border-color: var(--wr-border);
+}
+.form-check-input:checked {
+    background-color: var(--wr-primary);
+    border-color: var(--wr-primary);
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+/* ── Badges soft (pílulas) ─────────────────────────────── */
+
+.wr-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    font-weight: 600;
+    font-size: 0.72rem;
+    line-height: 1;
+    padding: 0.34em 0.62em;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.wr-badge--success { background: var(--wr-success-soft); color: var(--wr-success); }
+.wr-badge--warning { background: var(--wr-warning-soft); color: var(--wr-warning); }
+.wr-badge--danger  { background: var(--wr-danger-soft);  color: var(--wr-danger); }
+.wr-badge--info    { background: var(--wr-info-soft);    color: var(--wr-info); }
+.wr-badge--muted   { background: var(--wr-surface-2);    color: var(--wr-text-muted); }
+
+/* ── Listagem (list-group vira cards espaçados) ─────────── */
+
+.list-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    border: none;
+    border-radius: 0;
+}
+.list-group-item {
+    background: var(--wr-surface);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius) !important;
+    box-shadow: var(--wr-shadow-sm);
+    color: var(--wr-text);
+    padding: 1rem 1.15rem;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.list-group-item:hover {
+    border-color: var(--wr-primary-soft);
+    box-shadow: var(--wr-shadow);
 }
 
-.content {
-    padding-top: 1.1rem;
+/* ── Alertas ───────────────────────────────────────────── */
+
+.alert { border-radius: var(--wr-radius); border: 1px solid transparent; }
+.alert-danger { background: var(--wr-danger-soft); color: var(--wr-danger); }
+.alert-warning { background: var(--wr-warning-soft); color: var(--wr-warning); }
+.alert-info {
+    background: var(--wr-primary-soft);
+    color: var(--wr-text);
+    border-color: var(--wr-border);
 }
 
-.valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
-}
+/* ── Barras de progresso (perfil) ──────────────────────── */
 
-.invalid {
-    outline: 1px solid red;
+.progress {
+    background: var(--wr-surface-2);
+    border-radius: 999px;
+    height: 8px;
 }
+.progress-bar { background: var(--wr-gradient); border-radius: 999px; }
 
-.validation-message {
-    color: red;
-}
+/* ── Ícones + utilidades ───────────────────────────────── */
+
+.wr-icon { flex: 0 0 auto; vertical-align: middle; }
+
+s { opacity: 0.85; }
+
+/* ============================================================
+   Infra do template Blazor (loading, erros, validação).
+   Cores ajustadas ao tema; NÃO remover.
+   ============================================================ */
+
+.valid.modified:not([type=checkbox]) { outline: 1px solid var(--wr-success); }
+.invalid { outline: 1px solid var(--wr-danger); }
+.validation-message { color: var(--wr-danger); }
+
+.content { /* mantém padding definido acima */ }
 
 #blazor-error-ui {
     color-scheme: light only;
@@ -64,7 +323,7 @@ a, .btn-link {
 }
 
     .blazor-error-boundary::after {
-        content: "An error has occurred."
+        content: "Ocorreu um erro.";
     }
 
 .loading-progress {
@@ -78,14 +337,14 @@ a, .btn-link {
 
     .loading-progress circle {
         fill: none;
-        stroke: #e0e0e0;
+        stroke: var(--wr-surface-2);
         stroke-width: 0.6rem;
         transform-origin: 50% 50%;
         transform: rotate(-90deg);
     }
 
         .loading-progress circle:last-child {
-            stroke: #1b6ec2;
+            stroke: var(--wr-primary);
             stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
             transition: stroke-dasharray 0.05s ease-in-out;
         }
@@ -94,22 +353,12 @@ a, .btn-link {
     position: absolute;
     text-align: center;
     font-weight: bold;
+    color: var(--wr-text);
     inset: calc(20vh + 3.25rem) 0 auto 0.2rem;
 }
 
     .loading-progress-text:after {
-        content: var(--blazor-load-percentage-text, "Loading");
+        content: var(--blazor-load-percentage-text, "Carregando");
     }
 
-code {
-    color: #c02d76;
-}
-
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-    color: var(--bs-secondary-color);
-    text-align: end;
-}
-
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-    text-align: start;
-}
+code { color: #c02d76; }

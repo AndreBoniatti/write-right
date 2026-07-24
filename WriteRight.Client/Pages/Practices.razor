@@ -4,8 +4,10 @@
 <PageTitle>WriteRight — Minhas práticas</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mb-0">✍️ Minhas práticas</h1>
-    <a class="btn btn-primary" href="practice/new">+ Nova prática</a>
+    <h1 class="mb-0">Minhas práticas</h1>
+    <a class="btn btn-primary" href="practice/new">
+        <Icon Name="plus" Size="18" /> Nova prática
+    </a>
 </div>
 
 @if (error is not null)
@@ -15,7 +17,7 @@
 
 @if (loading)
 {
-    <p>Carregando…</p>
+    <p class="text-muted">Carregando…</p>
 }
 else if (practices is null || practices.Count == 0)
 {
@@ -31,14 +33,16 @@ else
             <div class="list-group-item">
                 <div class="d-flex justify-content-between align-items-start">
                     <a href="practice/@p.Id" class="flex-grow-1 text-reset text-decoration-none">
-                        <div>
-                            <span class="badge @StatusClass(p.Status) me-2">@StatusLabel(p.Status)</span>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="@StatusClass(p.Status)">
+                                <Icon Name="@StatusIcon(p.Status)" Size="13" /> @StatusLabel(p.Status)
+                            </span>
                             <span class="text-muted small">
                                 @LangName(p.SourceLanguage) → @LangName(p.TargetLanguage)@(p.Level is null ? "" : $" · {p.Level}")@(string.IsNullOrWhiteSpace(p.Theme) ? "" : $" · {p.Theme}")
                             </span>
                         </div>
-                        <div class="mt-1">@p.Preview@(p.Preview.Length >= 120 ? "…" : "")</div>
-                        <div class="text-muted small mt-1">
+                        <div class="mt-2">@p.Preview@(p.Preview.Length >= 120 ? "…" : "")</div>
+                        <div class="text-muted small mt-2">
                             @p.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
                             @if (p.Status == PracticeStatus.Completed)
                             {
@@ -49,13 +53,15 @@ else
                     <div class="ms-3 text-nowrap">
                         @if (deletingId == p.Id)
                         {
-                            <span class="small me-1">Excluir?</span>
+                            <span class="small text-muted me-1">Excluir?</span>
                             <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(p.Id)" disabled="@busy">Sim</button>
                             <button class="btn btn-sm btn-outline-secondary" @onclick="() => deletingId = null" disabled="@busy">Não</button>
                         }
                         else
                         {
-                            <button class="btn btn-sm btn-outline-danger" @onclick="() => deletingId = p.Id">Excluir</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => deletingId = p.Id">
+                                <Icon Name="trash" Size="14" /> Excluir
+                            </button>
                         }
                     </div>
                 </div>
@@ -127,9 +133,15 @@ else
 
     private static string StatusClass(PracticeStatus s) => s switch
     {
-        PracticeStatus.InProgress => "bg-warning text-dark",
-        PracticeStatus.Completed => "bg-success",
-        _ => "bg-secondary",
+        PracticeStatus.InProgress => "wr-badge wr-badge--warning",
+        PracticeStatus.Completed => "wr-badge wr-badge--success",
+        _ => "wr-badge wr-badge--muted",
+    };
+
+    private static string StatusIcon(PracticeStatus s) => s switch
+    {
+        PracticeStatus.Completed => "check",
+        _ => "clock",
     };
 
     private static string Friendly(Exception ex) =>

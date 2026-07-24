@@ -1,0 +1,43 @@
+@inject IJSRuntime JS
+
+<button type="button" class="theme-toggle" @onclick="Toggle"
+        title="@(isDark ? "Tema claro" : "Tema escuro")" aria-label="Alternar tema">
+    <Icon Name="@(isDark ? "sun" : "moon")" Size="20" />
+</button>
+
+@code {
+    private bool isDark;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            // O tema já foi aplicado no <html> pelo script do index.html; aqui só
+            // sincronizo o ícone com o estado atual.
+            var theme = await JS.InvokeAsync<string>("writerightTheme.get");
+            if (theme == "dark")
+            {
+                isDark = true;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // JS indisponível — mantém o padrão (claro).
+        }
+    }
+
+    private async Task Toggle()
+    {
+        isDark = !isDark;
+        try
+        {
+            await JS.InvokeVoidAsync("writerightTheme.set", isDark ? "dark" : "light");
+        }
+        catch
+        {
+            // ignora falha de interop
+        }
+    }
+}

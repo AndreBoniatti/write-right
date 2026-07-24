@@ -17,6 +17,12 @@ public class WriteRightDbContext : DbContext
         exercise.Property(e => e.TargetLanguage).HasConversion<string>();
         exercise.Property(e => e.Level).HasConversion<string>();
 
+        // Blindagem no banco (defense-in-depth): origem e alvo nunca podem ser
+        // iguais. A validação da aplicação dá o erro amigável; isto é a rede de
+        // segurança de última instância, mesmo que algo passe por fora do serviço.
+        exercise.ToTable(t => t.HasCheckConstraint(
+            "CK_Exercise_LanguagesDiffer", "SourceLanguage <> TargetLanguage"));
+
         var error = modelBuilder.Entity<ExerciseError>();
 
         // Enums como STRING — legível no banco, resiliente a reordenação do enum.

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using WriteRight.Api.Data;
 using WriteRight.Api.Services;
 using WriteRight.Shared;
@@ -92,6 +93,33 @@ public sealed class PracticeServiceTests : IDisposable
         Assert.Null(stub.LastGenerationRequest!.FocusCategories);
     }
 
+    [Fact]
+    public async Task CreatePracticeAsync_rejects_same_source_and_target()
+    {
+        // Não faz sentido traduzir de um idioma pra ele mesmo.
+        var request = new CreatePracticeRequest(
+            Language.English, Language.English, 60, CefrLevel.B1);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => Service(new StubLlmProvider(SampleExercise())).CreatePracticeAsync(request));
+    }
+
+    [Fact]
+    public async Task Database_rejects_practice_with_same_languages()
+    {
+        // Blindagem de última instância: mesmo forçando por fora do serviço, o
+        // CHECK constraint do banco barra origem == alvo.
+        await using var ctx = _db.NewContext();
+        ctx.Exercises.Add(new ExerciseAttempt
+        {
+            SourceLanguage = Language.English,
+            TargetLanguage = Language.English,
+            Status = PracticeStatus.InProgress,
+        });
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => ctx.SaveChangesAsync());
+    }
+
     // ── Rascunho ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -182,12 +210,16 @@ public sealed class PracticeServiceTests : IDisposable
         {
             ctx.Exercises.Add(new ExerciseAttempt
             {
+                SourceLanguage = Language.Portuguese,
+                TargetLanguage = Language.English,
                 SourceText = "antiga",
                 Status = PracticeStatus.Completed,
                 CreatedAt = DateTimeOffset.UtcNow.AddHours(-2),
             });
             ctx.Exercises.Add(new ExerciseAttempt
             {
+                SourceLanguage = Language.Portuguese,
+                TargetLanguage = Language.English,
                 SourceText = "recente",
                 Status = PracticeStatus.InProgress,
                 CreatedAt = DateTimeOffset.UtcNow,

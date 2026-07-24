@@ -44,6 +44,10 @@ public sealed class PracticeService
     /// </summary>
     public async Task<PracticeDetail> CreatePracticeAsync(CreatePracticeRequest request, CancellationToken ct = default)
     {
+        if (request.SourceLanguage == request.TargetLanguage)
+            throw new ArgumentException(
+                "Origem e alvo devem ser idiomas diferentes.", nameof(request));
+
         IReadOnlyList<ErrorCategory>? focus = null;
         if (request.FocusOnWeaknesses)
         {

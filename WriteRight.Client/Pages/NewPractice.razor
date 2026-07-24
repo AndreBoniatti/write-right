@@ -4,71 +4,137 @@
 
 <PageTitle>WriteRight — Nova prática</PageTitle>
 
-<a href="" class="small text-muted">← Minhas práticas</a>
-<h1 class="my-3">✍️ Nova prática</h1>
+<a href="" class="small text-muted d-inline-flex align-items-center gap-1">
+    <Icon Name="arrow-left" Size="16" /> Minhas práticas
+</a>
+<h1 class="my-3">Nova prática</h1>
 
 @if (error is not null)
 {
     <div class="alert alert-danger">@error</div>
 }
 
-<div class="card p-3" style="max-width: 640px;">
-    <div class="row g-3">
-        <div class="col-6">
-            <label class="form-label">Traduzir de</label>
-            <select class="form-select" @bind="source">
-                @foreach (var l in Enum.GetValues<Language>())
-                {
-                    <option value="@l">@LangName(l)</option>
-                }
-            </select>
-        </div>
-        <div class="col-6">
-            <label class="form-label">para</label>
-            <select class="form-select" @bind="target">
-                @foreach (var l in Enum.GetValues<Language>())
-                {
-                    <option value="@l">@LangName(l)</option>
-                }
-            </select>
-        </div>
-        <div class="col-6">
-            <label class="form-label">Nº de palavras</label>
-            <input type="number" class="form-control" @bind="wordCount" min="20" max="200" />
-        </div>
-        <div class="col-6">
-            <label class="form-label">Nível (CEFR)</label>
-            <select class="form-select" @bind="level">
-                @foreach (var lv in Enum.GetValues<CefrLevel>())
-                {
-                    <option value="@lv">@lv</option>
-                }
-            </select>
-        </div>
-        <div class="col-12">
-            <label class="form-label">Tema (opcional)</label>
-            <input class="form-control" @bind="theme" placeholder="ex.: viagem, trabalho, comida…" />
-        </div>
-        <div class="col-12">
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="focus" @bind="focusOnWeaknesses" />
-                <label class="form-check-label" for="focus">
-                    Focar nas minhas fraquezas (usa o perfil pra mirar o exercício)
-                </label>
+<div class="row g-4 align-items-stretch" style="max-width: 1040px;">
+    <div class="col-lg-7">
+        <div class="card p-3 h-100">
+            <div class="row g-3">
+                <div class="col-6">
+                    <label class="form-label">Traduzir de</label>
+                    <select class="form-select" @bind="Source">
+                        @foreach (var l in Enum.GetValues<Language>())
+                        {
+                            <option value="@l">@LangName(l)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label">para</label>
+                    <select class="form-select" @bind="Target">
+                        @foreach (var l in Enum.GetValues<Language>())
+                        {
+                            <option value="@l">@LangName(l)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Nº de palavras</label>
+                    <input type="number" class="form-control" @bind="wordCount" @bind:event="oninput" min="20" max="200" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Nível (CEFR)</label>
+                    <select class="form-select" @bind="level">
+                        @foreach (var lv in Enum.GetValues<CefrLevel>())
+                        {
+                            <option value="@lv">@CefrLevels.Display(lv)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Tema (opcional)</label>
+                    <input class="form-control" @bind="theme" @bind:event="oninput" placeholder="ex.: viagem, trabalho, comida…" />
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="focus" @bind="focusOnWeaknesses" />
+                        <label class="form-check-label" for="focus">
+                            Focar nas minhas fraquezas (usa o perfil pra mirar o exercício)
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-auto pt-3">
+                <button class="btn btn-primary" @onclick="Create" disabled="@loading">
+                    @(loading ? "Gerando…" : "Gerar e começar")
+                </button>
+                <a class="btn btn-outline-secondary ms-2" href="">Cancelar</a>
             </div>
         </div>
     </div>
-    <div class="mt-3">
-        <button class="btn btn-primary" @onclick="Create" disabled="@loading">
-            @(loading ? "Gerando…" : "Gerar e começar")
-        </button>
-        <a class="btn btn-outline-secondary ms-2" href="">Cancelar</a>
+
+    <div class="col-lg-5">
+        <div class="summary h-100">
+            <div class="summary-eyebrow">O que você vai fazer</div>
+            <p class="summary-lead">
+                Traduzir um texto em <strong>@LangName(source)</strong>
+                (~@wordCount palavras, nível <strong>@CefrLevels.Display(level)</strong>)
+                para <strong>@LangName(target)</strong>.
+            </p>
+
+            @if (!string.IsNullOrWhiteSpace(theme))
+            {
+                <p class="summary-line">Tema: <strong>@theme</strong></p>
+            }
+
+            <p class="summary-line summary-focus">
+                @if (focusOnWeaknesses)
+                {
+                    <span>🎯 Mirado nas suas maiores fraquezas.</span>
+                }
+                else
+                {
+                    <span>Texto neutro, sem foco específico.</span>
+                }
+            </p>
+
+            <hr class="summary-hr" />
+
+            <div class="summary-eyebrow">Como funciona</div>
+            <ol class="summary-steps">
+                <li>A IA gera o texto no idioma de origem.</li>
+                <li>Você escreve a tradução.</li>
+                <li>A correção classifica cada erro por categoria.</li>
+                <li>Os erros viram seu perfil e miram as próximas práticas.</li>
+            </ol>
+        </div>
     </div>
 </div>
 
 @code {
     private Language source = Language.Portuguese;
     private Language target = Language.English;
+
+    // Origem e alvo nunca podem ser iguais. Se você escolher um idioma que bate
+    // com o do outro campo, eles trocam (swap) — igual ao Google Tradutor.
+    private Language Source
+    {
+        get => source;
+        set
+        {
+            if (value == target) target = source;
+            source = value;
+        }
+    }
+
+    private Language Target
+    {
+        get => target;
+        set
+        {
+            if (value == source) source = target;
+            target = value;
+        }
+    }
+
     private int wordCount = 60;
     private CefrLevel level = CefrLevel.B1;
     private string? theme;

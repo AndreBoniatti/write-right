@@ -4,7 +4,9 @@
 
 <PageTitle>WriteRight — Prática</PageTitle>
 
-<a href="" class="small text-muted">← Minhas práticas</a>
+<a href="" class="small text-muted d-inline-flex align-items-center gap-1">
+    <Icon Name="arrow-left" Size="16" /> Minhas práticas
+</a>
 
 @if (error is not null)
 {
@@ -13,7 +15,7 @@
 
 @if (loading)
 {
-    <p class="mt-3">Carregando…</p>
+    <p class="text-muted mt-3">Carregando…</p>
 }
 else if (practice is null)
 {
@@ -21,8 +23,15 @@ else if (practice is null)
 }
 else
 {
-    <h1 class="my-3">
-        @(practice.Status == PracticeStatus.Completed ? "✅ Prática concluída" : "✍️ Traduza o texto")
+    <h1 class="my-3 d-flex align-items-center gap-2">
+        @if (practice.Status == PracticeStatus.Completed)
+        {
+            <span class="wr-badge wr-badge--success"><Icon Name="check" Size="14" /> Concluída</span>
+        }
+        else
+        {
+            <span class="wr-badge wr-badge--warning"><Icon Name="clock" Size="14" /> Em andamento</span>
+        }
     </h1>
 
     <div class="card p-3 mb-3">
@@ -51,19 +60,21 @@ else
         </div>
 
         <div class="card p-3 mb-3 border-success">
-            <h6>Texto corrigido</h6>
+            <h6 class="d-flex align-items-center gap-1">
+                <Icon Name="check" Size="18" /> Texto corrigido
+            </h6>
             <p class="lead mb-0">@practice.CorrectedText</p>
         </div>
 
         <h5 class="mb-3">@practice.Errors.Count erro(s) encontrado(s)</h5>
         @foreach (var e in practice.Errors)
         {
-            <div class="card p-2 mb-2" style="max-width: 720px;">
-                <div>
-                    <span class="badge @SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
-                    <span class="badge bg-secondary">@ErrorCatalog.Info(e.Category).LabelPt</span>
+            <div class="card p-3 mb-2" style="max-width: 720px;">
+                <div class="d-flex gap-2 flex-wrap">
+                    <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                    <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(e.Category).LabelPt</span>
                 </div>
-                <div class="mt-1">
+                <div class="mt-2">
                     <s class="text-danger">@e.Original</s> → <strong class="text-success">@e.Correction</strong>
                 </div>
                 <div class="text-muted small mt-1">@e.Explanation</div>
@@ -75,7 +86,9 @@ else
             <div class="alert alert-info mt-3" style="max-width: 720px;">@practice.OverallComment</div>
         }
 
-        <a class="btn btn-primary mt-2" href="practice/new">Nova prática</a>
+        <a class="btn btn-primary mt-2" href="practice/new">
+            <Icon Name="plus" Size="18" /> Nova prática
+        </a>
     }
 }
 
@@ -175,10 +188,10 @@ else
 
     private static string SeverityClass(ErrorSeverity s) => s switch
     {
-        ErrorSeverity.BreaksMeaning => "bg-danger",
-        ErrorSeverity.Understandable => "bg-warning text-dark",
-        ErrorSeverity.Polish => "bg-info text-dark",
-        _ => "bg-secondary",
+        ErrorSeverity.BreaksMeaning => "wr-badge wr-badge--danger",
+        ErrorSeverity.Understandable => "wr-badge wr-badge--warning",
+        ErrorSeverity.Polish => "wr-badge wr-badge--info",
+        _ => "wr-badge wr-badge--muted",
     };
 
     private static string Friendly(Exception ex) =>

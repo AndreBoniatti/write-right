@@ -54,8 +54,15 @@ var practices = app.MapGroup("/api/practices");
 practices.MapPost("/",
     async (CreatePracticeRequest request, PracticeService service, CancellationToken ct) =>
     {
-        var detail = await service.CreatePracticeAsync(request, ct);
-        return Results.Created($"/api/practices/{detail.Id}", detail);
+        try
+        {
+            var detail = await service.CreatePracticeAsync(request, ct);
+            return Results.Created($"/api/practices/{detail.Id}", detail);
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
     })
    .WithName("CreatePractice");
 

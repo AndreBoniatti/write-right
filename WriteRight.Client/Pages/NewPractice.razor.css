@@ -1,0 +1,69 @@
+.summary {
+    background: var(--wr-surface-2);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    padding: 1.35rem 1.4rem;
+}
+
+.summary-eyebrow {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--wr-text-muted);
+    margin-bottom: 0.55rem;
+}
+
+.summary-lead {
+    font-size: 1.05rem;
+    line-height: 1.5;
+    color: var(--wr-text);
+    margin-bottom: 0.6rem;
+}
+
+.summary-lead strong {
+    color: var(--wr-primary);
+    font-weight: 650;
+}
+
+.summary-line {
+    color: var(--wr-text-muted);
+    margin-bottom: 0.35rem;
+    font-size: 0.92rem;
+}
+
+.summary-line strong {
+    color: var(--wr-text);
+    font-weight: 600;
+}
+
+.summary-focus {
+    margin-top: 0.5rem;
+    font-size: 0.95rem;
+    color: var(--wr-text);
+}
+
+.summary-hr {
+    border: 0;
+    border-top: 1px solid var(--wr-border);
+    opacity: 1;
+    margin: 1.15rem 0;
+}
+
+.summary-steps {
+    margin: 0;
+    padding-left: 1.15rem;
+    color: var(--wr-text-muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.summary-steps li {
+    margin-bottom: 0.4rem;
+    padding-left: 0.2rem;
+}
+
+.summary-steps li::marker {
+    color: var(--wr-primary);
+    font-weight: 700;
+}

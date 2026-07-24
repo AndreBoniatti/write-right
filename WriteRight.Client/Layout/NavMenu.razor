@@ -1,22 +1,21 @@
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">WriteRight</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
+<div class="nav-brand">
+    <span class="brand-mark">W</span>
+    <span class="brand-text">WriteRight</span>
+    <button title="Menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+        <span class="navbar-toggler-icon"></span>
+    </button>
 </div>
 
 <div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
     <nav class="nav flex-column">
-        <div class="nav-item px-3">
+        <div class="nav-item">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Práticas
+                <Icon Name="book" Size="20" /> <span>Práticas</span>
             </NavLink>
         </div>
-        <div class="nav-item px-3">
+        <div class="nav-item">
             <NavLink class="nav-link" href="profile">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Meu perfil
+                <Icon Name="chart" Size="20" /> <span>Meu perfil</span>
             </NavLink>
         </div>
     </nav>
