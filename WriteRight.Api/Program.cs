@@ -3,8 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using WriteRight.Api.Data;
 using WriteRight.Api.Llm;
 using WriteRight.Api.Services;
-using WriteRight.Shared.Corrections;
-using WriteRight.Shared.Exercises;
+using WriteRight.Shared.Practices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,24 +47,69 @@ app.UseHttpsRedirection();
 app.UseCors(clientCors);
 
 // ── Endpoints ───────────────────────────────────────────────
-var api = app.MapGroup("/api");
+// Práticas: recurso com ciclo de vida (criar → retomar/salvar → corrigir → ler).
+var practices = app.MapGroup("/api/practices");
 
-// Gera um texto pro usuário traduzir.
-api.MapPost("/exercises/generate",
-    async (ExerciseGenerationRequest request, PracticeService practice, CancellationToken ct) =>
-        Results.Ok(await practice.GenerateAsync(request, ct)))
-   .WithName("GenerateExercise");
+// Cria uma prática: gera o texto e persiste como "Em andamento".
+practices.MapPost("/",
+    async (CreatePracticeRequest request, PracticeService service, CancellationToken ct) =>
+    {
+        var detail = await service.CreatePracticeAsync(request, ct);
+        return Results.Created($"/api/practices/{detail.Id}", detail);
+    })
+   .WithName("CreatePractice");
 
-// Corrige a tradução do usuário e persiste a tentativa + os erros.
-api.MapPost("/corrections",
-    async (CorrectionRequest request, PracticeService practice, CancellationToken ct) =>
-        Results.Ok(await practice.CorrectAndSaveAsync(request, ct)))
-   .WithName("CorrectTranslation");
+// Lista as práticas pra tela inicial (resumos).
+practices.MapGet("/",
+    async (PracticeService service, CancellationToken ct) =>
+        Results.Ok(await service.ListPracticesAsync(ct)))
+   .WithName("ListPractices");
 
-// Perfil de fraquezas (agregação dos erros por categoria).
-api.MapGet("/profile",
-    async (PracticeService practice, CancellationToken ct) =>
-        Results.Ok(await practice.GetProfileAsync(ct)))
+// Detalhe de uma prática (retomar ou ler).
+practices.MapGet("/{id:int}",
+    async (int id, PracticeService service, CancellationToken ct) =>
+        await service.GetPracticeAsync(id, ct) is { } detail
+            ? Results.Ok(detail)
+            : Results.NotFound())
+   .WithName("GetPractice");
+
+// Salva o rascunho da tradução ("Salvar e sair"), sem corrigir.
+practices.MapPut("/{id:int}/translation",
+    async (int id, PracticeTranslationRequest request, PracticeService service, CancellationToken ct) =>
+        (await service.SaveDraftAsync(id, request.UserTranslation, ct)) switch
+        {
+            PracticeOutcome.Ok => Results.NoContent(),
+            PracticeOutcome.ReadOnly => Results.Conflict(),
+            _ => Results.NotFound(),
+        })
+   .WithName("SaveDraft");
+
+// Corrige a prática e a conclui (readonly). Devolve o detalhe já corrigido.
+practices.MapPost("/{id:int}/correct",
+    async (int id, PracticeTranslationRequest request, PracticeService service, CancellationToken ct) =>
+    {
+        var (outcome, detail) = await service.CorrectPracticeAsync(id, request.UserTranslation, ct);
+        return outcome switch
+        {
+            PracticeOutcome.Ok => Results.Ok(detail),
+            PracticeOutcome.ReadOnly => Results.Conflict(),
+            _ => Results.NotFound(),
+        };
+    })
+   .WithName("CorrectPractice");
+
+// Exclui uma prática (com confirmação no cliente).
+practices.MapDelete("/{id:int}",
+    async (int id, PracticeService service, CancellationToken ct) =>
+        (await service.DeletePracticeAsync(id, ct)) == PracticeOutcome.Ok
+            ? Results.NoContent()
+            : Results.NotFound())
+   .WithName("DeletePractice");
+
+// Perfil de fraquezas (agregação dos erros das práticas concluídas).
+app.MapGet("/api/profile",
+    async (PracticeService service, CancellationToken ct) =>
+        Results.Ok(await service.GetProfileAsync(ct)))
    .WithName("GetProfile");
 
 app.Run();

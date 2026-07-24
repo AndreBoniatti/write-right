@@ -12,6 +12,7 @@ public class WriteRightDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var exercise = modelBuilder.Entity<ExerciseAttempt>();
+        exercise.Property(e => e.Status).HasConversion<string>();
         exercise.Property(e => e.SourceLanguage).HasConversion<string>();
         exercise.Property(e => e.TargetLanguage).HasConversion<string>();
         exercise.Property(e => e.Level).HasConversion<string>();

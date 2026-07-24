@@ -1,0 +1,109 @@
+@page "/practice/new"
+@inject WriteRightApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>WriteRight — Nova prática</PageTitle>
+
+<a href="" class="small text-muted">← Minhas práticas</a>
+<h1 class="my-3">✍️ Nova prática</h1>
+
+@if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<div class="card p-3" style="max-width: 640px;">
+    <div class="row g-3">
+        <div class="col-6">
+            <label class="form-label">Traduzir de</label>
+            <select class="form-select" @bind="source">
+                @foreach (var l in Enum.GetValues<Language>())
+                {
+                    <option value="@l">@LangName(l)</option>
+                }
+            </select>
+        </div>
+        <div class="col-6">
+            <label class="form-label">para</label>
+            <select class="form-select" @bind="target">
+                @foreach (var l in Enum.GetValues<Language>())
+                {
+                    <option value="@l">@LangName(l)</option>
+                }
+            </select>
+        </div>
+        <div class="col-6">
+            <label class="form-label">Nº de palavras</label>
+            <input type="number" class="form-control" @bind="wordCount" min="20" max="200" />
+        </div>
+        <div class="col-6">
+            <label class="form-label">Nível (CEFR)</label>
+            <select class="form-select" @bind="level">
+                @foreach (var lv in Enum.GetValues<CefrLevel>())
+                {
+                    <option value="@lv">@lv</option>
+                }
+            </select>
+        </div>
+        <div class="col-12">
+            <label class="form-label">Tema (opcional)</label>
+            <input class="form-control" @bind="theme" placeholder="ex.: viagem, trabalho, comida…" />
+        </div>
+        <div class="col-12">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="focus" @bind="focusOnWeaknesses" />
+                <label class="form-check-label" for="focus">
+                    Focar nas minhas fraquezas (usa o perfil pra mirar o exercício)
+                </label>
+            </div>
+        </div>
+    </div>
+    <div class="mt-3">
+        <button class="btn btn-primary" @onclick="Create" disabled="@loading">
+            @(loading ? "Gerando…" : "Gerar e começar")
+        </button>
+        <a class="btn btn-outline-secondary ms-2" href="">Cancelar</a>
+    </div>
+</div>
+
+@code {
+    private Language source = Language.Portuguese;
+    private Language target = Language.English;
+    private int wordCount = 60;
+    private CefrLevel level = CefrLevel.B1;
+    private string? theme;
+    private bool focusOnWeaknesses = true;
+
+    private bool loading;
+    private string? error;
+
+    private async Task Create()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            var req = new CreatePracticeRequest(
+                source, target, wordCount, level,
+                string.IsNullOrWhiteSpace(theme) ? null : theme, focusOnWeaknesses);
+
+            var detail = await Api.CreatePracticeAsync(req);
+            Nav.NavigateTo($"practice/{detail.Id}");
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+            loading = false;
+        }
+    }
+
+    private static string LangName(Language l) => l switch
+    {
+        Language.Portuguese => "Português",
+        Language.English => "Inglês",
+        _ => l.ToString(),
+    };
+
+    private static string Friendly(Exception ex) =>
+        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056) e a chave foi setada?";
+}

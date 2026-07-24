@@ -1,0 +1,137 @@
+@page "/"
+@inject WriteRightApiClient Api
+
+<PageTitle>WriteRight — Minhas práticas</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">✍️ Minhas práticas</h1>
+    <a class="btn btn-primary" href="practice/new">+ Nova prática</a>
+</div>
+
+@if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@if (loading)
+{
+    <p>Carregando…</p>
+}
+else if (practices is null || practices.Count == 0)
+{
+    <div class="alert alert-info">
+        Nenhuma prática ainda. Clique em <strong>Nova prática</strong> pra começar!
+    </div>
+}
+else
+{
+    <div class="list-group">
+        @foreach (var p in practices)
+        {
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start">
+                    <a href="practice/@p.Id" class="flex-grow-1 text-reset text-decoration-none">
+                        <div>
+                            <span class="badge @StatusClass(p.Status) me-2">@StatusLabel(p.Status)</span>
+                            <span class="text-muted small">
+                                @LangName(p.SourceLanguage) → @LangName(p.TargetLanguage)@(p.Level is null ? "" : $" · {p.Level}")@(string.IsNullOrWhiteSpace(p.Theme) ? "" : $" · {p.Theme}")
+                            </span>
+                        </div>
+                        <div class="mt-1">@p.Preview@(p.Preview.Length >= 120 ? "…" : "")</div>
+                        <div class="text-muted small mt-1">
+                            @p.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                            @if (p.Status == PracticeStatus.Completed)
+                            {
+                                <span>· @p.ErrorCount erro(s)</span>
+                            }
+                        </div>
+                    </a>
+                    <div class="ms-3 text-nowrap">
+                        @if (deletingId == p.Id)
+                        {
+                            <span class="small me-1">Excluir?</span>
+                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(p.Id)" disabled="@busy">Sim</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => deletingId = null" disabled="@busy">Não</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => deletingId = p.Id">Excluir</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<PracticeSummary>? practices;
+    private bool loading = true;
+    private bool busy;
+    private int? deletingId;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            practices = await Api.ListPracticesAsync();
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task ConfirmDelete(int id)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            await Api.DeletePracticeAsync(id);
+            deletingId = null;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string LangName(Language l) => l switch
+    {
+        Language.Portuguese => "Português",
+        Language.English => "Inglês",
+        _ => l.ToString(),
+    };
+
+    private static string StatusLabel(PracticeStatus s) => s switch
+    {
+        PracticeStatus.InProgress => "Em andamento",
+        PracticeStatus.Completed => "Concluída",
+        _ => s.ToString(),
+    };
+
+    private static string StatusClass(PracticeStatus s) => s switch
+    {
+        PracticeStatus.InProgress => "bg-warning text-dark",
+        PracticeStatus.Completed => "bg-success",
+        _ => "bg-secondary",
+    };
+
+    private static string Friendly(Exception ex) =>
+        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056)?";
+}

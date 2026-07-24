@@ -1,0 +1,186 @@
+@page "/practice/{Id:int}"
+@inject WriteRightApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>WriteRight — Prática</PageTitle>
+
+<a href="" class="small text-muted">← Minhas práticas</a>
+
+@if (error is not null)
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+
+@if (loading)
+{
+    <p class="mt-3">Carregando…</p>
+}
+else if (practice is null)
+{
+    <div class="alert alert-warning mt-3">Prática não encontrada.</div>
+}
+else
+{
+    <h1 class="my-3">
+        @(practice.Status == PracticeStatus.Completed ? "✅ Prática concluída" : "✍️ Traduza o texto")
+    </h1>
+
+    <div class="card p-3 mb-3">
+        <h6 class="text-muted">Texto (@LangName(practice.SourceLanguage) → @LangName(practice.TargetLanguage))</h6>
+        <p class="lead mb-0">@practice.SourceText</p>
+    </div>
+
+    @if (practice.Status == PracticeStatus.InProgress)
+    {
+        <textarea class="form-control mb-3" rows="6" @bind="translation" @bind:event="oninput"
+                  placeholder="Escreva sua tradução aqui…"></textarea>
+
+        <button class="btn btn-primary" @onclick="Correct"
+                disabled="@(busy || string.IsNullOrWhiteSpace(translation))">
+            @(correcting ? "Corrigindo…" : "Corrigir")
+        </button>
+        <button class="btn btn-outline-secondary ms-2" @onclick="SaveAndExit" disabled="@busy">
+            @(saving ? "Salvando…" : "Salvar e sair")
+        </button>
+    }
+    else
+    {
+        <div class="card p-3 mb-3">
+            <h6 class="text-muted">Sua tradução</h6>
+            <p class="mb-0">@practice.UserTranslation</p>
+        </div>
+
+        <div class="card p-3 mb-3 border-success">
+            <h6>Texto corrigido</h6>
+            <p class="lead mb-0">@practice.CorrectedText</p>
+        </div>
+
+        <h5 class="mb-3">@practice.Errors.Count erro(s) encontrado(s)</h5>
+        @foreach (var e in practice.Errors)
+        {
+            <div class="card p-2 mb-2" style="max-width: 720px;">
+                <div>
+                    <span class="badge @SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                    <span class="badge bg-secondary">@ErrorCatalog.Info(e.Category).LabelPt</span>
+                </div>
+                <div class="mt-1">
+                    <s class="text-danger">@e.Original</s> → <strong class="text-success">@e.Correction</strong>
+                </div>
+                <div class="text-muted small mt-1">@e.Explanation</div>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(practice.OverallComment))
+        {
+            <div class="alert alert-info mt-3" style="max-width: 720px;">@practice.OverallComment</div>
+        }
+
+        <a class="btn btn-primary mt-2" href="practice/new">Nova prática</a>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private PracticeDetail? practice;
+    private string translation = "";
+
+    private bool loading = true;
+    private bool busy;         // qualquer ação em andamento
+    private bool correcting;
+    private bool saving;
+    private string? error;
+
+    // OnParametersSetAsync (e não OnInitialized) pra recarregar ao navegar entre práticas.
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            practice = await Api.GetPracticeAsync(Id);
+            translation = practice?.UserTranslation ?? "";
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task Correct()
+    {
+        busy = true;
+        correcting = true;
+        error = null;
+        try
+        {
+            var updated = await Api.CorrectPracticeAsync(Id, translation);
+            if (updated is null)
+                error = "Não deu pra corrigir (a prática pode já estar concluída).";
+            else
+                practice = updated; // vira a visão readonly com a correção
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            busy = false;
+            correcting = false;
+        }
+    }
+
+    private async Task SaveAndExit()
+    {
+        busy = true;
+        saving = true;
+        error = null;
+        try
+        {
+            if (await Api.SaveDraftAsync(Id, translation))
+                Nav.NavigateTo("");
+            else
+                error = "Não deu pra salvar o rascunho.";
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            busy = false;
+            saving = false;
+        }
+    }
+
+    private static string LangName(Language l) => l switch
+    {
+        Language.Portuguese => "Português",
+        Language.English => "Inglês",
+        _ => l.ToString(),
+    };
+
+    private static string SeverityLabel(ErrorSeverity s) => s switch
+    {
+        ErrorSeverity.BreaksMeaning => "Quebra o sentido",
+        ErrorSeverity.Understandable => "Compreensível",
+        ErrorSeverity.Polish => "Lapidação",
+        _ => s.ToString(),
+    };
+
+    private static string SeverityClass(ErrorSeverity s) => s switch
+    {
+        ErrorSeverity.BreaksMeaning => "bg-danger",
+        ErrorSeverity.Understandable => "bg-warning text-dark",
+        ErrorSeverity.Polish => "bg-info text-dark",
+        _ => "bg-secondary",
+    };
+
+    private static string Friendly(Exception ex) =>
+        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056)?";
+}
