@@ -18,6 +18,15 @@ internal static class GenerationPrompt
         sb.AppendLine("Você gera textos curtos para um estudante de idiomas traduzir.");
         sb.AppendLine("Escreva um texto natural, coeso e original — sem título, sem marcações, sem aspas.");
         sb.AppendLine("O estudante vai LER o texto no idioma de origem e TRADUZIR para o idioma-alvo.");
+        sb.AppendLine();
+        sb.AppendLine("O texto é a REFERÊNCIA que o aluno lê: precisa ser impecável no idioma de origem.");
+        sb.AppendLine("Regras de qualidade (obrigatórias):");
+        sb.AppendLine("- Gramática correta e ortografia padrão (culta), sem registro telegráfico ou informal.");
+        sb.AppendLine("- Comece cada frase com letra MAIÚSCULA e use pontuação correta.");
+        sb.AppendLine("- Capitalize nomes próprios e topônimos (ex.: São Paulo, não são paulo).");
+        sb.AppendLine("- NÃO omita artigos, preposições ou palavras funcionais (ex.: 'para o parque', não 'para parque').");
+        sb.AppendLine("- Releia mentalmente: cada frase deve fazer sentido completo e soar como um falante nativo culto.");
+        sb.AppendLine();
         sb.AppendLine("NÃO inclua a tradução, dicas, listas ou qualquer meta-comentário: apenas o texto.");
         sb.AppendLine("Responda no formato estruturado, com o texto no campo 'text'.");
         return sb.ToString();
