@@ -9,7 +9,7 @@
 
 @if (loading)
 {
-    <p>Carregando…</p>
+    <p class="text-muted">Carregando…</p>
 }
 else if (error is not null)
 {
@@ -17,32 +17,66 @@ else if (error is not null)
 }
 else if (profile is not null)
 {
-    <p class="text-muted">@profile.TotalAttempts prática(s) concluída(s) · @profile.TotalErrors erro(s) no total</p>
-
+    <div class="profile">
     @if (profile.ByCategory.Count == 0)
     {
         <div class="alert alert-info">
-            Ainda não há dados. Comece uma <a href="practice/new">nova prática</a>!
+            Ainda não há dados. Comece uma <a href="practice/new">nova prática</a> e volte aqui pra ver
+            onde você mais tropeça.
         </div>
     }
     else
     {
-        <div style="max-width: 640px;">
+        var top = profile.ByCategory[0];
+        var topInfo = ErrorCatalog.Info(top.Category);
+        var maxCount = profile.ByCategory.Max(c => c.Count);
+
+        <div class="stat-row">
+            <div class="stat-tile">
+                <div class="stat-value">@profile.TotalAttempts</div>
+                <div class="stat-label">prática(s) concluída(s)</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-value">@profile.TotalErrors</div>
+                <div class="stat-label">erro(s) no total</div>
+            </div>
+            <div class="stat-tile">
+                <div class="stat-value stat-value--accent">@topInfo.LabelPt</div>
+                <div class="stat-label">categoria mais frequente</div>
+            </div>
+        </div>
+
+        <div class="focus-card">
+            <div class="focus-icon"><Icon Name="target" Size="20" /></div>
+            <div>
+                <strong>Foco atual: @topInfo.LabelPt.</strong>
+                As próximas práticas vão priorizar suas categorias mais frequentes.
+                <a href="practice/new">Começar uma nova prática</a> pra atacar isso.
+            </div>
+        </div>
+
+        <h2 class="section-title">Onde você mais tropeça</h2>
+
+        <div class="weak-list">
             @foreach (var c in profile.ByCategory)
             {
-                var pct = profile.TotalErrors == 0 ? 0 : (int)(100.0 * c.Count / profile.TotalErrors);
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between">
-                        <span>@ErrorCatalog.Info(c.Category).LabelPt</span>
-                        <span class="text-muted">@c.Count</span>
+                var info = ErrorCatalog.Info(c.Category);
+                var pct = maxCount == 0 ? 0 : (int)Math.Round(100.0 * c.Count / maxCount);
+                <div class="weak-row @(c.Category == top.Category ? "weak-row--lead" : "")">
+                    <div class="weak-head">
+                        <span class="weak-label">@info.LabelPt</span>
+                        <span class="wr-badge wr-badge--muted">@GroupLabel(info.Group)</span>
+                        <span class="weak-count">@c.Count</span>
                     </div>
-                    <div class="progress" style="height: 8px;">
-                        <div class="progress-bar" style="width:@(pct)%"></div>
+                    <div class="weak-track">
+                        <span class="weak-fill" style="width:@(pct)%"></span>
                     </div>
+                    <div class="weak-desc">@info.Description</div>
                 </div>
             }
         </div>
     }
+    </div>
 }
 
 @code {
@@ -65,4 +99,13 @@ else if (profile is not null)
             loading = false;
         }
     }
+
+    private static string GroupLabel(ErrorGroup g) => g switch
+    {
+        ErrorGroup.Structure => "Estrutura",
+        ErrorGroup.Vocabulary => "Vocabulário",
+        ErrorGroup.Mechanics => "Mecânica",
+        ErrorGroup.Style => "Estilo",
+        _ => "Outros",
+    };
 }

@@ -1,0 +1,131 @@
+/* Coluna única — tudo alinhado à mesma largura (sem zona morta à direita). */
+.profile {
+    max-width: 860px;
+}
+
+/* ── Tiles de resumo ─────────────────────────────────────── */
+.stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.9rem;
+    margin-bottom: 1.1rem;
+}
+
+.stat-tile {
+    background: var(--wr-surface-2);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    padding: 1rem 1.15rem;
+}
+
+.stat-value {
+    font-size: 1.7rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--wr-text);
+}
+
+/* rótulo de categoria é texto, não número — encolhe pra caber */
+.stat-value--accent {
+    font-size: 1.15rem;
+    color: var(--wr-primary);
+}
+
+.stat-label {
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--wr-text-muted);
+}
+
+/* ── Destaque do foco (amarra ao loop adaptativo) ────────── */
+.focus-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    background: var(--wr-primary-soft);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    padding: 0.85rem 1.05rem;
+    margin-bottom: 2rem;
+    line-height: 1.45;
+}
+
+.focus-icon {
+    color: var(--wr-primary);
+    flex: 0 0 auto;
+    margin-top: 0.1rem;
+}
+
+/* ── Lista de fraquezas ──────────────────────────────────── */
+.section-title {
+    font-size: 1.05rem;
+    font-weight: 650;
+    margin-bottom: 0.9rem;
+}
+
+.weak-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.weak-row {
+    background: var(--wr-surface);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    box-shadow: var(--wr-shadow-sm);
+    padding: 0.85rem 1.05rem;
+}
+
+/* a categoria líder ganha realce sutil */
+.weak-row--lead {
+    border-color: var(--wr-primary);
+    box-shadow: 0 0 0 1px var(--wr-primary-soft);
+}
+
+.weak-head {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.weak-label {
+    font-weight: 600;
+    color: var(--wr-text);
+}
+
+/* empurra a contagem pra direita */
+.weak-count {
+    margin-left: auto;
+    font-weight: 700;
+    color: var(--wr-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.weak-track {
+    height: 6px;
+    background: var(--wr-surface-2);
+    border-radius: 999px;
+    margin: 0.55rem 0 0.5rem;
+    overflow: hidden;
+}
+
+.weak-fill {
+    display: block;
+    height: 100%;
+    background: var(--wr-gradient);
+    border-radius: 999px;
+}
+
+.weak-desc {
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
+    line-height: 1.4;
+}
+
+/* ── Responsivo ──────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .stat-row {
+        grid-template-columns: 1fr;
+    }
+}
