@@ -39,11 +39,14 @@
 
 <body>
     <div id="app">
-        <svg class="loading-progress">
-            <circle r="40%" cx="50%" cy="50%" />
-            <circle r="40%" cx="50%" cy="50%" />
-        </svg>
-        <div class="loading-progress-text"></div>
+        <div class="app-loading">
+            <div class="app-loading-brand">
+                <span class="app-loading-mark">W</span>
+                <span class="app-loading-word">WriteRight</span>
+            </div>
+            <div class="app-loading-bar"><span></span></div>
+            <div class="app-loading-text">Carregando…</div>
+        </div>
     </div>
 
     <div id="blazor-error-ui">

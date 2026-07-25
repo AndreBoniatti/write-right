@@ -326,39 +326,76 @@ s { opacity: 0.85; }
         content: "Ocorreu um erro.";
     }
 
-.loading-progress {
+/* ── Tela de boot (runtime .NET carregando ao atualizar) ──── */
+
+.app-loading {
     position: absolute;
-    display: block;
-    width: 8rem;
-    height: 8rem;
-    inset: 20vh 0 auto 0;
-    margin: 0 auto 0 auto;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.4rem;
+    padding: 1rem;
 }
 
-    .loading-progress circle {
-        fill: none;
-        stroke: var(--wr-surface-2);
-        stroke-width: 0.6rem;
-        transform-origin: 50% 50%;
-        transform: rotate(-90deg);
-    }
+.app-loading-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
 
-        .loading-progress circle:last-child {
-            stroke: var(--wr-primary);
-            stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
-            transition: stroke-dasharray 0.05s ease-in-out;
-        }
+/* Mesmo monograma da navbar — a marca que carrega a cor. Pulsa de leve. */
+.app-loading-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
+    background: var(--wr-gradient);
+    color: #fff;
+    font-weight: 800;
+    font-size: 1.45rem;
+    letter-spacing: -0.03em;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 4px 16px rgba(106, 92, 255, 0.35);
+    animation: wr-pulse 1.4s ease-in-out infinite;
+}
 
-.loading-progress-text {
-    position: absolute;
-    text-align: center;
-    font-weight: bold;
+.app-loading-word {
+    font-size: 1.6rem;
+    font-weight: 750;
+    letter-spacing: -0.02em;
     color: var(--wr-text);
-    inset: calc(20vh + 3.25rem) 0 auto 0.2rem;
 }
 
-    .loading-progress-text:after {
-        content: var(--blazor-load-percentage-text, "Carregando");
-    }
+/* Barra que enche com o progresso real de download do Blazor. */
+.app-loading-bar {
+    width: 220px;
+    max-width: 70vw;
+    height: 6px;
+    background: var(--wr-surface-2);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.app-loading-bar > span {
+    display: block;
+    height: 100%;
+    width: var(--blazor-load-percentage, 0%);
+    background: var(--wr-gradient);
+    border-radius: 999px;
+    transition: width 0.15s ease-out;
+}
+
+.app-loading-text {
+    font-size: 0.85rem;
+    font-weight: 550;
+    color: var(--wr-text-muted);
+}
+
+@keyframes wr-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.06); opacity: 0.85; }
+}
 
 code { color: #c02d76; }
