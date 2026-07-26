@@ -30,7 +30,12 @@ internal static class CorrectionPrompt
         sb.AppendLine("- 'original' = o trecho errado como o aluno escreveu; 'correction' = esse mesmo trecho corrigido.");
         sb.AppendLine("- 'correctedText' = a tradução inteira, corrigida e natural.");
         sb.AppendLine("- Se a tradução estiver perfeita, devolva 'errors' vazio.");
-        sb.AppendLine("- Seja encorajador no 'overallComment', mas honesto.");
+        sb.AppendLine("- 'overallComment': em 1-2 frases, sintetize o PADRÃO principal dos erros e diga");
+        sb.AppendLine("  concretamente o que o aluno deve focar na próxima prática. É um resumo útil, não elogio.");
+        sb.AppendLine("  NÃO abra com elogio genérico nem fórmulas clichê (\"muito bom esforço\", \"parabéns\", etc.).");
+        sb.AppendLine("  NUNCA se dirija ao aluno por um nome: o texto de origem pode conter nomes de personagens");
+        sb.AppendLine("  que NÃO são o aluno. Fale direto na 2ª pessoa (\"sua tradução...\", \"foque em...\").");
+        sb.AppendLine("  Se a tradução estiver perfeita, diga isso em uma frase e aponte um detalhe a manter.");
         sb.AppendLine();
         sb.AppendLine("CATEGORIAS (use exatamente estes identificadores no campo 'category'):");
         foreach (var info in ErrorCatalog.All)

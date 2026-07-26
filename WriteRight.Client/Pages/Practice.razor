@@ -83,7 +83,12 @@ else
 
         @if (!string.IsNullOrWhiteSpace(practice.OverallComment))
         {
-            <div class="alert alert-info mt-3" style="max-width: 720px;">@practice.OverallComment</div>
+            <div class="alert alert-info mt-3" style="max-width: 720px;">
+                <h6 class="d-flex align-items-center gap-1 mb-1">
+                    <Icon Name="target" Size="16" /> No que focar
+                </h6>
+                @practice.OverallComment
+            </div>
         }
 
         <a class="btn btn-primary mt-2" href="practice/new">
