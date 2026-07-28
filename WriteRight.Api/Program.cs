@@ -4,6 +4,7 @@ using WriteRight.Api.Data;
 using WriteRight.Api.Llm;
 using WriteRight.Api.Services;
 using WriteRight.Shared.Practices;
+using WriteRight.Shared.Taxonomy;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -118,5 +119,11 @@ app.MapGet("/api/profile",
     async (PracticeService service, CancellationToken ct) =>
         Results.Ok(await service.GetProfileAsync(ct)))
    .WithName("GetProfile");
+
+// Erros reais de uma categoria (tela de revisão do perfil). Releitura, sem IA.
+app.MapGet("/api/profile/errors",
+    async (ErrorCategory category, PracticeService service, CancellationToken ct) =>
+        Results.Ok(await service.GetCategoryErrorsAsync(category, ct)))
+   .WithName("GetCategoryErrors");
 
 app.Run();

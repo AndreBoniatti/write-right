@@ -18,7 +18,7 @@ else if (error is not null)
 else if (profile is not null)
 {
     <div class="profile">
-    @if (profile.ByCategory.Count == 0)
+    @if (profile.Lifetime.Attempts == 0)
     {
         <div class="alert alert-info">
             Ainda não há dados. Comece uma <a href="practice/new">nova prática</a> e volte aqui pra ver
@@ -27,54 +27,69 @@ else if (profile is not null)
     }
     else
     {
-        var top = profile.ByCategory[0];
-        var topInfo = ErrorCatalog.Info(top.Category);
-        var maxCount = profile.ByCategory.Max(c => c.Count);
+        var life = profile.Lifetime;
+        var top = life.ByCategory.Count > 0 ? life.ByCategory[0] : null;
+        // Recent só difere do histórico quando há mais práticas do que cabem na janela.
+        var split = life.Attempts > profile.Recent.Attempts;
 
         <div class="stat-row">
             <div class="stat-tile">
-                <div class="stat-value">@profile.TotalAttempts</div>
+                <div class="stat-value">@life.Attempts</div>
                 <div class="stat-label">prática(s) concluída(s)</div>
             </div>
             <div class="stat-tile">
-                <div class="stat-value">@profile.TotalErrors</div>
+                <div class="stat-value">@life.TotalErrors</div>
                 <div class="stat-label">erro(s) no total</div>
             </div>
             <div class="stat-tile">
-                <div class="stat-value stat-value--accent">@topInfo.LabelPt</div>
-                <div class="stat-label">categoria mais frequente</div>
+                <div class="stat-value stat-value--accent">@(top is null ? "—" : ErrorCatalog.Info(top.Category).LabelPt)</div>
+                <div class="stat-label">prioridade de estudo</div>
             </div>
         </div>
 
-        <div class="focus-card">
-            <div class="focus-icon"><Icon Name="target" Size="20" /></div>
-            <div>
-                <strong>Foco atual: @topInfo.LabelPt.</strong>
-                As próximas práticas vão priorizar suas categorias mais frequentes.
-                <a href="practice/new">Começar uma nova prática</a> pra atacar isso.
+        @if (top is not null)
+        {
+            <div class="focus-card">
+                <div class="focus-icon"><Icon Name="target" Size="20" /></div>
+                <div>
+                    <strong>Foco atual: @ErrorCatalog.Info(top.Category).LabelPt.</strong>
+                    As próximas práticas priorizam suas categorias de maior peso (gravidade × frequência).
+                    <a href="practice/new">Começar uma nova prática</a> pra atacar isso.
+                </div>
             </div>
-        </div>
 
-        <h2 class="section-title">Onde você mais tropeça</h2>
+            <p class="profile-legend">
+                As barras são ponderadas por gravidade:
+                <strong>Quebra o sentido</strong> pesa 3×, <strong>Compreensível</strong> 2×,
+                <strong>Lapidação</strong> 1×. O número à direita é o volume de erros.
+            </p>
+        }
 
-        <div class="weak-list">
-            @foreach (var c in profile.ByCategory)
+        @if (split)
+        {
+            <h2 class="section-title">
+                Onde você tropeça agora
+                <span class="section-hint">· últimas @profile.Recent.Attempts prática(s)</span>
+            </h2>
+            @if (profile.Recent.ByCategory.Count == 0)
             {
-                var info = ErrorCatalog.Info(c.Category);
-                var pct = maxCount == 0 ? 0 : (int)Math.Round(100.0 * c.Count / maxCount);
-                <div class="weak-row @(c.Category == top.Category ? "weak-row--lead" : "")">
-                    <div class="weak-head">
-                        <span class="weak-label">@info.LabelPt</span>
-                        <span class="wr-badge wr-badge--muted">@GroupLabel(info.Group)</span>
-                        <span class="weak-count">@c.Count</span>
-                    </div>
-                    <div class="weak-track">
-                        <span class="weak-fill" style="width:@(pct)%"></span>
-                    </div>
-                    <div class="weak-desc">@info.Description</div>
+                <div class="alert alert-success">
+                    Nas suas últimas @profile.Recent.Attempts prática(s), nenhum erro recorrente. Segue assim.
                 </div>
             }
-        </div>
+            else
+            {
+                @WeakList(profile.Recent, "recent")
+            }
+
+            <h2 class="section-title section-title--spaced">No histórico todo</h2>
+            @WeakList(life, "life")
+        }
+        else
+        {
+            <h2 class="section-title">Onde você mais tropeça</h2>
+            @WeakList(life, "life")
+        }
     }
     </div>
 }
@@ -83,6 +98,11 @@ else if (profile is not null)
     private ErrorProfile? profile;
     private bool loading = true;
     private string? error;
+
+    // Revisão: quais painéis (tag:categoria) estão abertos, e o cache dos erros reais
+    // por categoria (null = carregando). Carrega sob demanda, na 1ª abertura.
+    private readonly HashSet<string> open = new();
+    private readonly Dictionary<ErrorCategory, IReadOnlyList<CategoryError>?> examples = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -100,6 +120,82 @@ else if (profile is not null)
         }
     }
 
+    // Lista de fraquezas de uma visão: barra = PESO (Score), número = volume (Count).
+    // Cada linha expande pra revisar os erros reais daquela categoria (carrega sob demanda).
+    private RenderFragment WeakList(ProfileView view, string tag) =>@<div class="weak-list">
+        @{
+            var maxScore = view.ByCategory.Count == 0 ? 0 : view.ByCategory.Max(c => c.Score);
+            var leader = view.ByCategory.Count == 0 ? (ErrorCategory?)null : view.ByCategory[0].Category;
+        }
+        @foreach (var c in view.ByCategory)
+        {
+            var info = ErrorCatalog.Info(c.Category);
+            var pct = maxScore == 0 ? 0 : (int)Math.Round(100.0 * c.Score / maxScore);
+            var isOpen = open.Contains($"{tag}:{c.Category}");
+            <div class="weak-row @(c.Category == leader ? "weak-row--lead" : "") @(isOpen ? "weak-row--open" : "")">
+                <div class="weak-head weak-head--btn" @onclick="() => ToggleAsync(tag, c.Category)">
+                    <span class="weak-label">@info.LabelPt</span>
+                    <span class="wr-badge wr-badge--muted">@GroupLabel(info.Group)</span>
+                    <span class="weak-count">@c.Count erro(s)</span>
+                    <span class="weak-chevron @(isOpen ? "weak-chevron--open" : "")">
+                        <Icon Name="chevron-down" Size="16" />
+                    </span>
+                </div>
+                <div class="weak-track">
+                    <span class="weak-fill" style="width:@(pct)%"></span>
+                </div>
+                <div class="weak-desc">@info.Description</div>
+
+                @if (isOpen)
+                {
+                    <div class="review">
+                        @if (examples.TryGetValue(c.Category, out var items) && items is not null)
+                        {
+                            @foreach (var it in items)
+                            {
+                                <div class="review-item">
+                                    <span class="@SeverityClass(it.Severity)">@SeverityLabel(it.Severity)</span>
+                                    <div class="review-diff">
+                                        <s class="text-danger">@it.Original</s>
+                                        <span class="review-arrow">→</span>
+                                        <strong class="text-success">@it.Correction</strong>
+                                    </div>
+                                    <div class="review-why">@it.Explanation</div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p class="review-loading">Carregando seus erros…</p>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>;
+
+    // Abre/fecha a revisão de uma categoria; carrega os erros reais na 1ª abertura.
+    private async Task ToggleAsync(string tag, ErrorCategory category)
+    {
+        var key = $"{tag}:{category}";
+        if (!open.Add(key)) { open.Remove(key); return; } // já estava aberto → fecha
+
+        if (!examples.ContainsKey(category))
+        {
+            examples[category] = null; // "carregando" (o re-render mostra o aviso)
+            try
+            {
+                examples[category] = await Api.GetCategoryErrorsAsync(category);
+            }
+            catch
+            {
+                examples.Remove(category); // deixa tentar de novo numa próxima abertura
+                open.Remove(key);
+                error = "Não deu pra carregar os erros dessa categoria. (A API está rodando?)";
+            }
+        }
+    }
+
     private static string GroupLabel(ErrorGroup g) => g switch
     {
         ErrorGroup.Structure => "Estrutura",
@@ -107,5 +203,22 @@ else if (profile is not null)
         ErrorGroup.Mechanics => "Mecânica",
         ErrorGroup.Style => "Estilo",
         _ => "Outros",
+    };
+
+    // Mesma linguagem visual da tela de correção (badge por gravidade).
+    private static string SeverityLabel(ErrorSeverity s) => s switch
+    {
+        ErrorSeverity.BreaksMeaning => "Quebra o sentido",
+        ErrorSeverity.Understandable => "Compreensível",
+        ErrorSeverity.Polish => "Lapidação",
+        _ => s.ToString(),
+    };
+
+    private static string SeverityClass(ErrorSeverity s) => s switch
+    {
+        ErrorSeverity.BreaksMeaning => "wr-badge wr-badge--danger",
+        ErrorSeverity.Understandable => "wr-badge wr-badge--warning",
+        ErrorSeverity.Polish => "wr-badge wr-badge--info",
+        _ => "wr-badge wr-badge--muted",
     };
 }

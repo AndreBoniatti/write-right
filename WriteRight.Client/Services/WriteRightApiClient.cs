@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using WriteRight.Shared.Practices;
 using WriteRight.Shared.Profile;
+using WriteRight.Shared.Taxonomy;
 
 namespace WriteRight.Client.Services;
 
@@ -69,4 +70,10 @@ public sealed class WriteRightApiClient
     /// <summary>Perfil de fraquezas (agregação das práticas concluídas).</summary>
     public async Task<ErrorProfile> GetProfileAsync(CancellationToken ct = default) =>
         (await _http.GetFromJsonAsync<ErrorProfile>("api/profile", Json, ct))!;
+
+    /// <summary>Os erros reais do usuário numa categoria (tela de revisão do perfil).</summary>
+    public async Task<IReadOnlyList<CategoryError>> GetCategoryErrorsAsync(
+        ErrorCategory category, CancellationToken ct = default) =>
+        await _http.GetFromJsonAsync<List<CategoryError>>(
+            $"api/profile/errors?category={category}", Json, ct) ?? new();
 }

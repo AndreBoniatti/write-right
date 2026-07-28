@@ -56,11 +56,31 @@
     margin-top: 0.1rem;
 }
 
+/* legenda dos pesos por gravidade — explica a régua das barras */
+.profile-legend {
+    font-size: 0.82rem;
+    color: var(--wr-text-muted);
+    line-height: 1.5;
+    margin: -0.8rem 0 1.6rem;
+}
+
 /* ── Lista de fraquezas ──────────────────────────────────── */
 .section-title {
     font-size: 1.05rem;
     font-weight: 650;
     margin-bottom: 0.9rem;
+}
+
+/* separa a segunda seção (histórico) da lista recente acima */
+.section-title--spaced {
+    margin-top: 2rem;
+}
+
+/* qualificador leve ao lado do título ("· últimas 5 práticas") */
+.section-hint {
+    font-weight: 400;
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
 }
 
 .weak-list {
@@ -121,6 +141,60 @@
     font-size: 0.85rem;
     color: var(--wr-text-muted);
     line-height: 1.4;
+}
+
+/* ── Revisão: erros reais, expandidos dentro da linha ────── */
+.weak-head--btn {
+    cursor: pointer;
+    user-select: none;
+}
+
+.weak-chevron {
+    display: inline-flex;
+    color: var(--wr-text-muted);
+    transition: transform 0.18s ease;
+}
+
+.weak-chevron--open {
+    transform: rotate(180deg);
+}
+
+.review {
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--wr-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.review-item {
+    background: var(--wr-surface-2);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    padding: 0.7rem 0.85rem;
+}
+
+.review-diff {
+    margin-top: 0.45rem;
+    line-height: 1.5;
+}
+
+.review-arrow {
+    color: var(--wr-text-muted);
+    margin: 0 0.2rem;
+}
+
+.review-why {
+    margin-top: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
+    line-height: 1.45;
+}
+
+.review-loading {
+    color: var(--wr-text-muted);
+    margin: 0;
 }
 
 /* ── Responsivo ──────────────────────────────────────────── */

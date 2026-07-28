@@ -37,6 +37,40 @@ public sealed class PracticeServiceTests : IDisposable
         return new CorrectionResult("I have a car.", errors, "Quase lá!");
     }
 
+    private static WritingError Err(ErrorCategory category, ErrorSeverity severity) =>
+        new(category, severity, "x", "y", "porquê");
+
+    /// <summary>
+    /// Semeia uma prática CONCLUÍDA direto no banco, com <paramref name="completedAt"/>
+    /// e erros explícitos. Dá controle total sobre severidade e sobre a ordem temporal
+    /// (o <c>CorrectPracticeAsync</c> carimbaria tudo com UtcNow) — o que o recorte
+    /// recente e a ponderação por gravidade precisam pra ser testados de forma determinística.
+    /// </summary>
+    private async Task SeedCompletedAsync(DateTimeOffset completedAt, params WritingError[] errors)
+    {
+        await using var ctx = _db.NewContext();
+        ctx.Exercises.Add(new ExerciseAttempt
+        {
+            SourceLanguage = Language.Portuguese,
+            TargetLanguage = Language.English,
+            Level = CefrLevel.B1,
+            Status = PracticeStatus.Completed,
+            SourceText = "seed",
+            UserTranslation = "seed",
+            CreatedAt = completedAt,
+            CompletedAt = completedAt,
+            Errors = errors.Select(e => new ExerciseError
+            {
+                Category = e.Category,
+                Severity = e.Severity,
+                Original = e.Original,
+                Correction = e.Correction,
+                Explanation = e.Explanation,
+            }).ToList(),
+        });
+        await ctx.SaveChangesAsync();
+    }
+
     // ── Criar ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -276,9 +310,12 @@ public sealed class PracticeServiceTests : IDisposable
     {
         var profile = await Service(new StubLlmProvider()).GetProfileAsync();
 
-        Assert.Equal(0, profile.TotalAttempts);
-        Assert.Equal(0, profile.TotalErrors);
-        Assert.Empty(profile.ByCategory);
+        Assert.Equal(0, profile.Lifetime.Attempts);
+        Assert.Equal(0, profile.Lifetime.TotalErrors);
+        Assert.Equal(0, profile.Lifetime.TotalScore);
+        Assert.Empty(profile.Lifetime.ByCategory);
+        Assert.Equal(0, profile.Recent.Attempts);
+        Assert.Empty(profile.Recent.ByCategory);
     }
 
     [Fact]
@@ -294,13 +331,13 @@ public sealed class PracticeServiceTests : IDisposable
         await Service(stub).CorrectPracticeAsync(created.Id, "x");
 
         var profile = await Service(new StubLlmProvider()).GetProfileAsync();
-        Assert.Equal(1, profile.TotalAttempts); // só a concluída
-        Assert.Equal(2, profile.TotalErrors);
-        Assert.Equal(2, profile.ByCategory.Count);
+        Assert.Equal(1, profile.Lifetime.Attempts); // só a concluída
+        Assert.Equal(2, profile.Lifetime.TotalErrors);
+        Assert.Equal(2, profile.Lifetime.ByCategory.Count);
     }
 
     [Fact]
-    public async Task GetProfileAsync_aggregates_and_orders_by_frequency()
+    public async Task GetProfileAsync_aggregates_and_orders_by_weighted_score()
     {
         // Prática 1 concluída: WordChoice ×2, Spelling ×1
         var stub1 = new StubLlmProvider(SampleExercise(), CorrectionWith(
@@ -316,14 +353,146 @@ public sealed class PracticeServiceTests : IDisposable
 
         var profile = await Service(new StubLlmProvider()).GetProfileAsync();
 
-        Assert.Equal(2, profile.TotalAttempts);
-        Assert.Equal(6, profile.TotalErrors);
+        Assert.Equal(2, profile.Lifetime.Attempts);
+        Assert.Equal(6, profile.Lifetime.TotalErrors);
 
-        // Ordenado da fraqueza mais frequente pra menos: WordChoice(3) > VerbTense(2) > Spelling(1).
-        Assert.Collection(profile.ByCategory,
-            c => { Assert.Equal(ErrorCategory.WordChoice, c.Category); Assert.Equal(3, c.Count); },
-            c => { Assert.Equal(ErrorCategory.VerbTense, c.Category); Assert.Equal(2, c.Count); },
-            c => { Assert.Equal(ErrorCategory.Spelling, c.Category); Assert.Equal(1, c.Count); });
+        // Tudo "Compreensível" (peso 2) → o Score é 2× a contagem; a ordem segue a
+        // frequência: WordChoice(3, peso 6) > VerbTense(2, peso 4) > Spelling(1, peso 2).
+        Assert.Collection(profile.Lifetime.ByCategory,
+            c => { Assert.Equal(ErrorCategory.WordChoice, c.Category); Assert.Equal(3, c.Count); Assert.Equal(6, c.Score); },
+            c => { Assert.Equal(ErrorCategory.VerbTense, c.Category); Assert.Equal(2, c.Count); Assert.Equal(4, c.Score); },
+            c => { Assert.Equal(ErrorCategory.Spelling, c.Category); Assert.Equal(1, c.Count); Assert.Equal(2, c.Score); });
+        Assert.Equal(12, profile.Lifetime.TotalScore);
+    }
+
+    [Fact]
+    public async Task GetProfileAsync_ranks_by_severity_weight_over_raw_frequency()
+    {
+        // Spelling ×2, mas só "Lapidação" (peso 1 cada = 2). Preposition ×1, mas
+        // "Quebra o sentido" (peso 3). O que atrapalha mais deve liderar, apesar de raro.
+        await SeedCompletedAsync(DateTimeOffset.UtcNow,
+            Err(ErrorCategory.Spelling, ErrorSeverity.Polish),
+            Err(ErrorCategory.Spelling, ErrorSeverity.Polish),
+            Err(ErrorCategory.Preposition, ErrorSeverity.BreaksMeaning));
+
+        var profile = await Service(new StubLlmProvider()).GetProfileAsync();
+
+        Assert.Collection(profile.Lifetime.ByCategory,
+            c => { Assert.Equal(ErrorCategory.Preposition, c.Category); Assert.Equal(1, c.Count); Assert.Equal(3, c.Score); },
+            c => { Assert.Equal(ErrorCategory.Spelling, c.Category); Assert.Equal(2, c.Count); Assert.Equal(2, c.Score); });
+        Assert.Equal(3, profile.Lifetime.TotalErrors);
+        Assert.Equal(5, profile.Lifetime.TotalScore);
+    }
+
+    [Fact]
+    public async Task GetProfileAsync_recent_window_keeps_only_last_five_completed()
+    {
+        // 6 práticas concluídas, categoria distinta em cada, da mais nova pra mais antiga.
+        var cats = new[]
+        {
+            ErrorCategory.Article, ErrorCategory.Preposition, ErrorCategory.Spelling,
+            ErrorCategory.VerbTense, ErrorCategory.WordChoice, ErrorCategory.Pronoun,
+        };
+        var now = DateTimeOffset.UtcNow;
+        for (var i = 0; i < cats.Length; i++)
+            await SeedCompletedAsync(now.AddMinutes(-i), Err(cats[i], ErrorSeverity.Understandable));
+        // i=5 (Pronoun) é a mais antiga (-5min) → deve cair fora do recorte recente.
+
+        var profile = await Service(new StubLlmProvider()).GetProfileAsync();
+
+        Assert.Equal(6, profile.Lifetime.Attempts);
+        Assert.Equal(6, profile.Lifetime.ByCategory.Count);
+
+        Assert.Equal(5, profile.Recent.Attempts);
+        Assert.Equal(5, profile.Recent.ByCategory.Count);
+        Assert.DoesNotContain(profile.Recent.ByCategory, c => c.Category == ErrorCategory.Pronoun);
+        Assert.Contains(profile.Lifetime.ByCategory, c => c.Category == ErrorCategory.Pronoun);
+    }
+
+    [Fact]
+    public async Task GetProfileAsync_recent_can_be_clean_while_lifetime_has_errors()
+    {
+        var now = DateTimeOffset.UtcNow;
+        // Uma antiga com erro; cinco recentes impecáveis (sem erros).
+        await SeedCompletedAsync(now.AddMinutes(-10), Err(ErrorCategory.Article, ErrorSeverity.Understandable));
+        for (var i = 0; i < 5; i++)
+            await SeedCompletedAsync(now.AddMinutes(-i));
+
+        var profile = await Service(new StubLlmProvider()).GetProfileAsync();
+
+        Assert.Equal(6, profile.Lifetime.Attempts);
+        Assert.Single(profile.Lifetime.ByCategory); // Article, do histórico
+        Assert.Equal(5, profile.Recent.Attempts);
+        Assert.Empty(profile.Recent.ByCategory); // limpo nas últimas cinco
+    }
+
+    // ── Revisão: erros reais por categoria ───────────────────────────────────
+
+    [Fact]
+    public async Task GetCategoryErrorsAsync_returns_only_that_category_newest_first()
+    {
+        var older = DateTimeOffset.UtcNow.AddHours(-1);
+        var newer = DateTimeOffset.UtcNow;
+        await SeedCompletedAsync(older,
+            new WritingError(ErrorCategory.Preposition, ErrorSeverity.BreaksMeaning, "in home", "at home", "usa 'at'"),
+            new WritingError(ErrorCategory.Spelling, ErrorSeverity.Polish, "adress", "address", "dois 'd'"));
+        await SeedCompletedAsync(newer,
+            new WritingError(ErrorCategory.Preposition, ErrorSeverity.Understandable, "to work", "for work", "é 'for work'"));
+
+        var items = await Service(new StubLlmProvider()).GetCategoryErrorsAsync(ErrorCategory.Preposition);
+
+        Assert.Equal(2, items.Count);               // só as preposições, não o Spelling
+        Assert.Equal("to work", items[0].Original); // mais recente primeiro
+        Assert.Equal("in home", items[1].Original);
+        Assert.Equal(ErrorSeverity.BreaksMeaning, items[1].Severity);
+        Assert.DoesNotContain(items, i => i.Original == "adress");
+        Assert.All(items, i => Assert.True(i.PracticeId > 0)); // traz a prática de origem
+    }
+
+    [Fact]
+    public async Task GetCategoryErrorsAsync_is_empty_for_category_without_errors()
+    {
+        await SeedCompletedAsync(DateTimeOffset.UtcNow, Err(ErrorCategory.Spelling, ErrorSeverity.Polish));
+
+        var items = await Service(new StubLlmProvider()).GetCategoryErrorsAsync(ErrorCategory.Preposition);
+
+        Assert.Empty(items);
+    }
+
+    [Fact]
+    public async Task GetCategoryErrorsAsync_ignores_errors_from_unfinished_practices()
+    {
+        // Uma concluída com o erro (deve vir); e uma "em andamento" com um erro plantado
+        // à força (não ocorre pela aplicação, mas o filtro por concluída tem que barrar).
+        await SeedCompletedAsync(DateTimeOffset.UtcNow,
+            Err(ErrorCategory.Preposition, ErrorSeverity.Understandable));
+        await using (var ctx = _db.NewContext())
+        {
+            ctx.Exercises.Add(new ExerciseAttempt
+            {
+                SourceLanguage = Language.Portuguese,
+                TargetLanguage = Language.English,
+                Status = PracticeStatus.InProgress,
+                SourceText = "x",
+                Errors =
+                {
+                    new ExerciseError
+                    {
+                        Category = ErrorCategory.Preposition,
+                        Severity = ErrorSeverity.Understandable,
+                        Original = "planted",
+                        Correction = "y",
+                        Explanation = "z",
+                    },
+                },
+            });
+            await ctx.SaveChangesAsync();
+        }
+
+        var items = await Service(new StubLlmProvider()).GetCategoryErrorsAsync(ErrorCategory.Preposition);
+
+        Assert.Single(items);
+        Assert.DoesNotContain(items, i => i.Original == "planted");
     }
 
     public void Dispose() => _db.Dispose();
