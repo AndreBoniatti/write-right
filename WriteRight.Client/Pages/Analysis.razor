@@ -1,0 +1,302 @@
+@page "/profile/analysis"
+@using WriteRight.Shared.Analysis
+@inject WriteRightApiClient Api
+
+<PageTitle>WriteRight — Análise dos meus erros</PageTitle>
+
+<div class="analysis">
+    <a class="back-link" href="profile">
+        <Icon Name="arrow-left" Size="16" /> Voltar ao perfil
+    </a>
+
+    <h1 class="mb-2 d-flex align-items-center gap-2">
+        <Icon Name="target" Size="26" /> Análise dos meus erros
+    </h1>
+    <p class="page-lead">
+        O perfil conta <em>o quê</em> você erra. Aqui a IA lê os seus erros reais e procura
+        o <em>porquê</em>: a sub-regra dentro da categoria e o fio que liga categorias diferentes.
+        Todo padrão vem com os erros que o sustentam — se não tem evidência, não vira padrão.
+    </p>
+
+    @if (loading)
+    {
+        <p class="text-muted">Carregando…</p>
+    }
+    else if (error is not null)
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+    else if (state is not null)
+    {
+        @Header(state)
+
+        @if (state.Latest is { } latest)
+        {
+            @Report(latest)
+        }
+        else if (!generating)
+        {
+            <div class="empty-card">
+                <Icon Name="chart" Size="22" />
+                <div>
+                    <strong>Nenhuma análise ainda.</strong>
+                    @if (state.Gate == AnalysisGate.NotEnoughData)
+                    {
+                        <span> Faça mais algumas práticas e volte — com pouco histórico qualquer
+                        "padrão" seria ruído com cara de conclusão.</span>
+                    }
+                    else
+                    {
+                        <span> Você já tem material suficiente. Gere a primeira acima.</span>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private AnalysisState? state;
+    private bool loading = true;
+    private bool generating;
+    private string? error;
+    private string? notice;
+
+    // Quais padrões estão com a evidência aberta (índice na lista).
+    private readonly HashSet<int> openEvidence = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            state = await Api.GetAnalysisStateAsync();
+        }
+        catch (Exception ex)
+        {
+            error = $"Não deu pra carregar a análise: {ex.Message}. (A API está rodando?)";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    // Cabeçalho: o que sustenta a análise atual + a ação de gerar/atualizar.
+    private RenderFragment Header(AnalysisState s) =>@<div class="head-card">
+        <div class="head-meta">
+            @if (s.Latest is { } l)
+            {
+                <div class="head-when">
+                    Gerada em <strong>@l.GeneratedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong>
+                </div>
+                <div class="head-basis">
+                    Baseada em @l.PracticesAnalyzed prática(s) e @l.ErrorsAnalyzed erro(s) reais.
+                    @if (s.NewPracticesSinceLatest > 0)
+                    {
+                        <span> Você fez @s.NewPracticesSinceLatest prática(s) desde então.</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="head-when"><strong>Sem análise gerada.</strong></div>
+                <div class="head-basis">
+                    Histórico atual: @s.CompletedPractices prática(s) concluída(s), @s.TotalErrors erro(s).
+                </div>
+            }
+        </div>
+
+        <div class="head-action">
+            <button class="btn btn-primary" disabled="@(generating || s.Gate == AnalysisGate.NotEnoughData)"
+                    @onclick="GenerateAsync">
+                @if (generating)
+                {
+                    <span>Analisando…</span>
+                }
+                else
+                {
+                    <span>@(s.Latest is null ? "Gerar análise" : "Atualizar análise")</span>
+                }
+            </button>
+            @if (s.Gate == AnalysisGate.NotEnoughData)
+            {
+                <div class="head-hint">
+                    Precisa de @s.MinPractices prática(s) e @s.MinErrors erro(s).
+                    Você tem @s.CompletedPractices e @s.TotalErrors.
+                </div>
+            }
+            else if (s.Gate == AnalysisGate.UpToDate && !generating)
+            {
+                <div class="head-hint">Pouca coisa mudou desde a última — regerar provavelmente dirá o mesmo.</div>
+            }
+        </div>
+
+        @if (generating)
+        {
+            <div class="head-progress">
+                Lendo seus erros e procurando padrão. Isso leva alguns segundos.
+            </div>
+        }
+        @if (notice is not null)
+        {
+            <div class="head-notice">@notice</div>
+        }
+    </div>;
+
+    // O relatório em si: padrões (com evidência) e o que estudar.
+    private RenderFragment Report(WeaknessAnalysis a) =>@<div>
+        <h2 class="section-title">
+            O que está por trás dos seus erros
+            <span class="section-hint">· @a.Patterns.Count padr(ão/ões)</span>
+        </h2>
+
+        @if (a.Patterns.Count == 0)
+        {
+            <div class="alert alert-info">Nenhum padrão com evidência suficiente nesta análise.</div>
+        }
+
+        <div class="pattern-list">
+            @for (var i = 0; i < a.Patterns.Count; i++)
+            {
+                var index = i;
+                var p = a.Patterns[index];
+                var isOpen = openEvidence.Contains(index);
+                <div class="pattern @(index == 0 ? "pattern--lead" : "")">
+                    <div class="pattern-head">
+                        <span class="pattern-rank">@(index + 1)</span>
+                        <h3 class="pattern-title">@p.Title</h3>
+                    </div>
+
+                    <div class="pattern-cats">
+                        @foreach (var c in p.Categories)
+                        {
+                            <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(c).LabelPt</span>
+                        }
+                    </div>
+
+                    <p class="pattern-diagnosis">@p.Diagnosis</p>
+
+                    <button class="evidence-toggle" @onclick="() => ToggleEvidence(index)">
+                        <span class="evidence-chevron @(isOpen ? "evidence-chevron--open" : "")">
+                            <Icon Name="chevron-down" Size="16" />
+                        </span>
+                        @(isOpen ? "Esconder" : "Ver") os @p.Evidence.Count erro(s) que sustentam isso
+                    </button>
+
+                    @if (isOpen)
+                    {
+                        <div class="review">
+                            @foreach (var e in p.Evidence)
+                            {
+                                <div class="review-item">
+                                    <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                                    <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(e.Category).LabelPt</span>
+                                    <div class="review-diff">
+                                        <s class="text-danger">@e.Original</s>
+                                        <span class="review-arrow">→</span>
+                                        <strong class="text-success">@e.Correction</strong>
+                                    </div>
+                                    <div class="review-why">@e.Explanation</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (a.StudyItems.Count > 0)
+        {
+            <h2 class="section-title section-title--spaced">O que estudar a seguir</h2>
+            <div class="study-list">
+                @foreach (var item in a.StudyItems)
+                {
+                    <div class="study">
+                        <div class="study-head">
+                            <span class="@KindClass(item.Kind)">@KindLabel(item.Kind)</span>
+                            <h3 class="study-title">@item.Title</h3>
+                        </div>
+                        <div class="study-content">@item.Content</div>
+                    </div>
+                }
+            </div>
+        }
+
+        <p class="analysis-foot">
+            A análise olha só as linhas de erro registradas — nunca os textos inteiros. Por isso ela
+            não comenta coisas como tamanho de frase ou repetição de vocabulário: sem registro,
+            seria afirmação sem lastro. Ponto cego escolhido, não esquecimento.
+        </p>
+    </div>;
+
+    private void ToggleEvidence(int index)
+    {
+        if (!openEvidence.Add(index)) openEvidence.Remove(index);
+    }
+
+    private async Task GenerateAsync()
+    {
+        generating = true;
+        notice = null;
+        error = null;
+
+        try
+        {
+            var result = await Api.GenerateAnalysisAsync();
+            switch (result.Status)
+            {
+                case GenerateAnalysisStatus.Ok:
+                    openEvidence.Clear(); // análise nova = painéis fechados de novo
+                    state = await Api.GetAnalysisStateAsync();
+                    break;
+                case GenerateAnalysisStatus.NotEnoughData:
+                    notice = "Ainda não há histórico suficiente pra uma análise honesta.";
+                    break;
+                case GenerateAnalysisStatus.NoGrounding:
+                    notice = "A IA respondeu sem evidência válida, então nada foi salvo. Tente de novo.";
+                    break;
+                default:
+                    notice = "Falhou ao gerar a análise. (A API está rodando?)";
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            notice = $"Falhou ao gerar a análise: {ex.Message}";
+        }
+        finally
+        {
+            generating = false;
+        }
+    }
+
+    private static string KindLabel(StudyItemKind kind) => kind switch
+    {
+        StudyItemKind.Rule => "Regra",
+        _ => "Tema",
+    };
+
+    // Regra é algo que dá pra fechar hoje; tema é trabalho de longo prazo — cores diferentes.
+    private static string KindClass(StudyItemKind kind) => kind switch
+    {
+        StudyItemKind.Rule => "wr-badge wr-badge--success",
+        _ => "wr-badge wr-badge--info",
+    };
+
+    // Mesma linguagem visual da correção e do perfil.
+    private static string SeverityLabel(ErrorSeverity s) => s switch
+    {
+        ErrorSeverity.BreaksMeaning => "Quebra o sentido",
+        ErrorSeverity.Understandable => "Compreensível",
+        ErrorSeverity.Polish => "Lapidação",
+        _ => s.ToString(),
+    };
+
+    private static string SeverityClass(ErrorSeverity s) => s switch
+    {
+        ErrorSeverity.BreaksMeaning => "wr-badge wr-badge--danger",
+        ErrorSeverity.Understandable => "wr-badge wr-badge--warning",
+        ErrorSeverity.Polish => "wr-badge wr-badge--info",
+        _ => "wr-badge wr-badge--muted",
+    };
+}

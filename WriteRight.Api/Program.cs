@@ -24,6 +24,7 @@ builder.Services.AddDbContext<WriteRightDbContext>(o => o.UseSqlite(connectionSt
 builder.Services.Configure<LlmOptions>(builder.Configuration.GetSection(LlmOptions.SectionName));
 builder.Services.AddScoped<ILlmProvider, AnthropicLlmProvider>();
 builder.Services.AddScoped<PracticeService>();
+builder.Services.AddScoped<AnalysisService>();
 
 // CORS pro front (Blazor WASM roda em outra origem).
 const string clientCors = "WriteRightClient";
@@ -125,5 +126,27 @@ app.MapGet("/api/profile/errors",
     async (ErrorCategory category, PracticeService service, CancellationToken ct) =>
         Results.Ok(await service.GetCategoryErrorsAsync(category, ct)))
    .WithName("GetCategoryErrors");
+
+// Análise de fraquezas: a última gerada + se vale gerar outra.
+app.MapGet("/api/analysis",
+    async (AnalysisService service, CancellationToken ct) =>
+        Results.Ok(await service.GetStateAsync(ct)))
+   .WithName("GetAnalysisState");
+
+// Gera uma análise nova (chama a IA e persiste).
+app.MapPost("/api/analysis",
+    async (AnalysisService service, CancellationToken ct) =>
+    {
+        var (outcome, analysis) = await service.GenerateAsync(ct);
+        return outcome switch
+        {
+            AnalysisOutcome.Ok => Results.Ok(analysis),
+            // Histórico pequeno demais: pedido legítimo, estado errado.
+            AnalysisOutcome.NotEnoughData => Results.Conflict(),
+            // Modelo respondeu sem lastro: nada persistido, dá pra tentar de novo.
+            _ => Results.UnprocessableEntity(),
+        };
+    })
+   .WithName("GenerateAnalysis");
 
 app.Run();

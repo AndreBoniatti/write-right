@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WriteRight.Api.Data;
 
@@ -10,9 +11,11 @@ using WriteRight.Api.Data;
 namespace WriteRight.Api.Migrations
 {
     [DbContext(typeof(WriteRightDbContext))]
-    partial class WriteRightDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260801013459_AddAnalysisRecord")]
+    partial class AddAnalysisRecord
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");

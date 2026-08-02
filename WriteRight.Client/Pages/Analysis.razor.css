@@ -1,0 +1,271 @@
+/* Mesma largura de coluna do perfil — as duas telas são leitura, não painel. */
+.analysis {
+    max-width: 860px;
+}
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.88rem;
+    color: var(--wr-text-muted);
+    margin-bottom: 0.9rem;
+}
+
+.back-link:hover {
+    color: var(--wr-primary);
+}
+
+/* Explica a diferença entre esta tela e o perfil já na abertura. */
+.page-lead {
+    color: var(--wr-text-muted);
+    line-height: 1.55;
+    margin-bottom: 1.4rem;
+}
+
+/* ── Cabeçalho: sobre o que a análise se apoia + ação ─────── */
+.head-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1rem;
+    background: var(--wr-surface-2);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    padding: 1rem 1.15rem;
+    margin-bottom: 2rem;
+}
+
+.head-meta {
+    flex: 1 1 260px;
+}
+
+.head-when {
+    font-size: 0.95rem;
+}
+
+.head-basis {
+    margin-top: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
+    line-height: 1.45;
+}
+
+.head-action {
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+/* Diz POR QUE o botão está como está, em vez de só desabilitar calado. */
+.head-hint {
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--wr-text-muted);
+    max-width: 260px;
+    line-height: 1.4;
+}
+
+.head-progress,
+.head-notice {
+    flex: 1 1 100%;
+    border-top: 1px solid var(--wr-border);
+    padding-top: 0.7rem;
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
+}
+
+.head-notice {
+    color: var(--wr-danger);
+}
+
+/* ── Estado vazio ────────────────────────────────────────── */
+.empty-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    background: var(--wr-primary-soft);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    padding: 0.95rem 1.15rem;
+    line-height: 1.5;
+}
+
+.empty-card > :first-child {
+    color: var(--wr-primary);
+    flex: 0 0 auto;
+    margin-top: 0.15rem;
+}
+
+/* ── Padrões ─────────────────────────────────────────────── */
+.section-title {
+    font-size: 1.05rem;
+    font-weight: 650;
+    margin-bottom: 0.9rem;
+}
+
+.section-title--spaced {
+    margin-top: 2.2rem;
+}
+
+.section-hint {
+    font-weight: 400;
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
+}
+
+.pattern-list,
+.study-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.pattern,
+.study {
+    background: var(--wr-surface);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    box-shadow: var(--wr-shadow-sm);
+    padding: 1rem 1.15rem;
+}
+
+/* O primeiro padrão é o mais importante — o modelo ordena por isso. */
+.pattern--lead {
+    border-color: var(--wr-primary);
+    box-shadow: 0 0 0 1px var(--wr-primary-soft);
+}
+
+.pattern-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+}
+
+.pattern-rank {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--wr-primary);
+    background: var(--wr-primary-soft);
+    border-radius: 999px;
+    width: 1.5rem;
+    height: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.pattern-title,
+.study-title {
+    font-size: 1rem;
+    font-weight: 650;
+    margin: 0;
+    line-height: 1.35;
+}
+
+.pattern-cats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0.6rem 0 0.55rem;
+}
+
+.pattern-diagnosis {
+    margin: 0;
+    line-height: 1.55;
+}
+
+/* ── Evidência (o lastro do padrão) ──────────────────────── */
+.evidence-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+    padding: 0;
+    background: none;
+    border: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--wr-primary);
+    cursor: pointer;
+}
+
+.evidence-chevron {
+    display: inline-flex;
+    transition: transform 0.18s ease;
+}
+
+.evidence-chevron--open {
+    transform: rotate(180deg);
+}
+
+/* Mesmo visual da revisão do perfil — é o mesmo tipo de conteúdo. */
+.review {
+    margin-top: 0.85rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--wr-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.review-item {
+    background: var(--wr-surface-2);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    padding: 0.7rem 0.85rem;
+}
+
+.review-diff {
+    margin-top: 0.45rem;
+    line-height: 1.5;
+}
+
+.review-arrow {
+    color: var(--wr-text-muted);
+    margin: 0 0.2rem;
+}
+
+.review-why {
+    margin-top: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
+    line-height: 1.45;
+}
+
+/* ── Itens de estudo ─────────────────────────────────────── */
+.study-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.study-content {
+    margin-top: 0.6rem;
+    line-height: 1.6;
+    white-space: pre-wrap; /* a regra costuma vir com quebras e exemplos em linhas */
+}
+
+/* ── Rodapé: deixa o ponto cego explícito ────────────────── */
+.analysis-foot {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--wr-border);
+    font-size: 0.8rem;
+    color: var(--wr-text-muted);
+    line-height: 1.5;
+}
+
+/* ── Responsivo ──────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .head-action {
+        flex: 1 1 100%;
+        text-align: left;
+    }
+
+    .head-hint {
+        max-width: none;
+    }
+}

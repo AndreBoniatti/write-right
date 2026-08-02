@@ -1,3 +1,4 @@
+using WriteRight.Shared.Analysis;
 using WriteRight.Shared.Corrections;
 using WriteRight.Shared.Exercises;
 
@@ -23,4 +24,12 @@ public interface ILlmProvider
     /// </summary>
     Task<CorrectionResult> CorrectAsync(
         CorrectionRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Analisa o histórico de erros e devolve os padrões por trás deles. A saída é
+    /// <b>crua</b> (evidência por id): quem confere os ids contra o que foi enviado
+    /// é o serviço, não o provider.
+    /// </summary>
+    Task<AnalysisDraft> AnalyzeAsync(
+        AnalysisRequest request, CancellationToken ct = default);
 }

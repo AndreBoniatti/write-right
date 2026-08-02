@@ -64,6 +64,52 @@
     margin: -0.8rem 0 1.6rem;
 }
 
+/* ── Entrada pra análise (o "porquê" mora em outra tela) ─── */
+.analysis-cta {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    background: var(--wr-surface);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    box-shadow: var(--wr-shadow-sm);
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 2rem;
+    color: var(--wr-text);
+    transition: border-color 0.15s ease;
+}
+
+.analysis-cta:hover {
+    border-color: var(--wr-primary);
+    color: var(--wr-text);
+}
+
+.analysis-cta-icon {
+    color: var(--wr-primary);
+    display: inline-flex;
+    flex: 0 0 auto;
+}
+
+.analysis-cta-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    line-height: 1.4;
+}
+
+.analysis-cta-text span {
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
+}
+
+.analysis-cta-go {
+    margin-left: auto;
+    flex: 0 0 auto;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--wr-primary);
+}
+
 /* ── Lista de fraquezas ──────────────────────────────────── */
 .section-title {
     font-size: 1.05rem;

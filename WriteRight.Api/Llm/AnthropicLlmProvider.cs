@@ -2,6 +2,7 @@ using System.Text.Json;
 using Anthropic;
 using Anthropic.Models.Messages;
 using Microsoft.Extensions.Options;
+using WriteRight.Shared.Analysis;
 using WriteRight.Shared.Corrections;
 using WriteRight.Shared.Exercises;
 
@@ -65,6 +66,28 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         var json = FirstText(response);
         return JsonSerializer.Deserialize<CorrectionResult>(json, LlmJson.Options)
             ?? throw new InvalidOperationException("Falha ao desserializar a correção da IA.");
+    }
+
+    public async Task<AnalysisDraft> AnalyzeAsync(
+        AnalysisRequest request, CancellationToken ct = default)
+    {
+        var client = CreateClient();
+
+        var response = await client.Messages.Create(new MessageCreateParams
+        {
+            Model = _options.AnalysisModel,
+            MaxTokens = 8000,
+            System = AnalysisPrompt.BuildSystemPrompt(request),
+            Messages = [new() { Role = Role.User, Content = AnalysisPrompt.BuildUserMessage(request) }],
+            OutputConfig = new OutputConfig
+            {
+                Format = new JsonOutputFormat { Schema = AnalysisPrompt.BuildResultSchema(request) },
+            },
+        });
+
+        var json = FirstText(response);
+        return JsonSerializer.Deserialize<AnalysisDraft>(json, LlmJson.Options)
+            ?? throw new InvalidOperationException("Falha ao desserializar a análise da IA.");
     }
 
     /// <summary>Extrai o JSON do primeiro bloco de texto (structured output).</summary>

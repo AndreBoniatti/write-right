@@ -22,4 +22,13 @@ public sealed class LlmOptions
 
     /// <summary>Modelo pra correção (melhor — é onde a qualidade importa).</summary>
     public string CorrectionModel { get; set; } = "claude-sonnet-5";
+
+    /// <summary>
+    /// Modelo pra análise de fraquezas. É a tarefa mais analítica do app — a
+    /// correção olha um texto, esta olha o histórico inteiro e precisa achar
+    /// estrutura. Modelo fraco aqui devolve exatamente o conselho genérico que o
+    /// desenho todo tenta evitar. Roda raro (análise persistida), então o custo por
+    /// chamada pesa pouco.
+    /// </summary>
+    public string AnalysisModel { get; set; } = "claude-sonnet-5";
 }

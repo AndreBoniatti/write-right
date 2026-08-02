@@ -1,4 +1,5 @@
 using WriteRight.Api.Llm;
+using WriteRight.Shared.Analysis;
 using WriteRight.Shared.Corrections;
 using WriteRight.Shared.Exercises;
 
@@ -13,15 +14,21 @@ public sealed class StubLlmProvider : ILlmProvider
 {
     private readonly GeneratedExercise? _exercise;
     private readonly CorrectionResult? _correction;
+    private readonly AnalysisDraft? _analysis;
 
-    public StubLlmProvider(GeneratedExercise? exercise = null, CorrectionResult? correction = null)
+    public StubLlmProvider(
+        GeneratedExercise? exercise = null,
+        CorrectionResult? correction = null,
+        AnalysisDraft? analysis = null)
     {
         _exercise = exercise;
         _correction = correction;
+        _analysis = analysis;
     }
 
     public CorrectionRequest? LastCorrectionRequest { get; private set; }
     public ExerciseGenerationRequest? LastGenerationRequest { get; private set; }
+    public AnalysisRequest? LastAnalysisRequest { get; private set; }
 
     public Task<GeneratedExercise> GenerateExerciseAsync(
         ExerciseGenerationRequest request, CancellationToken ct = default)
@@ -37,5 +44,13 @@ public sealed class StubLlmProvider : ILlmProvider
         LastCorrectionRequest = request;
         return Task.FromResult(_correction
             ?? throw new InvalidOperationException("StubLlmProvider sem correção configurada."));
+    }
+
+    public Task<AnalysisDraft> AnalyzeAsync(
+        AnalysisRequest request, CancellationToken ct = default)
+    {
+        LastAnalysisRequest = request;
+        return Task.FromResult(_analysis
+            ?? throw new InvalidOperationException("StubLlmProvider sem análise configurada."));
     }
 }

@@ -8,6 +8,7 @@ public class WriteRightDbContext : DbContext
 
     public DbSet<ExerciseAttempt> Exercises => Set<ExerciseAttempt>();
     public DbSet<ExerciseError> Errors => Set<ExerciseError>();
+    public DbSet<AnalysisRecord> Analyses => Set<AnalysisRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -265,7 +265,7 @@ public sealed class PracticeService
     {
         var byCategory = errors
             .GroupBy(e => e.Category)
-            .Select(g => new CategoryWeight(g.Key, g.Count(), g.Sum(e => Weight(e.Severity))))
+            .Select(g => new CategoryWeight(g.Key, g.Count(), g.Sum(e => SeverityWeight.Of(e.Severity))))
             .OrderByDescending(c => c.Score)
             .ThenByDescending(c => c.Count)
             .ThenBy(c => c.Category) // desempate estável (ordenação determinística)
@@ -274,15 +274,6 @@ public sealed class PracticeService
         return new ProfileView(
             attempts, byCategory.Sum(c => c.Count), byCategory.Sum(c => c.Score), byCategory);
     }
-
-    /// <summary>Peso de estudo por severidade: o que quebra a comunicação vem antes do detalhe fino.</summary>
-    private static int Weight(ErrorSeverity severity) => severity switch
-    {
-        ErrorSeverity.BreaksMeaning => 3,
-        ErrorSeverity.Understandable => 2,
-        ErrorSeverity.Polish => 1,
-        _ => 1,
-    };
 
     /// <summary>Linha de erro materializada do banco, pra agregar em memória.</summary>
     private sealed record ErrorRow(ErrorCategory Category, ErrorSeverity Severity, int AttemptId);

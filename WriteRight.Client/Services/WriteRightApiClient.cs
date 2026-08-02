@@ -2,11 +2,27 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using WriteRight.Shared.Analysis;
 using WriteRight.Shared.Practices;
 using WriteRight.Shared.Profile;
 using WriteRight.Shared.Taxonomy;
 
 namespace WriteRight.Client.Services;
+
+/// <summary>Desfecho de um pedido de análise, traduzido do status HTTP.</summary>
+public enum GenerateAnalysisStatus
+{
+    Ok,
+    /// <summary>Histórico pequeno demais (409).</summary>
+    NotEnoughData,
+    /// <summary>A IA respondeu sem evidência válida (422) — dá pra tentar de novo.</summary>
+    NoGrounding,
+    /// <summary>Falha de rede/servidor.</summary>
+    Failed,
+}
+
+/// <summary>Resultado de <see cref="WriteRightApiClient.GenerateAnalysisAsync"/>.</summary>
+public sealed record GenerateAnalysisResult(GenerateAnalysisStatus Status, WeaknessAnalysis? Analysis);
 
 /// <summary>
 /// Cliente tipado da API do WriteRight. Centraliza as chamadas HTTP e as opções
@@ -76,4 +92,31 @@ public sealed class WriteRightApiClient
         ErrorCategory category, CancellationToken ct = default) =>
         await _http.GetFromJsonAsync<List<CategoryError>>(
             $"api/profile/errors?category={category}", Json, ct) ?? new();
+
+    /// <summary>Última análise de fraquezas + se vale gerar outra.</summary>
+    public async Task<AnalysisState> GetAnalysisStateAsync(CancellationToken ct = default) =>
+        (await _http.GetFromJsonAsync<AnalysisState>("api/analysis", Json, ct))!;
+
+    /// <summary>
+    /// Gera uma análise nova (chamada de IA — demora). Traduz o status HTTP no motivo,
+    /// pra tela poder dizer o que houve em vez de só "falhou".
+    /// </summary>
+    public async Task<GenerateAnalysisResult> GenerateAnalysisAsync(CancellationToken ct = default)
+    {
+        var resp = await _http.PostAsync("api/analysis", content: null, ct);
+
+        if (resp.IsSuccessStatusCode)
+        {
+            var analysis = await resp.Content.ReadFromJsonAsync<WeaknessAnalysis>(Json, ct);
+            return new GenerateAnalysisResult(GenerateAnalysisStatus.Ok, analysis);
+        }
+
+        var status = resp.StatusCode switch
+        {
+            HttpStatusCode.Conflict => GenerateAnalysisStatus.NotEnoughData,
+            HttpStatusCode.UnprocessableEntity => GenerateAnalysisStatus.NoGrounding,
+            _ => GenerateAnalysisStatus.Failed,
+        };
+        return new GenerateAnalysisResult(status, null);
+    }
 }
