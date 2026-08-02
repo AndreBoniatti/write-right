@@ -16,13 +16,19 @@ namespace WriteRight.Shared.Exercises;
 /// Gancho adaptativo: categorias que o texto deve <b>forçar</b> o usuário a
 /// praticar (as fraquezas do perfil). Nulo/vazio = texto neutro.
 /// </param>
+/// <param name="Variety">
+/// Eixos de forma sorteados no servidor (tempo verbal, registro, ponto de vista,
+/// assunto). É o que impede a geração de convergir sempre pro mesmo texto — ver
+/// <see cref="TextVariety"/>. Nulo = sem variação forçada.
+/// </param>
 public sealed record ExerciseGenerationRequest(
     Language SourceLanguage,
     Language TargetLanguage,
     int WordCount,
     CefrLevel Level,
     string? Theme = null,
-    IReadOnlyList<ErrorCategory>? FocusCategories = null);
+    IReadOnlyList<ErrorCategory>? FocusCategories = null,
+    TextVariety? Variety = null);
 
 /// <summary>Texto gerado pro usuário traduzir, com o eco dos parâmetros usados.</summary>
 public sealed record GeneratedExercise(

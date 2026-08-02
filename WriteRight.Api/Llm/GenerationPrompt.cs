@@ -39,7 +39,30 @@ internal static class GenerationPrompt
         sb.AppendLine($"O estudante vai traduzir para: {LlmText.LanguageName(request.TargetLanguage)}");
         sb.AppendLine($"Tamanho: aproximadamente {request.WordCount} palavras.");
         sb.AppendLine($"Nível (CEFR): {request.Level}.");
-        sb.AppendLine($"Tema: {(string.IsNullOrWhiteSpace(request.Theme) ? "escolha um tema cotidiano e interessante" : request.Theme)}.");
+
+        // Tema do usuário é fronteira; assunto sorteado é trampolim. A diferença de
+        // palavra importa: "Tema: X" o modelo lê como cerca e não sai dali, o que
+        // reduziria os textos aos limites literais do catálogo. Quando a escolha foi
+        // NOSSA, e não do usuário, ele deve poder derivar. (O fallback antigo, "um
+        // tema cotidiano", era o funil que produzia sempre a mesma vinheta doméstica.)
+        if (!string.IsNullOrWhiteSpace(request.Theme))
+            sb.AppendLine($"Tema: {request.Theme}.");
+        else if (request.Variety is { } picked)
+            sb.AppendLine($"Ponto de partida: {picked.Domain} — sinta-se livre para derivar " +
+                          "para assuntos vizinhos ou para um recorte inesperado dele.");
+        else
+            sb.AppendLine("Tema: escolha um assunto específico e concreto.");
+
+        if (request.Variety is { } variety)
+        {
+            sb.AppendLine();
+            sb.AppendLine("FORMA (siga à risca — estes eixos mudam a cada exercício de propósito):");
+            sb.AppendLine($"- Tempo verbal predominante: {variety.Tense}.");
+            sb.AppendLine($"- Registro: {variety.Register}.");
+            sb.AppendLine($"- Ponto de vista: {variety.PointOfView}.");
+            if (variety.CharacterInitial is { } initial)
+                sb.AppendLine($"- O nome do personagem deve começar com a letra {initial}.");
+        }
 
         if (request.FocusCategories is { Count: > 0 })
         {

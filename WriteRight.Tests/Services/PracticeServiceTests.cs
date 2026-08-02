@@ -118,6 +118,20 @@ public sealed class PracticeServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CreatePracticeAsync_always_rolls_the_text_variety()
+    {
+        // Sem foco, o resto do prompt é idêntico em toda geração — a variedade
+        // sorteada é a única coisa que impede o modelo de devolver sempre o mesmo texto.
+        var stub = new StubLlmProvider(SampleExercise());
+        await Service(stub).CreatePracticeAsync(CreateRequest(focusOnWeaknesses: false));
+
+        var variety = stub.LastGenerationRequest!.Variety;
+        Assert.NotNull(variety);
+        Assert.Contains(variety!.Domain, VarietyCatalog.Domains);
+        Assert.Contains(variety.Tense, VarietyCatalog.Tenses);
+    }
+
+    [Fact]
     public async Task CreatePracticeAsync_with_focus_but_no_history_passes_no_categories()
     {
         // Foco pedido, mas sem histórico ainda → nada pra mirar.

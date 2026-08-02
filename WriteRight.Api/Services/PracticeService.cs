@@ -61,10 +61,14 @@ public sealed class PracticeService
                 focus = profile.Lifetime.ByCategory.Take(FocusCategoryCount).Select(c => c.Category).ToList();
         }
 
+        // Sorteia a FORMA do texto (tempo verbal, registro, ponto de vista, assunto).
+        // Sem isto, uma prática sem foco manda um prompt idêntico toda vez — e prompt
+        // idêntico devolve sempre o mesmo texto modal. A variedade tem que vir daqui,
+        // porque o modelo não lembra o que já gerou.
         var generated = await _llm.GenerateExerciseAsync(
             new ExerciseGenerationRequest(
                 request.SourceLanguage, request.TargetLanguage, request.WordCount,
-                request.Level, request.Theme, focus),
+                request.Level, request.Theme, focus, VarietyCatalog.Pick()),
             ct);
 
         var practice = new ExerciseAttempt
