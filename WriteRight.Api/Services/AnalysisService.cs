@@ -7,6 +7,7 @@ using WriteRight.Shared.Analysis;
 using WriteRight.Shared.Practices;
 using WriteRight.Shared.Profile;
 using WriteRight.Shared.Taxonomy;
+using WriteRight.Shared.Usage;
 
 namespace WriteRight.Api.Services;
 
@@ -76,11 +77,13 @@ public sealed class AnalysisService
 
     private readonly ILlmProvider _llm;
     private readonly WriteRightDbContext _db;
+    private readonly UsageService _usage;
 
-    public AnalysisService(ILlmProvider llm, WriteRightDbContext db)
+    public AnalysisService(ILlmProvider llm, WriteRightDbContext db, UsageService usage)
     {
         _llm = llm;
         _db = db;
+        _usage = usage;
     }
 
     /// <summary>
@@ -133,10 +136,30 @@ public sealed class AnalysisService
             MinEvidence,
             MaxStudyItems);
 
-        var draft = await _llm.AnalyzeAsync(request, ct);
+        LlmResult<AnalysisDraft> result;
+        try
+        {
+            result = await _llm.AnalyzeAsync(request, ct);
+        }
+        catch (LlmCallFailedException ex)
+        {
+            // Mesmo raciocínio do NoGrounding logo abaixo: cobrado sem produzir
+            // análise. A diferença é só o motivo — aqui a resposta nem foi lida.
+            _usage.Record(LlmOperation.Analysis, ex.Usage);
+            await _db.SaveChangesAsync(UsageService.AfterBilling);
+            throw;
+        }
 
-        var patterns = Ground(draft.Patterns, window.Errors);
-        if (patterns.Count == 0) return (AnalysisOutcome.NoGrounding, null);
+        var patterns = Ground(result.Value.Patterns, window.Errors);
+        if (patterns.Count == 0)
+        {
+            // Nada é persistido como análise — mas a chamada FOI cobrada. O consumo
+            // é gravado assim mesmo (sem AnalysisId): esta é exatamente a chamada
+            // que some de qualquer instrumentação presa ao resultado.
+            _usage.Record(LlmOperation.Analysis, result.Usage);
+            await _db.SaveChangesAsync(UsageService.AfterBilling);
+            return (AnalysisOutcome.NoGrounding, null);
+        }
 
         var record = new AnalysisRecord
         {
@@ -144,11 +167,19 @@ public sealed class AnalysisService
             PracticesAnalyzed = window.Practices,
             ErrorsAnalyzed = window.Errors.Count,
             PatternsJson = JsonSerializer.Serialize(patterns, Json),
-            StudyItemsJson = JsonSerializer.Serialize(StudyItems(draft.StudyItems), Json),
+            StudyItemsJson = JsonSerializer.Serialize(StudyItems(result.Value.StudyItems), Json),
         };
 
+        // A análise em si também é gravada com o token não cancelável: ela já foi
+        // paga. Se o navegador desistiu no meio, o usuário a encontra ao recarregar,
+        // em vez de pagar de novo pela mesma análise.
         _db.Analyses.Add(record);
-        await _db.SaveChangesAsync(ct);
+        await _db.SaveChangesAsync(UsageService.AfterBilling);
+
+        // Segundo save: o Id da análise só existe depois do primeiro (mesmo motivo
+        // do CreatePracticeAsync).
+        _usage.Record(LlmOperation.Analysis, result.Usage, analysisId: record.Id);
+        await _db.SaveChangesAsync(UsageService.AfterBilling);
 
         return (AnalysisOutcome.Ok, ToContract(record));
     }

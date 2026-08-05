@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using WriteRight.Api.Data;
 using WriteRight.Api.Llm;
 using WriteRight.Api.Services;
@@ -21,8 +22,16 @@ var connectionString = builder.Configuration.GetConnectionString("WriteRight")
 builder.Services.AddDbContext<WriteRightDbContext>(o => o.UseSqlite(connectionString));
 
 // Provedor de IA (costura) + serviço de orquestração (gera/corrige/perfil).
-builder.Services.Configure<LlmOptions>(builder.Configuration.GetSection(LlmOptions.SectionName));
+// As tarifas moram só no appsettings (Llm:Pricing), sem fallback no código — então
+// modelo em uso sem preço derruba a app no startup. Ver LlmOptionsValidator.
+builder.Services.AddSingleton<IValidateOptions<LlmOptions>, LlmOptionsValidator>();
+builder.Services.AddOptions<LlmOptions>()
+    .Bind(builder.Configuration.GetSection(LlmOptions.SectionName))
+    .ValidateOnStart();
+
 builder.Services.AddScoped<ILlmProvider, AnthropicLlmProvider>();
+builder.Services.AddSingleton<LlmPricing>(); // só depende de IOptions — sem estado por request
+builder.Services.AddScoped<UsageService>();
 builder.Services.AddScoped<PracticeService>();
 builder.Services.AddScoped<AnalysisService>();
 
@@ -148,5 +157,12 @@ app.MapPost("/api/analysis",
         };
     })
    .WithName("GenerateAnalysis");
+
+// Consumo da IA: quanto custou, por operação, e a média por prática/análise.
+// Releitura pura do registrado — não chama a IA.
+app.MapGet("/api/usage",
+    async (UsageService service, CancellationToken ct) =>
+        Results.Ok(await service.GetReportAsync(ct)))
+   .WithName("GetUsageReport");
 
 app.Run();

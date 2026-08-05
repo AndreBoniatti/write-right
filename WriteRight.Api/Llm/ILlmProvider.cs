@@ -11,18 +11,23 @@ namespace WriteRight.Api.Llm;
 ///
 /// Decisão de arquitetura: modelo é configurável (ver <see cref="LlmOptions"/>),
 /// mas provedor NÃO é dinâmico via front — seria over-engineering pro uso pessoal.
+///
+/// Todo método devolve <see cref="LlmResult{T}"/>: o resultado E o que ele consumiu.
+/// O consumo sai por aqui, em vez de o provider gravar sozinho, porque quem sabe a
+/// qual prática (ou análise) a chamada pertence é o serviço — e provider sem
+/// <c>DbContext</c> continua trocável por stub sem arrastar banco pro teste.
 /// </summary>
 public interface ILlmProvider
 {
     /// <summary>Gera um texto pro usuário traduzir, conforme os parâmetros.</summary>
-    Task<GeneratedExercise> GenerateExerciseAsync(
+    Task<LlmResult<GeneratedExercise>> GenerateExerciseAsync(
         ExerciseGenerationRequest request, CancellationToken ct = default);
 
     /// <summary>
     /// Corrige a tradução do usuário, devolvendo erros categorizados via
     /// structured output (schema derivado da taxonomia).
     /// </summary>
-    Task<CorrectionResult> CorrectAsync(
+    Task<LlmResult<CorrectionResult>> CorrectAsync(
         CorrectionRequest request, CancellationToken ct = default);
 
     /// <summary>
@@ -30,6 +35,6 @@ public interface ILlmProvider
     /// <b>crua</b> (evidência por id): quem confere os ids contra o que foi enviado
     /// é o serviço, não o provider.
     /// </summary>
-    Task<AnalysisDraft> AnalyzeAsync(
+    Task<LlmResult<AnalysisDraft>> AnalyzeAsync(
         AnalysisRequest request, CancellationToken ct = default);
 }

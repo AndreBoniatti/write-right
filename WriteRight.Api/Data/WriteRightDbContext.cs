@@ -9,6 +9,7 @@ public class WriteRightDbContext : DbContext
     public DbSet<ExerciseAttempt> Exercises => Set<ExerciseAttempt>();
     public DbSet<ExerciseError> Errors => Set<ExerciseError>();
     public DbSet<AnalysisRecord> Analyses => Set<AnalysisRecord>();
+    public DbSet<LlmCall> LlmCalls => Set<LlmCall>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,5 +38,19 @@ public class WriteRightDbContext : DbContext
              .WithMany(a => a.Errors)
              .HasForeignKey(e => e.ExerciseAttemptId)
              .OnDelete(DeleteBehavior.Cascade);
+
+        var call = modelBuilder.Entity<LlmCall>();
+        call.Property(c => c.Operation).HasConversion<string>();
+
+        // Índice por data: a consulta que importa depois é "gasto no período"
+        // (fatura, cota). PracticeId/AnalysisId ficam SEM FK de propósito —
+        // ver o resumo de LlmCall.
+        call.HasIndex(c => c.CreatedAt);
+
+        // Custo como TEXT (padrão do SQLite pra decimal): round-trip exato, sem o
+        // erro de arredondamento que double traria em dinheiro. A contrapartida é
+        // que SUM/ORDER BY não descem pro SQL — agrega-se em memória, igual ao
+        // resto do app (mesmo motivo do ListPracticesAsync).
+        call.Property(c => c.CostUsd).HasColumnType("TEXT");
     }
 }

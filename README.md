@@ -117,6 +117,7 @@ Then open **http://localhost:5193**. The SQLite database is created automaticall
 | `GET`  | `/api/profile/errors?category=` | Your real errors in one category (review panel — no AI call) |
 | `GET`  | `/api/analysis` | The latest weakness analysis + whether a new one is worth generating |
 | `POST` | `/api/analysis` | Generate and persist a new analysis |
+| `GET`  | `/api/usage` | Token/cost report per operation, and the average cost of a practice (no AI call) |
 
 ## Configuration
 
@@ -128,6 +129,22 @@ Under the `Llm` section (user-secrets or `appsettings`):
 | `Llm:GenerationModel` | `claude-haiku-4-5` | Model that generates exercises |
 | `Llm:CorrectionModel` | `claude-sonnet-5` | Model that corrects translations |
 | `Llm:AnalysisModel` | `claude-sonnet-5` | Model that analyses the error history |
+| `Llm:Pricing:<model>` | **required** | USD per MTok for that model — see below |
+
+**Pricing.** The API returns token counts, never a monetary cost, so turning tokens into dollars is always the client's job. The rates live in `appsettings.json` and **only** there — there is no built-in table in code, because a price that exists in two places just raises the question of which one is winning:
+
+```json
+"Llm": {
+  "Pricing": {
+    "claude-haiku-4-5": { "InputPerMTok": 1.00, "OutputPerMTok": 5.00 },
+    "claude-sonnet-5":  { "InputPerMTok": 3.00, "OutputPerMTok": 15.00 }
+  }
+}
+```
+
+Since there is no fallback, **every model in use must be priced** — switching `Llm:CorrectionModel` to a model with no rate fails at startup, naming the model and the line to add. Forgetting a price would otherwise break nothing visible: the app would run, practices would work, and only the cost report would come back empty. A negative rate is rejected the same way; zero is allowed, since it states outright that the model is free.
+
+A response that arrives from an unexpected model (an alias resolving to another snapshot) is still recorded with its token counts and a **null** cost, surfacing as `unpricedCalls` in `/api/usage` rather than silently counting as zero.
 
 ## Tests
 

@@ -31,4 +31,26 @@ public sealed class LlmOptions
     /// chamada pesa pouco.
     /// </summary>
     public string AnalysisModel { get; set; } = "claude-sonnet-5";
+
+    /// <summary>
+    /// Tarifas por modelo, em USD por 1M de tokens. <b>Única</b> fonte de preço — não
+    /// há tabela embutida no código, de propósito: preço muda mais que código, e ter
+    /// os valores em dois lugares só cria a dúvida de qual está valendo.
+    ///
+    /// Como não há fallback, todo modelo em uso PRECISA estar aqui; quem cobra isso é
+    /// o <see cref="LlmOptionsValidator"/>, no startup.
+    ///
+    /// Vive em config e não no banco porque isto é <b>configuração</b>, não dado:
+    /// poucos valores, editados raramente, e que devem ser versionados junto do código
+    /// que os usa. (Preço que você COBRA do usuário é outra coisa — esse sim vai pro
+    /// banco quando existir.)
+    /// </summary>
+    public Dictionary<string, ModelRate> Pricing { get; set; } = new();
+}
+
+/// <summary>Tarifa de um modelo, em USD por 1 milhão de tokens.</summary>
+public sealed class ModelRate
+{
+    public decimal InputPerMTok { get; set; }
+    public decimal OutputPerMTok { get; set; }
 }

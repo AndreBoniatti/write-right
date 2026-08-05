@@ -1,9 +1,11 @@
 using WriteRight.Api.Data;
+using WriteRight.Api.Llm;
 using WriteRight.Api.Services;
 using WriteRight.Shared;
 using WriteRight.Shared.Analysis;
 using WriteRight.Shared.Practices;
 using WriteRight.Shared.Taxonomy;
+using WriteRight.Shared.Usage;
 using WriteRight.Tests.Support;
 
 namespace WriteRight.Tests.Services;
@@ -19,7 +21,13 @@ public sealed class AnalysisServiceTests : IDisposable
 {
     private readonly TestDatabase _db = new();
 
-    private AnalysisService Service(StubLlmProvider stub) => new(stub, _db.NewContext());
+    // UsageService compartilha o MESMO contexto do serviço (ele enfileira, o serviço
+    // salva) — igual ao scoped do DI em produção.
+    private AnalysisService Service(StubLlmProvider stub)
+    {
+        var ctx = _db.NewContext();
+        return new(stub, ctx, new UsageService(ctx, TestPricing.Default()));
+    }
 
     private static StubLlmProvider Stub(params DraftPattern[] patterns) =>
         StubWith(new[] { new AnalysisStudyItem(StudyItemKind.Rule, "in/on com tempo", "Use 'on' com dias.") }, patterns);
@@ -431,6 +439,102 @@ public sealed class AnalysisServiceTests : IDisposable
         Assert.Equal("segunda", state.Latest!.Patterns[0].Title);
         await using var ctx = _db.NewContext();
         Assert.Equal(2, ctx.Analyses.Count()); // histórico preservado
+    }
+
+    // ── Consumo ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GenerateAsync_records_usage_linked_to_the_analysis()
+    {
+        var ids = await SeedAboveFloorAsync();
+
+        var (outcome, analysis) = await Service(
+            Stub(new DraftPattern("t", "d", ids.Take(3).ToList()))).GenerateAsync();
+
+        Assert.Equal(AnalysisOutcome.Ok, outcome);
+
+        await using var ctx = _db.NewContext();
+        var call = Assert.Single(ctx.LlmCalls);
+        Assert.Equal(LlmOperation.Analysis, call.Operation);
+        Assert.Equal(analysis!.Id, call.AnalysisId);
+        Assert.Null(call.PracticeId);
+        Assert.Equal(StubLlmProvider.DefaultUsage.OutputTokens, call.OutputTokens);
+        Assert.True(call.CostUsd > 0);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_records_usage_even_when_nothing_is_grounded()
+    {
+        // A chamada sem lastro não persiste análise nenhuma — mas FOI cobrada.
+        // É exatamente o gasto que some de qualquer instrumentação presa ao resultado.
+        await SeedAboveFloorAsync();
+        var stub = Stub(new DraftPattern("Tudo inventado", "x", new List<int> { 91, 92, 93 }));
+
+        var (outcome, _) = await Service(stub).GenerateAsync();
+
+        Assert.Equal(AnalysisOutcome.NoGrounding, outcome);
+
+        await using var ctx = _db.NewContext();
+        Assert.Equal(0, ctx.Analyses.Count());
+        var call = Assert.Single(ctx.LlmCalls);
+        Assert.Equal(LlmOperation.Analysis, call.Operation);
+        Assert.Null(call.AnalysisId); // não há análise pra apontar — o gasto existe assim mesmo
+        Assert.True(call.CostUsd > 0);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_persists_even_when_the_client_gives_up_mid_call()
+    {
+        // A análise é a chamada mais lenta do app — é ela que estourou o timeout de
+        // 100s do cliente na prática. Ela é cara: descartar por desistência do
+        // navegador significaria pagar duas vezes pelo mesmo diagnóstico.
+        var ids = await SeedAboveFloorAsync();
+        var stub = Stub(new DraftPattern("t", "d", ids.Take(3).ToList()));
+
+        var browserGaveUp = new CancellationTokenSource();
+        stub.CancelDuringCall = browserGaveUp;
+
+        var (outcome, analysis) = await Service(stub).GenerateAsync(browserGaveUp.Token);
+
+        Assert.Equal(AnalysisOutcome.Ok, outcome);
+
+        await using var ctx = _db.NewContext();
+        Assert.Equal(1, ctx.Analyses.Count());
+        var call = Assert.Single(ctx.LlmCalls);
+        Assert.Equal(analysis!.Id, call.AnalysisId);
+        Assert.True(call.CostUsd > 0);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_records_usage_when_the_call_is_billed_but_fails()
+    {
+        // Cobrado e a resposta nem foi lida (recusa, JSON truncado). Nada de análise,
+        // mas o gasto fica — mesmo raciocínio do NoGrounding, motivo diferente.
+        await SeedAboveFloorAsync();
+        var stub = Stub(new DraftPattern("t", "d", new List<int> { 1, 2, 3 }));
+        stub.FailAfterBilling = true;
+
+        await Assert.ThrowsAsync<LlmCallFailedException>(() => Service(stub).GenerateAsync());
+
+        await using var ctx = _db.NewContext();
+        Assert.Equal(0, ctx.Analyses.Count());
+        var call = Assert.Single(ctx.LlmCalls);
+        Assert.Equal(LlmOperation.Analysis, call.Operation);
+        Assert.Null(call.AnalysisId);
+        Assert.True(call.CostUsd > 0);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_below_the_floor_spends_nothing()
+    {
+        // Barrado antes da IA: nenhuma chamada, nenhum registro de consumo.
+        await SeedAsync(DateTimeOffset.UtcNow, Errors(3));
+
+        var (outcome, _) = await Service(new StubLlmProvider()).GenerateAsync();
+
+        Assert.Equal(AnalysisOutcome.NotEnoughData, outcome);
+        await using var ctx = _db.NewContext();
+        Assert.Equal(0, ctx.LlmCalls.Count());
     }
 
     public void Dispose() => _db.Dispose();

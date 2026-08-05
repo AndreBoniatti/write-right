@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using WriteRight.Api.Data;
+using WriteRight.Api.Llm;
 using WriteRight.Api.Services;
 using WriteRight.Shared;
 using WriteRight.Shared.Corrections;
 using WriteRight.Shared.Exercises;
 using WriteRight.Shared.Practices;
 using WriteRight.Shared.Taxonomy;
+using WriteRight.Shared.Usage;
 using WriteRight.Tests.Support;
 
 namespace WriteRight.Tests.Services;
@@ -21,7 +23,14 @@ public sealed class PracticeServiceTests : IDisposable
     private readonly TestDatabase _db = new();
 
     // Um serviço novo por operação = um contexto novo, como em produção (scoped por request).
-    private PracticeService Service(StubLlmProvider stub) => new(stub, _db.NewContext());
+    // O UsageService compartilha o MESMO contexto de propósito: ele só enfileira o
+    // registro de consumo e quem salva é o PracticeService. Contextos separados
+    // fariam o consumo nunca ser persistido — em produção o Scoped do DI garante isso.
+    private PracticeService Service(StubLlmProvider stub)
+    {
+        var ctx = _db.NewContext();
+        return new(stub, ctx, new UsageService(ctx, TestPricing.Default()));
+    }
 
     private static CreatePracticeRequest CreateRequest(bool focusOnWeaknesses = false) =>
         new(Language.Portuguese, Language.English, 60, CefrLevel.B1, Theme: "cotidiano", FocusOnWeaknesses: focusOnWeaknesses);
@@ -507,6 +516,123 @@ public sealed class PracticeServiceTests : IDisposable
 
         Assert.Single(items);
         Assert.DoesNotContain(items, i => i.Original == "planted");
+    }
+
+    // ── Consumo ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreatePracticeAsync_records_generation_usage_linked_to_the_practice()
+    {
+        var detail = await Service(new StubLlmProvider(SampleExercise())).CreatePracticeAsync(CreateRequest());
+
+        await using var ctx = _db.NewContext();
+        var call = Assert.Single(ctx.LlmCalls);
+        Assert.Equal(LlmOperation.Generation, call.Operation);
+        Assert.Equal(detail.Id, call.PracticeId);
+        Assert.Null(call.AnalysisId);
+        Assert.Equal(StubLlmProvider.DefaultUsage.InputTokens, call.InputTokens);
+        Assert.Equal(StubLlmProvider.DefaultUsage.OutputTokens, call.OutputTokens);
+        Assert.True(call.CostUsd > 0);
+    }
+
+    [Fact]
+    public async Task CorrectPracticeAsync_records_a_second_call_on_the_same_practice()
+    {
+        // Uma prática = DUAS chamadas em momentos diferentes. É o motivo de o consumo
+        // ser tabela própria em vez de colunas na prática.
+        var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
+        var detail = await Service(stub).CreatePracticeAsync(CreateRequest());
+        await Service(stub).CorrectPracticeAsync(detail.Id, "my translation");
+
+        await using var ctx = _db.NewContext();
+        var calls = ctx.LlmCalls.Where(c => c.PracticeId == detail.Id).OrderBy(c => c.Id).ToList();
+        Assert.Equal(2, calls.Count);
+        Assert.Equal(LlmOperation.Generation, calls[0].Operation);
+        Assert.Equal(LlmOperation.Correction, calls[1].Operation);
+    }
+
+    [Fact]
+    public async Task DeletePracticeAsync_keeps_the_usage_record()
+    {
+        // Referência fraca de propósito: o gasto aconteceu e é irreversível.
+        // Excluir a prática não pode apagar o registro de que você pagou por ela —
+        // senão a fatura e o histórico de custo divergem.
+        var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
+        var detail = await Service(stub).CreatePracticeAsync(CreateRequest());
+        await Service(stub).CorrectPracticeAsync(detail.Id, "my translation");
+
+        var outcome = await Service(stub).DeletePracticeAsync(detail.Id);
+
+        Assert.Equal(PracticeOutcome.Ok, outcome);
+        await using var ctx = _db.NewContext();
+        Assert.Equal(0, ctx.Exercises.Count());
+        Assert.Equal(2, ctx.LlmCalls.Count()); // o custo sobrevive à exclusão
+    }
+
+    [Fact]
+    public async Task CorrectPracticeAsync_persists_even_when_the_client_gives_up_mid_call()
+    {
+        // Bug real: o navegador estourou o timeout de 100s, o RequestAborted foi
+        // cancelado, e o SaveChanges que usava esse token descartou consumo E correção
+        // — com a chamada já paga. Gravação posterior à cobrança não é cancelável.
+        var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
+        var detail = await Service(stub).CreatePracticeAsync(CreateRequest());
+
+        var browserGaveUp = new CancellationTokenSource();
+        stub.CancelDuringCall = browserGaveUp;
+
+        var (outcome, _) = await Service(stub).CorrectPracticeAsync(
+            detail.Id, "my translation", browserGaveUp.Token);
+
+        Assert.Equal(PracticeOutcome.Ok, outcome);
+
+        await using var ctx = _db.NewContext();
+        // A correção sobreviveu: o usuário a encontra ao recarregar, sem pagar de novo.
+        Assert.Equal(PracticeStatus.Completed, ctx.Exercises.Single().Status);
+        Assert.Single(ctx.Errors);
+        // E o gasto das duas chamadas está registrado.
+        Assert.Equal(2, ctx.LlmCalls.Count());
+    }
+
+    [Fact]
+    public async Task CreatePracticeAsync_records_usage_when_the_call_is_billed_but_fails()
+    {
+        // A API respondeu e cobrou, mas a resposta não virou texto (recusa, JSON
+        // truncado). Não nasce prática nenhuma — o gasto tem que ficar mesmo assim.
+        var stub = new StubLlmProvider(SampleExercise()) { FailAfterBilling = true };
+
+        await Assert.ThrowsAsync<LlmCallFailedException>(
+            () => Service(stub).CreatePracticeAsync(CreateRequest()));
+
+        await using var ctx = _db.NewContext();
+        Assert.Equal(0, ctx.Exercises.Count()); // nada de prática pela metade
+        var call = Assert.Single(ctx.LlmCalls);
+        Assert.Equal(LlmOperation.Generation, call.Operation);
+        Assert.Null(call.PracticeId); // não há prática pra vincular
+        Assert.True(call.CostUsd > 0);
+    }
+
+    [Fact]
+    public async Task CorrectPracticeAsync_records_usage_when_the_call_is_billed_but_fails()
+    {
+        // O caso mais caro do app: a correção estoura o teto de saída, você paga pelos
+        // tokens todos e o JSON não desserializa. A prática segue em andamento (dá pra
+        // tentar de novo), mas o gasto não pode sumir.
+        var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
+        var detail = await Service(stub).CreatePracticeAsync(CreateRequest());
+
+        stub.FailAfterBilling = true;
+        await Assert.ThrowsAsync<LlmCallFailedException>(
+            () => Service(stub).CorrectPracticeAsync(detail.Id, "my translation"));
+
+        await using var ctx = _db.NewContext();
+        var practice = ctx.Exercises.Single();
+        Assert.Equal(PracticeStatus.InProgress, practice.Status); // não concluiu
+        Assert.Empty(ctx.Errors);
+
+        var failed = ctx.LlmCalls.Single(c => c.Operation == LlmOperation.Correction);
+        Assert.Equal(detail.Id, failed.PracticeId);
+        Assert.True(failed.CostUsd > 0);
     }
 
     public void Dispose() => _db.Dispose();

@@ -6,6 +6,7 @@ using WriteRight.Shared.Exercises;
 using WriteRight.Shared.Practices;
 using WriteRight.Shared.Profile;
 using WriteRight.Shared.Taxonomy;
+using WriteRight.Shared.Usage;
 
 namespace WriteRight.Api.Services;
 
@@ -33,11 +34,13 @@ public sealed class PracticeService
 
     private readonly ILlmProvider _llm;
     private readonly WriteRightDbContext _db;
+    private readonly UsageService _usage;
 
-    public PracticeService(ILlmProvider llm, WriteRightDbContext db)
+    public PracticeService(ILlmProvider llm, WriteRightDbContext db, UsageService usage)
     {
         _llm = llm;
         _db = db;
+        _usage = usage;
     }
 
     /// <summary>
@@ -65,11 +68,23 @@ public sealed class PracticeService
         // Sem isto, uma prática sem foco manda um prompt idêntico toda vez — e prompt
         // idêntico devolve sempre o mesmo texto modal. A variedade tem que vir daqui,
         // porque o modelo não lembra o que já gerou.
-        var generated = await _llm.GenerateExerciseAsync(
-            new ExerciseGenerationRequest(
-                request.SourceLanguage, request.TargetLanguage, request.WordCount,
-                request.Level, request.Theme, focus, VarietyCatalog.Pick()),
-            ct);
+        LlmResult<GeneratedExercise> generated;
+        try
+        {
+            generated = await _llm.GenerateExerciseAsync(
+                new ExerciseGenerationRequest(
+                    request.SourceLanguage, request.TargetLanguage, request.WordCount,
+                    request.Level, request.Theme, focus, VarietyCatalog.Pick()),
+                ct);
+        }
+        catch (LlmCallFailedException ex)
+        {
+            // Cobrado sem produzir texto: não há prática pra vincular, mas o gasto
+            // existe e some do registro se não for gravado aqui.
+            _usage.Record(LlmOperation.Generation, ex.Usage);
+            await _db.SaveChangesAsync(UsageService.AfterBilling);
+            throw;
+        }
 
         var practice = new ExerciseAttempt
         {
@@ -78,13 +93,21 @@ public sealed class PracticeService
             TargetLanguage = request.TargetLanguage,
             Level = request.Level,
             Theme = request.Theme,
-            SourceText = generated.SourceText,
+            SourceText = generated.Value.SourceText,
             UserTranslation = "",
             CreatedAt = DateTimeOffset.UtcNow,
         };
 
+        // Token não cancelável daqui pra frente: o texto já foi pago. Descartá-lo
+        // porque o navegador desistiu significaria pagar de novo pelo mesmo texto.
         _db.Exercises.Add(practice);
-        await _db.SaveChangesAsync(ct);
+        await _db.SaveChangesAsync(UsageService.AfterBilling);
+
+        // Segundo save: o Id da prática só existe depois do primeiro. Duas idas ao
+        // banco logo após uma chamada de rede de vários segundos — irrelevante.
+        _usage.Record(LlmOperation.Generation, generated.Usage, practiceId: practice.Id);
+        await _db.SaveChangesAsync(UsageService.AfterBilling);
+
         return ToDetail(practice);
     }
 
@@ -154,16 +177,32 @@ public sealed class PracticeService
         if (practice is null) return (PracticeOutcome.NotFound, null);
         if (practice.Status == PracticeStatus.Completed) return (PracticeOutcome.ReadOnly, null);
 
-        var result = await _llm.CorrectAsync(
-            new CorrectionRequest(
-                practice.SourceLanguage, practice.TargetLanguage,
-                practice.SourceText, userTranslation, practice.Level, practice.Theme),
-            ct);
+        LlmResult<CorrectionResult> result;
+        try
+        {
+            result = await _llm.CorrectAsync(
+                new CorrectionRequest(
+                    practice.SourceLanguage, practice.TargetLanguage,
+                    practice.SourceText, userTranslation, practice.Level, practice.Theme),
+                ct);
+        }
+        catch (LlmCallFailedException ex)
+        {
+            // A correção mais cara é a que estoura o teto de saída e não desserializa.
+            // A prática segue em andamento (dá pra tentar de novo), mas o gasto fica.
+            _usage.Record(LlmOperation.Correction, ex.Usage, practiceId: practice.Id);
+            await _db.SaveChangesAsync(UsageService.AfterBilling);
+            throw;
+        }
 
+        // A prática já tem Id aqui, então o registro entra na MESMA transação da correção.
+        _usage.Record(LlmOperation.Correction, result.Usage, practiceId: practice.Id);
+
+        var correction = result.Value;
         practice.UserTranslation = userTranslation;
-        practice.CorrectedText = result.CorrectedText;
-        practice.OverallComment = result.OverallComment;
-        practice.Errors = result.Errors.Select(e => new ExerciseError
+        practice.CorrectedText = correction.CorrectedText;
+        practice.OverallComment = correction.OverallComment;
+        practice.Errors = correction.Errors.Select(e => new ExerciseError
         {
             Category = e.Category,
             Severity = e.Severity,
@@ -174,7 +213,10 @@ public sealed class PracticeService
         practice.Status = PracticeStatus.Completed;
         practice.CompletedAt = DateTimeOffset.UtcNow;
 
-        await _db.SaveChangesAsync(ct);
+        // Correção e consumo na mesma transação, com o token não cancelável: se o
+        // navegador desistiu, a prática fica corrigida e o usuário a encontra ao
+        // recarregar, em vez de pagar outra correção.
+        await _db.SaveChangesAsync(UsageService.AfterBilling);
         return (PracticeOutcome.Ok, ToDetail(practice));
     }
 
