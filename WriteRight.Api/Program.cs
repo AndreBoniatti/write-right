@@ -35,6 +35,11 @@ builder.Services.AddScoped<UsageService>();
 builder.Services.AddScoped<PracticeService>();
 builder.Services.AddScoped<AnalysisService>();
 
+// A análise roda fora da requisição: fila (singleton, sobrevive ao fim do request)
+// + worker que a consome. Ver AnalysisJobQueue pro porquê.
+builder.Services.AddSingleton<AnalysisJobQueue>();
+builder.Services.AddHostedService<AnalysisWorker>();
+
 // CORS pro front (Blazor WASM roda em outra origem).
 const string clientCors = "WriteRightClient";
 builder.Services.AddCors(o => o.AddPolicy(clientCors, p =>
@@ -142,19 +147,19 @@ app.MapGet("/api/analysis",
         Results.Ok(await service.GetStateAsync(ct)))
    .WithName("GetAnalysisState");
 
-// Gera uma análise nova (chama a IA e persiste).
+// Enfileira uma análise nova. Devolve 202 na hora — a chamada à IA leva minutos e
+// não cabe no ciclo de uma requisição HTTP (o cliente acompanha por GET /api/analysis).
 app.MapPost("/api/analysis",
-    async (AnalysisService service, CancellationToken ct) =>
+    async (AnalysisService service, AnalysisJobQueue jobs, CancellationToken ct) =>
     {
-        var (outcome, analysis) = await service.GenerateAsync(ct);
-        return outcome switch
-        {
-            AnalysisOutcome.Ok => Results.Ok(analysis),
-            // Histórico pequeno demais: pedido legítimo, estado errado.
-            AnalysisOutcome.NotEnoughData => Results.Conflict(),
-            // Modelo respondeu sem lastro: nada persistido, dá pra tentar de novo.
-            _ => Results.UnprocessableEntity(),
-        };
+        // Histórico pequeno demais: pedido legítimo, estado errado. Responde na hora,
+        // sem gastar um job pra devolver a mesma negativa daqui a minutos.
+        if (!await service.HasEnoughDataAsync(ct)) return Results.Conflict();
+
+        // Pedido durante uma execução em curso também vira 202: do ponto de vista de
+        // quem pediu, "sua análise está sendo gerada" é verdade nos dois casos.
+        jobs.TryEnqueue();
+        return Results.Accepted();
     })
    .WithName("GenerateAnalysis");
 

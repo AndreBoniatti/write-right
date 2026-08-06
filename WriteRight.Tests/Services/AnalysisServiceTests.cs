@@ -23,10 +23,16 @@ public sealed class AnalysisServiceTests : IDisposable
 
     // UsageService compartilha o MESMO contexto do serviço (ele enfileira, o serviço
     // salva) — igual ao scoped do DI em produção.
+    /// <summary>
+    /// A fila é do teste inteiro (como o singleton em produção), pra os testes de
+    /// estado do job enxergarem o que o enfileiramento fez.
+    /// </summary>
+    private readonly AnalysisJobQueue _jobs = new();
+
     private AnalysisService Service(StubLlmProvider stub)
     {
         var ctx = _db.NewContext();
-        return new(stub, ctx, new UsageService(ctx, TestPricing.Default()));
+        return new(stub, ctx, new UsageService(ctx, TestPricing.Default()), _jobs);
     }
 
     private static StubLlmProvider Stub(params DraftPattern[] patterns) =>
@@ -439,6 +445,52 @@ public sealed class AnalysisServiceTests : IDisposable
         Assert.Equal("segunda", state.Latest!.Patterns[0].Title);
         await using var ctx = _db.NewContext();
         Assert.Equal(2, ctx.Analyses.Count()); // histórico preservado
+    }
+
+    // ── Piso síncrono / estado do job ────────────────────────────────────────
+
+    [Fact]
+    public async Task HasEnoughDataAsync_is_false_below_the_floor()
+    {
+        // Checado ANTES de enfileirar: enfileirar um job que já se sabe que vai
+        // falhar faria o usuário esperar minutos pra receber a mesma negativa.
+        await SeedAsync(DateTimeOffset.UtcNow, Errors(3));
+
+        Assert.False(await Service(new StubLlmProvider()).HasEnoughDataAsync());
+    }
+
+    [Fact]
+    public async Task HasEnoughDataAsync_is_true_above_the_floor()
+    {
+        await SeedAboveFloorAsync();
+
+        Assert.True(await Service(new StubLlmProvider()).HasEnoughDataAsync());
+    }
+
+    [Fact]
+    public async Task GetStateAsync_surfaces_the_running_job()
+    {
+        // É esse campo que a tela usa pra decidir entre "Analisando…" e o botão —
+        // sem ele o usuário recarrega a página e perde de vista a geração em curso.
+        await SeedAboveFloorAsync();
+        _jobs.TryEnqueue();
+
+        var state = await Service(new StubLlmProvider()).GetStateAsync();
+
+        Assert.Equal(AnalysisJobStatus.Running, state.Job.Status);
+    }
+
+    [Fact]
+    public async Task GetStateAsync_surfaces_the_failure_reason()
+    {
+        await SeedAboveFloorAsync();
+        _jobs.TryEnqueue();
+        _jobs.MarkFailed("a IA respondeu sem evidência válida");
+
+        var state = await Service(new StubLlmProvider()).GetStateAsync();
+
+        Assert.Equal(AnalysisJobStatus.Failed, state.Job.Status);
+        Assert.Equal("a IA respondeu sem evidência válida", state.Job.FailureReason);
     }
 
     // ── Consumo ──────────────────────────────────────────────────────────────

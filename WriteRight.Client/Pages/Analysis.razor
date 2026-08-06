@@ -1,6 +1,7 @@
 @page "/profile/analysis"
 @using WriteRight.Shared.Analysis
 @inject WriteRightApiClient Api
+@implements IDisposable
 
 <PageTitle>WriteRight — Análise dos meus erros</PageTitle>
 
@@ -79,6 +80,19 @@
         {
             loading = false;
         }
+
+        // A geração roda no servidor: se ela já estava em curso quando a página abriu
+        // (recarregou, voltou depois), retoma o acompanhamento em vez de mostrar um
+        // botão que o servidor vai ignorar.
+        if (state?.Job.Status == AnalysisJobStatus.Running)
+        {
+            generating = true;
+            await FollowJobAsync();
+        }
+        else if (state?.Job.Status == AnalysisJobStatus.Failed)
+        {
+            notice = state.Job.FailureReason;
+        }
     }
 
     // Cabeçalho: o que sustenta a análise atual + a ação de gerar/atualizar.
@@ -118,7 +132,14 @@
                     <span>@(s.Latest is null ? "Gerar análise" : "Atualizar análise")</span>
                 }
             </button>
-            @if (s.Gate == AnalysisGate.NotEnoughData)
+            @if (generating)
+            {
+                <div class="head-hint">
+                    Roda no servidor — pode sair desta página ou fechar a aba.
+                    O resultado fica salvo.
+                </div>
+            }
+            else if (s.Gate == AnalysisGate.NotEnoughData)
             {
                 <div class="head-hint">
                     Precisa de @s.MinPractices prática(s) e @s.MinErrors erro(s).
@@ -234,6 +255,20 @@
         if (!openEvidence.Add(index)) openEvidence.Remove(index);
     }
 
+    /// <summary>De quanto em quanto tempo se pergunta ao servidor se a análise terminou.</summary>
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Teto do acompanhamento. Não cancela nada no servidor — só para de perguntar,
+    /// pra a tela não ficar girando pra sempre se algo der muito errado.
+    /// </summary>
+    private static readonly TimeSpan PollTimeout = TimeSpan.FromMinutes(10);
+
+    /// <summary>Cancela o polling quando o usuário sai da página (o job segue no servidor).</summary>
+    private readonly CancellationTokenSource cts = new();
+
+    public void Dispose() => cts.Cancel();
+
     private async Task GenerateAsync()
     {
         generating = true;
@@ -242,32 +277,77 @@
 
         try
         {
-            var result = await Api.GenerateAnalysisAsync();
-            switch (result.Status)
+            var status = await Api.GenerateAnalysisAsync(cts.Token);
+
+            if (status == GenerateAnalysisStatus.NotEnoughData)
             {
-                case GenerateAnalysisStatus.Ok:
-                    openEvidence.Clear(); // análise nova = painéis fechados de novo
-                    state = await Api.GetAnalysisStateAsync();
-                    break;
-                case GenerateAnalysisStatus.NotEnoughData:
-                    notice = "Ainda não há histórico suficiente pra uma análise honesta.";
-                    break;
-                case GenerateAnalysisStatus.NoGrounding:
-                    notice = "A IA respondeu sem evidência válida, então nada foi salvo. Tente de novo.";
-                    break;
-                default:
-                    notice = "Falhou ao gerar a análise. (A API está rodando?)";
-                    break;
+                notice = "Ainda não há histórico suficiente pra uma análise honesta.";
+                generating = false;
+                return;
             }
+
+            if (status == GenerateAnalysisStatus.Failed)
+            {
+                notice = "Falhou ao pedir a análise. (A API está rodando?)";
+                generating = false;
+                return;
+            }
+
+            await FollowJobAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Saiu da página; o job continua no servidor.
         }
         catch (Exception ex)
         {
             notice = $"Falhou ao gerar a análise: {ex.Message}";
-        }
-        finally
-        {
             generating = false;
         }
+    }
+
+    /// <summary>
+    /// Acompanha a geração por polling até ela sair de <c>Running</c>.
+    ///
+    /// A resposta do POST não traz a análise: ela roda em background justamente pra
+    /// não depender de a conexão sobreviver alguns minutos. Fechar a aba aqui não
+    /// perde nada — o resultado é persistido e aparece ao voltar.
+    /// </summary>
+    private async Task FollowJobAsync()
+    {
+        var deadline = DateTimeOffset.UtcNow + PollTimeout;
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(PollInterval, cts.Token);
+
+            var fresh = await Api.GetAnalysisStateAsync(cts.Token);
+            var previousId = state?.Latest?.Id;
+            state = fresh;
+
+            if (fresh.Job.Status == AnalysisJobStatus.Running)
+            {
+                StateHasChanged(); // mantém o "Analisando…" vivo
+                continue;
+            }
+
+            generating = false;
+
+            if (fresh.Job.Status == AnalysisJobStatus.Failed)
+            {
+                notice = fresh.Job.FailureReason;
+            }
+            else if (fresh.Latest?.Id != previousId)
+            {
+                openEvidence.Clear(); // análise nova = painéis fechados de novo
+            }
+
+            return;
+        }
+
+        generating = false;
+        notice = "A análise está demorando mais que o esperado. Ela continua rodando no "
+               + "servidor — recarregue a página em alguns minutos.";
     }
 
     private static string KindLabel(StudyItemKind kind) => kind switch

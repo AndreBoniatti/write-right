@@ -9,20 +9,20 @@ using WriteRight.Shared.Taxonomy;
 
 namespace WriteRight.Client.Services;
 
-/// <summary>Desfecho de um pedido de análise, traduzido do status HTTP.</summary>
+/// <summary>Desfecho de um PEDIDO de análise, traduzido do status HTTP.</summary>
 public enum GenerateAnalysisStatus
 {
-    Ok,
+    /// <summary>
+    /// Enfileirada (202). Não quer dizer pronta — a geração roda em background e o
+    /// resultado chega acompanhando <c>GetAnalysisStateAsync</c>.
+    /// </summary>
+    Accepted,
     /// <summary>Histórico pequeno demais (409).</summary>
     NotEnoughData,
-    /// <summary>A IA respondeu sem evidência válida (422) — dá pra tentar de novo.</summary>
-    NoGrounding,
     /// <summary>Falha de rede/servidor.</summary>
     Failed,
 }
 
-/// <summary>Resultado de <see cref="WriteRightApiClient.GenerateAnalysisAsync"/>.</summary>
-public sealed record GenerateAnalysisResult(GenerateAnalysisStatus Status, WeaknessAnalysis? Analysis);
 
 /// <summary>
 /// Cliente tipado da API do WriteRight. Centraliza as chamadas HTTP e as opções
@@ -98,25 +98,23 @@ public sealed class WriteRightApiClient
         (await _http.GetFromJsonAsync<AnalysisState>("api/analysis", Json, ct))!;
 
     /// <summary>
-    /// Gera uma análise nova (chamada de IA — demora). Traduz o status HTTP no motivo,
-    /// pra tela poder dizer o que houve em vez de só "falhou".
+    /// PEDE uma análise nova. Volta assim que o servidor aceita (202) — a geração
+    /// roda em background, porque a chamada de IA leva minutos e não sobrevive aos
+    /// timeouts do caminho (navegador, proxy, balanceador).
+    ///
+    /// O resultado se acompanha por <see cref="GetAnalysisStateAsync"/>: enquanto
+    /// <c>Job.Status</c> for <c>Running</c>, ainda está rodando.
     /// </summary>
-    public async Task<GenerateAnalysisResult> GenerateAnalysisAsync(CancellationToken ct = default)
+    public async Task<GenerateAnalysisStatus> GenerateAnalysisAsync(CancellationToken ct = default)
     {
         var resp = await _http.PostAsync("api/analysis", content: null, ct);
 
-        if (resp.IsSuccessStatusCode)
-        {
-            var analysis = await resp.Content.ReadFromJsonAsync<WeaknessAnalysis>(Json, ct);
-            return new GenerateAnalysisResult(GenerateAnalysisStatus.Ok, analysis);
-        }
+        if (resp.IsSuccessStatusCode) return GenerateAnalysisStatus.Accepted;
 
-        var status = resp.StatusCode switch
+        return resp.StatusCode switch
         {
             HttpStatusCode.Conflict => GenerateAnalysisStatus.NotEnoughData,
-            HttpStatusCode.UnprocessableEntity => GenerateAnalysisStatus.NoGrounding,
             _ => GenerateAnalysisStatus.Failed,
         };
-        return new GenerateAnalysisResult(status, null);
     }
 }

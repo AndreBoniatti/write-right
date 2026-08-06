@@ -78,12 +78,26 @@ public sealed class AnalysisService
     private readonly ILlmProvider _llm;
     private readonly WriteRightDbContext _db;
     private readonly UsageService _usage;
+    private readonly AnalysisJobQueue _jobs;
 
-    public AnalysisService(ILlmProvider llm, WriteRightDbContext db, UsageService usage)
+    public AnalysisService(
+        ILlmProvider llm, WriteRightDbContext db, UsageService usage, AnalysisJobQueue jobs)
     {
         _llm = llm;
         _db = db;
         _usage = usage;
+        _jobs = jobs;
+    }
+
+    /// <summary>
+    /// Há material suficiente pra uma análise honesta? Checado de forma SÍNCRONA
+    /// antes de enfileirar: é leitura barata, e enfileirar um job que já se sabe que
+    /// vai falhar só faria o usuário esperar pra receber a mesma negativa.
+    /// </summary>
+    public async Task<bool> HasEnoughDataAsync(CancellationToken ct = default)
+    {
+        var (practices, errors) = await LoadCompletedAsync(ct);
+        return practices.Count >= MinPractices && errors.Count >= MinErrors;
     }
 
     /// <summary>
@@ -108,7 +122,8 @@ public sealed class AnalysisService
             errors.Count,
             newSince,
             MinPractices,
-            MinErrors);
+            MinErrors,
+            _jobs.Current);
     }
 
     /// <summary>

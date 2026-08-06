@@ -81,6 +81,41 @@ public enum AnalysisGate
     UpToDate,
 }
 
+/// <summary>Situação da geração em background.</summary>
+public enum AnalysisJobStatus
+{
+    /// <summary>Nada rodando.</summary>
+    Idle,
+
+    /// <summary>Em execução no servidor. O cliente acompanha por polling.</summary>
+    Running,
+
+    /// <summary>A última execução falhou; o motivo está em <see cref="AnalysisJob.FailureReason"/>.</summary>
+    Failed,
+}
+
+/// <summary>
+/// Estado da geração em background.
+///
+/// A análise é a chamada mais lenta do app e não cabe no ciclo de uma requisição
+/// HTTP: navegador, proxy e balanceador têm timeouts próprios que você não controla
+/// (o free do Cloudflare corta em 100s). Então o <c>POST</c> só enfileira, e é este
+/// objeto — devolvido pelo <c>GET</c> — que diz em que pé está.
+/// </summary>
+/// <param name="FailureReason">Mensagem pro usuário quando <see cref="AnalysisJobStatus.Failed"/>.</param>
+/// <param name="StartedAt">Quando a execução em curso começou.</param>
+public sealed record AnalysisJob(
+    AnalysisJobStatus Status,
+    string? FailureReason,
+    DateTimeOffset? StartedAt)
+{
+    public static AnalysisJob Idle { get; } = new(AnalysisJobStatus.Idle, null, null);
+
+    public static AnalysisJob Started(DateTimeOffset at) => new(AnalysisJobStatus.Running, null, at);
+
+    public static AnalysisJob Failure(string reason) => new(AnalysisJobStatus.Failed, reason, null);
+}
+
 /// <summary>
 /// Estado da tela de análise: a última análise (se houver) e se vale gerar outra.
 /// Os contadores vêm juntos pra UI explicar o motivo em vez de só desabilitar o botão.
@@ -92,6 +127,7 @@ public enum AnalysisGate
 /// <param name="NewPracticesSinceLatest">Práticas concluídas depois da última análise.</param>
 /// <param name="MinPractices">Piso de práticas pra habilitar a geração.</param>
 /// <param name="MinErrors">Piso de erros pra habilitar a geração.</param>
+/// <param name="Job">Se há geração rodando agora (ou se a última falhou).</param>
 public sealed record AnalysisState(
     WeaknessAnalysis? Latest,
     AnalysisGate Gate,
@@ -99,4 +135,5 @@ public sealed record AnalysisState(
     int TotalErrors,
     int NewPracticesSinceLatest,
     int MinPractices,
-    int MinErrors);
+    int MinErrors,
+    AnalysisJob Job);
