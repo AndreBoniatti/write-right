@@ -80,18 +80,25 @@ else
         else
         {
             <h5 class="mb-3">@practice.Errors.Count erro(s) encontrado(s)</h5>
-            @foreach (var e in practice.Errors)
+            @foreach (var group in ByCategory(practice.Errors))
             {
-                <div class="card p-3 mb-2" style="max-width: 720px;">
-                    <div class="d-flex gap-2 flex-wrap">
-                        <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
-                        <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(e.Category).LabelPt</span>
+                <h6 class="wr-error-group">
+                    @ErrorCatalog.Info(group.Key).LabelPt
+                    <span class="wr-error-group__count">· @group.Count()</span>
+                </h6>
+                @foreach (var e in group)
+                {
+                    <div class="card p-3 mb-2" style="max-width: 720px;">
+                        @* Sem o badge de categoria: o cabeçalho do grupo já a nomeia. *@
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                        </div>
+                        <div class="mt-2">
+                            <s class="text-danger">@e.Original</s> → <strong class="text-success">@e.Correction</strong>
+                        </div>
+                        <div class="text-muted small mt-1">@e.Explanation</div>
                     </div>
-                    <div class="mt-2">
-                        <s class="text-danger">@e.Original</s> → <strong class="text-success">@e.Correction</strong>
-                    </div>
-                    <div class="text-muted small mt-1">@e.Explanation</div>
-                </div>
+                }
             }
         }
 
@@ -179,6 +186,20 @@ else
             saving = false;
         }
     }
+
+    /// <summary>
+    /// Agrupa os erros por categoria, do grupo de maior peso pro menor. Espalhados na
+    /// ordem do texto, três erros da mesma categoria parecem três deslizes avulsos;
+    /// empilhados sob um cabeçalho com a contagem, viram o padrão que são — é a tela
+    /// deixando o diagnóstico à vista em vez de pedir que o usuário o monte de cabeça.
+    /// A régua é o <see cref="SeverityWeight"/>, o mesmo que ordena o perfil.
+    /// Dentro do grupo o GroupBy preserva a ordem original (= a ordem do texto).
+    /// </summary>
+    private static IEnumerable<IGrouping<ErrorCategory, WritingError>> ByCategory(
+        IReadOnlyList<WritingError> errors) =>
+        errors.GroupBy(e => e.Category)
+              .OrderByDescending(g => g.Sum(e => SeverityWeight.Of(e.Severity)))
+              .ThenByDescending(g => g.Count());
 
     private static string LangName(Language l) => l switch
     {

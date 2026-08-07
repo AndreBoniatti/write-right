@@ -235,6 +235,27 @@ a:hover { color: var(--wr-primary-strong); }
 .wr-badge--info    { background: var(--wr-info-soft);    color: var(--wr-info); }
 .wr-badge--muted   { background: var(--wr-surface-2);    color: var(--wr-text-muted); }
 
+/* ── Grupos de erro (revisão da prática) ───────────────── */
+
+.wr-error-group {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    margin: 1.5rem 0 0.6rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--wr-text);
+}
+
+/* O primeiro grupo já vem espaçado pelo "N erro(s) encontrado(s)" acima. */
+.wr-error-group:first-of-type { margin-top: 0; }
+
+.wr-error-group__count {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--wr-text-muted);
+}
+
 /* ── Listagem (list-group vira cards espaçados) ─────────── */
 
 .list-group {
