@@ -23,7 +23,7 @@ public class CorrectionSchemaTests
 
         var required = Schema.GetProperty("required").EnumerateArray()
             .Select(e => e.GetString()!).ToList();
-        Assert.Equal(new[] { "correctedText", "errors", "overallComment" }, required);
+        Assert.Equal(new[] { "correctedText", "errors" }, required);
     }
 
     [Fact]

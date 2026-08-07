@@ -66,29 +66,33 @@ else
             <p class="lead mb-0">@practice.CorrectedText</p>
         </div>
 
-        <h5 class="mb-3">@practice.Errors.Count erro(s) encontrado(s)</h5>
-        @foreach (var e in practice.Errors)
+        @if (practice.Errors.Count == 0)
         {
-            <div class="card p-3 mb-2" style="max-width: 720px;">
-                <div class="d-flex gap-2 flex-wrap">
-                    <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
-                    <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(e.Category).LabelPt</span>
+            @* Sem erros não há card nenhum pra listar: sem isto, a única prática em
+               que o usuário acertou tudo seria a tela mais vazia do app. *@
+            <div class="card p-3 mb-2 border-success" style="max-width: 720px;">
+                <div class="d-flex align-items-center gap-2">
+                    <Icon Name="check" Size="18" />
+                    <span>Nenhum erro encontrado nesta prática.</span>
                 </div>
-                <div class="mt-2">
-                    <s class="text-danger">@e.Original</s> → <strong class="text-success">@e.Correction</strong>
-                </div>
-                <div class="text-muted small mt-1">@e.Explanation</div>
             </div>
         }
-
-        @if (!string.IsNullOrWhiteSpace(practice.OverallComment))
+        else
         {
-            <div class="alert alert-info mt-3" style="max-width: 720px;">
-                <h6 class="d-flex align-items-center gap-1 mb-1">
-                    <Icon Name="target" Size="16" /> No que focar
-                </h6>
-                @practice.OverallComment
-            </div>
+            <h5 class="mb-3">@practice.Errors.Count erro(s) encontrado(s)</h5>
+            @foreach (var e in practice.Errors)
+            {
+                <div class="card p-3 mb-2" style="max-width: 720px;">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                        <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(e.Category).LabelPt</span>
+                    </div>
+                    <div class="mt-2">
+                        <s class="text-danger">@e.Original</s> → <strong class="text-success">@e.Correction</strong>
+                    </div>
+                    <div class="text-muted small mt-1">@e.Explanation</div>
+                </div>
+            }
         }
 
         <a class="btn btn-primary mt-2" href="practice/new">

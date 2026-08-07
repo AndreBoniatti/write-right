@@ -43,7 +43,7 @@ public sealed class PracticeServiceTests : IDisposable
         var errors = categories
             .Select(c => new WritingError(c, ErrorSeverity.Understandable, "x", "y", "porquê"))
             .ToList();
-        return new CorrectionResult("I have a car.", errors, "Quase lá!");
+        return new CorrectionResult("I have a car.", errors);
     }
 
     private static WritingError Err(ErrorCategory category, ErrorSeverity severity) =>

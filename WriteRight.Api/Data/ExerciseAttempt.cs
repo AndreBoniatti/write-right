@@ -27,7 +27,6 @@ public class ExerciseAttempt
     public string SourceText { get; set; } = "";
     public string UserTranslation { get; set; } = "";
     public string CorrectedText { get; set; } = "";
-    public string OverallComment { get; set; } = "";
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? CompletedAt { get; set; }

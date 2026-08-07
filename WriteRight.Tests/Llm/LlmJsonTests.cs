@@ -36,8 +36,7 @@ public class LlmJsonTests
               "correction": "excited about",
               "explanation": "Preposição errada."
             }
-          ],
-          "overallComment": "Bom trabalho!"
+          ]
         }
         """;
 
@@ -45,7 +44,6 @@ public class LlmJsonTests
 
         Assert.NotNull(result);
         Assert.Equal("It was a simple day.", result!.CorrectedText);
-        Assert.Equal("Bom trabalho!", result.OverallComment);
         Assert.Equal(2, result.Errors.Count);
 
         Assert.Equal(ErrorCategory.SubjectOmission, result.Errors[0].Category);
@@ -59,7 +57,7 @@ public class LlmJsonTests
     {
         // O provider habilita PropertyNameCaseInsensitive: PascalCase também entra
         // (robustez contra variação de casing na resposta do modelo).
-        const string json = """{ "CorrectedText": "ok", "Errors": [], "OverallComment": "c" }""";
+        const string json = """{ "CorrectedText": "ok", "Errors": [] }""";
 
         var result = JsonSerializer.Deserialize<CorrectionResult>(json, LlmJson.Options);
 

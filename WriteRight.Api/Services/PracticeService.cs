@@ -201,7 +201,6 @@ public sealed class PracticeService
         var correction = result.Value;
         practice.UserTranslation = userTranslation;
         practice.CorrectedText = correction.CorrectedText;
-        practice.OverallComment = correction.OverallComment;
         practice.Errors = correction.Errors.Select(e => new ExerciseError
         {
             Category = e.Category,
@@ -334,7 +333,6 @@ public sealed class PracticeService
             p.Id, p.SourceLanguage, p.TargetLanguage, p.Level, p.Theme, p.Status,
             p.SourceText, p.UserTranslation,
             completed ? p.CorrectedText : null,
-            completed ? p.OverallComment : null,
             p.Errors.Select(e => new WritingError(
                 e.Category, e.Severity, e.Original, e.Correction, e.Explanation)).ToList(),
             p.CreatedAt, p.CompletedAt);

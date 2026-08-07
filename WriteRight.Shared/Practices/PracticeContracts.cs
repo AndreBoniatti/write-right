@@ -52,7 +52,6 @@ public sealed record PracticeDetail(
     string SourceText,
     string UserTranslation,
     string? CorrectedText,
-    string? OverallComment,
     IReadOnlyList<WritingError> Errors,
     DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt);

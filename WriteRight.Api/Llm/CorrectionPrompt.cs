@@ -23,19 +23,13 @@ internal static class CorrectionPrompt
         sb.AppendLine("Sua tarefa: corrigir a tradução e classificar CADA erro.");
         sb.AppendLine();
         sb.AppendLine("REGRAS:");
-        sb.AppendLine("- Toda explicação e o comentário geral devem ser em PORTUGUÊS do Brasil.");
+        sb.AppendLine("- Toda explicação deve ser em PORTUGUÊS do Brasil.");
         sb.AppendLine("- Classifique cada erro em UMA categoria da lista fixa abaixo. Se couber em duas, escolha a MAIS ESPECÍFICA.");
         sb.AppendLine("- Use \"Other\" apenas quando nada mais encaixar.");
         sb.AppendLine("- 'severity': BreaksMeaning (compromete o entendimento), Understandable (dá pra entender mas está errado), Polish (correto, só lapidação).");
         sb.AppendLine("- 'original' = o trecho errado como o aluno escreveu; 'correction' = esse mesmo trecho corrigido.");
         sb.AppendLine("- 'correctedText' = a tradução inteira, corrigida e natural.");
         sb.AppendLine("- Se a tradução estiver perfeita, devolva 'errors' vazio.");
-        sb.AppendLine("- 'overallComment': em 1-2 frases, sintetize o PADRÃO principal dos erros e diga");
-        sb.AppendLine("  concretamente o que o aluno deve focar na próxima prática. É um resumo útil, não elogio.");
-        sb.AppendLine("  NÃO abra com elogio genérico nem fórmulas clichê (\"muito bom esforço\", \"parabéns\", etc.).");
-        sb.AppendLine("  NUNCA se dirija ao aluno por um nome: o texto de origem pode conter nomes de personagens");
-        sb.AppendLine("  que NÃO são o aluno. Fale direto na 2ª pessoa (\"sua tradução...\", \"foque em...\").");
-        sb.AppendLine("  Se a tradução estiver perfeita, diga isso em uma frase e aponte um detalhe a manter.");
         sb.AppendLine();
         sb.AppendLine("CATEGORIAS (use exatamente estes identificadores no campo 'category'):");
         foreach (var info in ErrorCatalog.All)
@@ -82,9 +76,8 @@ internal static class CorrectionPrompt
             {
                 correctedText = new { type = "string" },
                 errors = new { type = "array", items = errorItem },
-                overallComment = new { type = "string" },
             }),
-            ["required"] = JsonSerializer.SerializeToElement(new[] { "correctedText", "errors", "overallComment" }),
+            ["required"] = JsonSerializer.SerializeToElement(new[] { "correctedText", "errors" }),
             ["additionalProperties"] = JsonSerializer.SerializeToElement(false),
         };
     }

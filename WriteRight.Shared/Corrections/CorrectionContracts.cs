@@ -20,8 +20,6 @@ public sealed record CorrectionRequest(
 /// </summary>
 /// <param name="CorrectedText">A tradução corrigida por inteiro (no idioma-alvo).</param>
 /// <param name="Errors">Lista de erros categorizados.</param>
-/// <param name="OverallComment">Comentário geral/encorajador em português.</param>
 public sealed record CorrectionResult(
     string CorrectedText,
-    IReadOnlyList<WritingError> Errors,
-    string OverallComment);
+    IReadOnlyList<WritingError> Errors);
