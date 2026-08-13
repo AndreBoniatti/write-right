@@ -34,6 +34,19 @@
         })();
     </script>
 
+    <!-- Modo "tentar antes de ver" da revisão: preferência persistida. Só isso —
+         nada é aplicado no <html>, então não precisa rodar antes do body pintar. -->
+    <script>
+        window.writerightDrill = {
+            get: function () {
+                try { return localStorage.getItem('wr-drill') === '1'; } catch (e) { return false; }
+            },
+            set: function (on) {
+                try { localStorage.setItem('wr-drill', on ? '1' : '0'); } catch (e) { }
+            }
+        };
+    </script>
+
     <script type="importmap"></script>
 </head>
 

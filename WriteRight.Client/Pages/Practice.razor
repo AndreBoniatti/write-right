@@ -1,6 +1,7 @@
 @page "/practice/{Id:int}"
 @inject WriteRightApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>WriteRight — Prática</PageTitle>
 
@@ -23,16 +24,32 @@ else if (practice is null)
 }
 else
 {
-    <h1 class="my-3 d-flex align-items-center gap-2">
-        @if (practice.Status == PracticeStatus.Completed)
+    @* O switch mora aqui, e não junto da lista de erros, porque ele governa a página
+       inteira — inclusive o card do texto corrigido, que aparece ANTES da lista. Um
+       controle depois daquilo que ele afeta confunde. *@
+    <div class="my-3 d-flex align-items-center gap-2 flex-wrap">
+        <h1 class="mb-0">
+            @if (practice.Status == PracticeStatus.Completed)
+            {
+                <span class="wr-badge wr-badge--success"><Icon Name="check" Size="14" /> Concluída</span>
+            }
+            else
+            {
+                <span class="wr-badge wr-badge--warning"><Icon Name="clock" Size="14" /> Em andamento</span>
+            }
+        </h1>
+
+        @if (practice.Status == PracticeStatus.Completed && practice.Errors.Count > 0)
         {
-            <span class="wr-badge wr-badge--success"><Icon Name="check" Size="14" /> Concluída</span>
+            <div class="form-check form-switch mb-0 ms-auto">
+                <input class="form-check-input" type="checkbox" id="wr-drill-toggle"
+                       checked="@drill" @onchange="ToggleDrill" />
+                <label class="form-check-label small text-muted" for="wr-drill-toggle">
+                    Tentar antes de ver a correção
+                </label>
+            </div>
         }
-        else
-        {
-            <span class="wr-badge wr-badge--warning"><Icon Name="clock" Size="14" /> Em andamento</span>
-        }
-    </h1>
+    </div>
 
     <div class="card p-3 mb-3">
         <h6 class="text-muted">Texto (@LangName(practice.SourceLanguage) → @LangName(practice.TargetLanguage))</h6>
@@ -63,7 +80,20 @@ else
             <h6 class="d-flex align-items-center gap-1">
                 <Icon Name="check" Size="18" /> Texto corrigido
             </h6>
-            <p class="lead mb-0">@practice.CorrectedText</p>
+            @* No modo teste este card é o maior vazamento da tela: traz TODAS as
+               correções de uma vez, antes do primeiro card de erro. Colapsado (e não
+               borrado) porque um parágrafo inteiro sob blur ocupa espaço à toa. *@
+            @if (drill && practice.Errors.Count > 0 && !showCorrectedText)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm align-self-start mt-1"
+                        @onclick="() => showCorrectedText = true">
+                    Ver texto corrigido
+                </button>
+            }
+            else
+            {
+                <p class="lead mb-0">@practice.CorrectedText</p>
+            }
         </div>
 
         @if (practice.Errors.Count == 0)
@@ -79,24 +109,50 @@ else
         }
         else
         {
-            <h5 class="mb-3">@practice.Errors.Count erro(s) encontrado(s)</h5>
+            <div class="d-flex align-items-center gap-3 mb-3">
+                <h5 class="mb-0">@practice.Errors.Count erro(s) encontrado(s)</h5>
+
+                @if (drill && revealed.Count < practice.Errors.Count)
+                {
+                    <button type="button" class="wr-linkish ms-auto" @onclick="RevealAll">
+                        Revelar tudo
+                    </button>
+                }
+            </div>
+
             @foreach (var group in ByCategory(practice.Errors))
             {
                 <h6 class="wr-error-group">
                     @ErrorCatalog.Info(group.Key).LabelPt
                     <span class="wr-error-group__count">· @group.Count()</span>
                 </h6>
-                @foreach (var e in group)
+                @foreach (var x in group)
                 {
                     <div class="card p-3 mb-2" style="max-width: 720px;">
                         @* Sem o badge de categoria: o cabeçalho do grupo já a nomeia. *@
                         <div class="d-flex gap-2 flex-wrap">
-                            <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                            <span class="@SeverityClass(x.Error.Severity)">@SeverityLabel(x.Error.Severity)</span>
                         </div>
+
+                        @* Correção E explicação escondidas juntas: a explicação é didática,
+                           então quase sempre nomeia a forma correta por extenso ("o termo
+                           correto é 'season'"). Esconder só a seta verde não testaria nada. *@
                         <div class="mt-2">
-                            <s class="text-danger">@e.Original</s> → <strong class="text-success">@e.Correction</strong>
+                            <s class="text-danger">@x.Error.Original</s>
+                            <span class="@AnswerClass(x.Index)" role="@AnswerRole(x.Index)"
+                                  tabindex="@AnswerTabIndex(x.Index)" title="@AnswerTitle(x.Index)"
+                                  @onclick="() => Reveal(x.Index)"
+                                  @onkeydown="e => RevealOnKey(e, x.Index)">
+                                → <strong class="text-success">@x.Error.Correction</strong>
+                            </span>
                         </div>
-                        <div class="text-muted small mt-1">@e.Explanation</div>
+                        <div class="text-muted small mt-1 @AnswerClass(x.Index)"
+                             role="@AnswerRole(x.Index)" tabindex="@AnswerTabIndex(x.Index)"
+                             title="@AnswerTitle(x.Index)"
+                             @onclick="() => Reveal(x.Index)"
+                             @onkeydown="e => RevealOnKey(e, x.Index)">
+                            @x.Error.Explanation
+                        </div>
                     </div>
                 }
             }
@@ -120,11 +176,21 @@ else
     private bool saving;
     private string? error;
 
+    // Modo "tentar antes de ver": correção e explicação entram borradas, e o usuário
+    // revela uma a uma. A preferência é global (localStorage); o que já foi revelado
+    // é por prática e morre ao navegar.
+    private bool drill;
+    private bool showCorrectedText;
+    private readonly HashSet<int> revealed = new();
+
     // OnParametersSetAsync (e não OnInitialized) pra recarregar ao navegar entre práticas.
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
         error = null;
+        // Outra prática, outras respostas: o que foi revelado aqui não vale lá.
+        revealed.Clear();
+        showCorrectedText = false;
         try
         {
             practice = await Api.GetPracticeAsync(Id);
@@ -139,6 +205,59 @@ else
             loading = false;
         }
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            drill = await JS.InvokeAsync<bool>("writerightDrill.get");
+            if (drill) StateHasChanged();
+        }
+        catch
+        {
+            // JS indisponível — segue no modo normal (tudo visível).
+        }
+    }
+
+    private async Task ToggleDrill(ChangeEventArgs e)
+    {
+        drill = e.Value is true;
+        // Sair e voltar recomeça o teste do zero: revelação antiga não vale.
+        revealed.Clear();
+        showCorrectedText = false;
+        try
+        {
+            await JS.InvokeVoidAsync("writerightDrill.set", drill);
+        }
+        catch
+        {
+            // ignora falha de interop — o modo vale pra sessão atual mesmo assim
+        }
+    }
+
+    private void Reveal(int index) => revealed.Add(index);
+
+    private void RevealOnKey(KeyboardEventArgs e, int index)
+    {
+        if (e.Key is "Enter" or " ") Reveal(index);
+    }
+
+    private void RevealAll()
+    {
+        for (var i = 0; i < (practice?.Errors.Count ?? 0); i++)
+            revealed.Add(i);
+        showCorrectedText = true;
+    }
+
+    private bool Hidden(int index) => drill && !revealed.Contains(index);
+
+    // Fora do modo teste estes quatro devolvem null/vazio, e o card renderiza
+    // exatamente como antes — o atributo nem chega ao HTML.
+    private string AnswerClass(int index) => Hidden(index) ? "wr-answer--hidden" : "";
+    private string? AnswerRole(int index) => Hidden(index) ? "button" : null;
+    private string? AnswerTabIndex(int index) => Hidden(index) ? "0" : null;
+    private string? AnswerTitle(int index) => Hidden(index) ? "Clique para revelar" : null;
 
     private async Task Correct()
     {
@@ -195,11 +314,19 @@ else
     /// A régua é o <see cref="SeverityWeight"/>, o mesmo que ordena o perfil.
     /// Dentro do grupo o GroupBy preserva a ordem original (= a ordem do texto).
     /// </summary>
-    private static IEnumerable<IGrouping<ErrorCategory, WritingError>> ByCategory(
+    private static IEnumerable<IGrouping<ErrorCategory, IndexedError>> ByCategory(
         IReadOnlyList<WritingError> errors) =>
-        errors.GroupBy(e => e.Category)
-              .OrderByDescending(g => g.Sum(e => SeverityWeight.Of(e.Severity)))
+        errors.Select((e, i) => new IndexedError(i, e))
+              .GroupBy(x => x.Error.Category)
+              .OrderByDescending(g => g.Sum(x => SeverityWeight.Of(x.Error.Severity)))
               .ThenByDescending(g => g.Count());
+
+    /// <summary>
+    /// O erro com sua posição na lista original. O agrupamento embaralha a ordem, mas
+    /// o estado de "já revelei este" precisa de uma chave estável — e
+    /// <see cref="WritingError"/> não tem id, então o índice de origem é a chave.
+    /// </summary>
+    private sealed record IndexedError(int Index, WritingError Error);
 
     private static string LangName(Language l) => l switch
     {

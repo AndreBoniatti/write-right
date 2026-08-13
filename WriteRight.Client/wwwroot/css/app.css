@@ -256,6 +256,42 @@ a:hover { color: var(--wr-primary-strong); }
     color: var(--wr-text-muted);
 }
 
+/* ── Modo "tentar antes de ver" ────────────────────────── */
+
+/* Ação secundária com peso de link: ao lado de um título, um botão desenhado
+   competiria com ele. */
+.wr-linkish {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    transition: color .15s ease;
+}
+
+.wr-linkish:hover { color: var(--wr-primary); }
+
+/* Blur em vez de display:none de propósito: o espaço fica reservado, então
+   revelar um card não empurra os de baixo e você não perde o lugar na página.
+   user-select: none evita revelar sem querer ao arrastar o mouse pelo texto. */
+.wr-answer--hidden {
+    filter: blur(5px);
+    cursor: pointer;
+    user-select: none;
+    transition: filter .18s ease;
+}
+
+.wr-answer--hidden:hover { filter: blur(3.5px); }
+
+.wr-answer--hidden:focus-visible {
+    outline: 2px solid var(--wr-primary);
+    outline-offset: 2px;
+    border-radius: var(--wr-radius-sm);
+}
+
 /* ── Listagem (list-group vira cards espaçados) ─────────── */
 
 .list-group {
