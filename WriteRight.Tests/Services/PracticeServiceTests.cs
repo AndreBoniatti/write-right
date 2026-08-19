@@ -29,7 +29,7 @@ public sealed class PracticeServiceTests : IDisposable
     private PracticeService Service(StubLlmProvider stub)
     {
         var ctx = _db.NewContext();
-        return new(stub, ctx, new UsageService(ctx, TestPricing.Default()));
+        return new(stub, ctx, new UsageService(ctx, TestPricing.Default()), new CardService(ctx));
     }
 
     private static CreatePracticeRequest CreateRequest(bool focusOnWeaknesses = false) =>

@@ -23,4 +23,12 @@ public class ExerciseError
     public string Original { get; set; } = "";
     public string Correction { get; set; } = "";
     public string Explanation { get; set; } = "";
+
+    /// <summary>
+    /// Trecho do texto de origem correspondente, no idioma de origem do exercício.
+    /// Insumo do card de vocabulário (a dica da frente). NULL quando não há
+    /// correspondência — e também nos erros gravados antes deste campo existir,
+    /// que é o que o backfill preenche.
+    /// </summary>
+    public string? SourcePhrase { get; set; }
 }

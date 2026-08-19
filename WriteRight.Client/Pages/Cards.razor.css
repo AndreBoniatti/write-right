@@ -1,0 +1,151 @@
+/* Sessão de revisão — um card por vez, centralizado e estreito. A largura curta
+   é deliberada: a frente do card é uma frase que precisa ser lida inteira de um
+   golpe, e linha longa força varredura. */
+
+.wr-session {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.wr-session__meter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
+}
+
+.wr-session__last {
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.wr-card .card-body {
+    padding: 1.75rem;
+}
+
+/* A frase com a lacuna: maior que o corpo do texto porque é o objeto da tela,
+   não um detalhe dela. */
+.wr-card__prompt {
+    font-size: 1.2rem;
+    line-height: 1.9; /* folga pro contorno da lacuna não encostar na linha de cima */
+    margin-bottom: 1.25rem;
+}
+
+/* A lacuna, com a dica no idioma de origem dentro dela. O contorno tracejado diz
+   "espaço a preencher" e o itálico diz "isto não é o inglês da frase, é o que
+   você tem que produzir" — as duas coisas sem precisar de legenda. */
+.wr-card__slot {
+    display: inline-block;
+    padding: 0.02em 0.5em;
+    margin: 0 0.1em;
+    border: 1px dashed var(--wr-primary);
+    border-radius: var(--wr-radius-sm);
+    background: var(--wr-primary-soft);
+    color: var(--wr-primary);
+    font-style: italic;
+    font-size: 0.92em;
+    line-height: 1.5;
+}
+
+.wr-card__input {
+    font-size: 1.05rem;
+    padding: 0.7rem 0.9rem;
+}
+
+.wr-card__result {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+}
+
+/* O veredito: uma linha, sempre presente, antes das caixas. "Acertei?" é a
+   primeira pergunta de quem revela um card, e a resposta não pode depender de
+   interpretar a cor de fundo de uma caixa. */
+.wr-card__verdict {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.wr-card__verdict--ok { color: var(--wr-success); }
+.wr-card__verdict--bad { color: var(--wr-danger); }
+.wr-card__verdict--near { color: var(--wr-warning); }
+
+.wr-result {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--wr-radius-sm);
+}
+
+.wr-result--ok { background: var(--wr-success-soft); }
+.wr-result--bad { background: var(--wr-danger-soft); }
+
+.wr-result__label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+}
+
+.wr-result--ok .wr-result__label { color: var(--wr-success); }
+.wr-result--bad .wr-result__label { color: var(--wr-danger); }
+
+.wr-result__text {
+    font-size: 1.05rem;
+    font-weight: 550;
+}
+
+/* A origem: a única linha de prosa da revisão, e o que faz o card ser SEU e não
+   de uma lista genérica. A borda separa o que aconteceu agora (veredito, as duas
+   respostas) de onde o card nasceu. */
+.wr-card__origin {
+    margin: 0.3rem 0 0;
+    padding-top: 0.8rem;
+    border-top: 1px solid var(--wr-border);
+    font-size: 0.85rem;
+    color: var(--wr-text-muted);
+}
+
+
+/* A pergunta do "quase". Sem cor própria de propósito: o âmbar já foi gasto no
+   veredito lá em cima, e repeti-lo aqui faria a tela ter dois avisos onde há um. */
+.wr-card__near {
+    margin: 1.1rem 0 0.5rem;
+    font-weight: 550;
+}
+
+.wr-card__actions {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 1.25rem;
+}
+
+.wr-card__actions .btn { flex: 1; justify-content: center; }
+
+/* O intervalo dentro do botão: presente, mas subordinado ao rótulo — quem decide
+   é "difícil ou fácil", o prazo só informa a consequência. */
+.wr-card__when {
+    opacity: 0.7;
+    font-weight: 450;
+    font-size: 0.85em;
+}
+
+/* Explica os dois botões levarem à mesma data nas primeiras revisões. */
+.wr-card__equal {
+    margin: 0.7rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--wr-text-muted);
+    text-align: center;
+}

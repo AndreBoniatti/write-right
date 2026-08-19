@@ -27,14 +27,28 @@ public class CorrectionSchemaTests
     }
 
     [Fact]
-    public void Error_item_requires_all_five_fields()
+    public void Error_item_requires_every_field()
     {
         var required = ErrorItem().GetProperty("required").EnumerateArray()
             .Select(e => e.GetString()!).ToList();
 
         Assert.Equal(
-            new[] { "category", "severity", "original", "correction", "explanation" },
+            new[] { "category", "severity", "original", "correction", "explanation", "sourcePhrase" },
             required);
+    }
+
+    /// <summary>
+    /// 'sourcePhrase' é obrigatório com string vazia permitida, e NÃO opcional: modelo
+    /// pula campo opcional com frequência, e a ausência ficaria ambígua entre "não há
+    /// correspondência" e "esqueceu". Este teste trava essa decisão.
+    /// </summary>
+    [Fact]
+    public void Source_phrase_is_required_and_accepts_empty_string()
+    {
+        var property = ErrorItem().GetProperty("properties").GetProperty("sourcePhrase");
+
+        Assert.Equal("string", property.GetProperty("type").GetString());
+        Assert.False(property.TryGetProperty("minLength", out _));
     }
 
     [Fact]

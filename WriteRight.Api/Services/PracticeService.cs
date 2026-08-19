@@ -35,12 +35,14 @@ public sealed class PracticeService
     private readonly ILlmProvider _llm;
     private readonly WriteRightDbContext _db;
     private readonly UsageService _usage;
+    private readonly CardService _cards;
 
-    public PracticeService(ILlmProvider llm, WriteRightDbContext db, UsageService usage)
+    public PracticeService(ILlmProvider llm, WriteRightDbContext db, UsageService usage, CardService cards)
     {
         _llm = llm;
         _db = db;
         _usage = usage;
+        _cards = cards;
     }
 
     /// <summary>
@@ -208,6 +210,10 @@ public sealed class PracticeService
             Original = e.Original,
             Correction = e.Correction,
             Explanation = e.Explanation,
+            // "sem correspondência" tem UMA representação (null): o schema pede string
+            // vazia, o banco guarda null. Sem isto, "" e null significariam a mesma
+            // coisa em colunas diferentes e todo consumidor teria que testar os dois.
+            SourcePhrase = string.IsNullOrWhiteSpace(e.SourcePhrase) ? null : e.SourcePhrase.Trim(),
         }).ToList();
         practice.Status = PracticeStatus.Completed;
         practice.CompletedAt = DateTimeOffset.UtcNow;
@@ -216,7 +222,16 @@ public sealed class PracticeService
         // navegador desistiu, a prática fica corrigida e o usuário a encontra ao
         // recarregar, em vez de pagar outra correção.
         await _db.SaveChangesAsync(UsageService.AfterBilling);
-        return (PracticeOutcome.Ok, ToDetail(practice));
+
+        // Cards num SaveChanges SEPARADO, e não junto do de cima: se a cunhagem
+        // falhar dentro da mesma transação, a correção some com ela — e ela já foi
+        // paga. Perder alguns cards (os erros continuam no perfil) é muito melhor
+        // que fazer o usuário pagar outra correção. O deck é consequência da
+        // correção, não condição dela.
+        var minted = await _cards.MintForPracticeAsync(practice, UsageService.AfterBilling);
+        await _db.SaveChangesAsync(UsageService.AfterBilling);
+
+        return (PracticeOutcome.Ok, ToDetail(practice) with { MintedCards = minted });
     }
 
     /// <summary>Exclui uma prática (e seus erros, por cascade). Permitido em qualquer status.</summary>
@@ -334,7 +349,7 @@ public sealed class PracticeService
             p.SourceText, p.UserTranslation,
             completed ? p.CorrectedText : null,
             p.Errors.Select(e => new WritingError(
-                e.Category, e.Severity, e.Original, e.Correction, e.Explanation)).ToList(),
+                e.Category, e.Severity, e.Original, e.Correction, e.Explanation, e.SourcePhrase)).ToList(),
             p.CreatedAt, p.CompletedAt);
     }
 }

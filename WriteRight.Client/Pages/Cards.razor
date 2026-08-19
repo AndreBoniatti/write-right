@@ -1,0 +1,442 @@
+@page "/cards"
+@inject WriteRightApiClient Api
+@inject NavigationManager Nav
+@inject DueCardsState DueCards
+
+<PageTitle>WriteRight — Revisar vocabulário</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">Revisar vocabulário</h1>
+    <a class="btn btn-outline-secondary" href="cards/deck">Ver o deck</a>
+</div>
+
+@if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@if (loading)
+{
+    <p class="text-muted">Carregando…</p>
+}
+else if (Current is null)
+{
+    <div class="alert alert-info">
+        @if (reviewed > 0)
+        {
+            <span>
+                <strong>Por hoje é isso.</strong>
+                @reviewed card(s) revisado(s), @correct de cara. O resto volta amanhã.
+            </span>
+        }
+        else if (deckSize > 0)
+        {
+            @* Distinguir "acabei por hoje" de "não tenho card nenhum": para quem tem
+               80 cards e voltou depois de terminar, a mensagem de deck vazio soaria
+               como se o deck tivesse sumido. *@
+            <span>
+                <strong>Nada para hoje.</strong>
+                Seus @deckSize cards estão em dia — o próximo lote volta conforme os intervalos.
+            </span>
+        }
+        else
+        {
+            <span>Nenhum card ainda. Eles nascem dos seus erros de vocabulário nas práticas.</span>
+        }
+    </div>
+}
+else
+{
+    <div class="wr-session">
+        <div class="wr-session__meter">
+            <span>@(reviewed + 1) de @(reviewed + queue!.Count)</span>
+            <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(Current.Category).LabelPt</span>
+            @if (Current.Lapses > 0)
+            {
+                <span class="wr-badge wr-badge--warning" title="Vezes que você já esqueceu este card">
+                    @Current.Lapses esquecimento(s)
+                </span>
+            }
+        </div>
+
+        <div class="card wr-card">
+            <div class="card-body">
+                @* A dica ocupa a LACUNA, em vez de ficar solta embaixo da frase.
+                   Embaixo ela era uma palavra solta no idioma de origem: não dizia a
+                   que buraco pertencia nem por que estava ali. No lugar da lacuna a
+                   relação dispensa legenda — é isto que você traduz, aqui. *@
+                <p class="wr-card__prompt">
+                    @if (Cloze.Split(Current.Prompt) is { } partes)
+                    {
+                        @partes.Before
+                        <span class="wr-card__slot">@Current.Hint</span>
+                        @partes.After
+                    }
+                    else
+                    {
+                        @* Enunciado sem marcador não deveria existir, mas se existir
+                           é melhor mostrá-lo cru do que engolir o card. *@
+                        @Current.Prompt
+                    }
+                </p>
+
+                @if (revealed is null)
+                {
+                    <input class="form-control wr-card__input" @bind="typed" @bind:event="oninput"
+                           @onkeydown="OnKeyDown" placeholder="Escreva a resposta…"
+                           autocomplete="off" autocapitalize="off" spellcheck="false"
+                           disabled="@busy" @ref="input" />
+
+                    @* Campo vazio NÃO desabilita o botão: "não sei" é resposta legítima
+                       — a mais comum numa revisão — e fechar essa porta obrigaria a
+                       digitar qualquer coisa só pra destravar a tela, enchendo o log de
+                       lixo no lugar de um branco honesto. O botão muda de rótulo e de
+                       peso, pra dizer o que vai acontecer antes de acontecer. *@
+                    <button class="btn mt-3 @(HasTyped ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick="Check" disabled="@busy">
+                        @(HasTyped ? "Conferir" : "Não sei")
+                    </button>
+                }
+                else
+                {
+                    <div class="wr-card__result">
+                        @* O veredito numa linha só, acima das caixas, e presente nos
+                           quatro desfechos. Antes ele morava no rótulo da caixa verde:
+                           funcionava no acerto e falhava no erro, onde a primeira coisa
+                           a ser lida era uma caixa VERDE escrito "certa" — e o veredito
+                           tinha que ser deduzido da cor da caixa de baixo. *@
+                        <p class="wr-card__verdict wr-card__verdict--@Outcome.Modifier">
+                            @if (Outcome.Icon is { } icone)
+                            {
+                                <Icon Name="@icone" Size="15" />
+                            }
+                            <span>@Outcome.Text</span>
+                        </p>
+
+                        <div class="wr-result wr-result--ok">
+                            <span class="wr-result__label">Resposta certa</span>
+                            <span class="wr-result__text">@revealed.Answer</span>
+                        </div>
+
+                        @* Só mostra o que foi escrito se houver o que mostrar: depois de
+                           "Não sei" um traço vazio ocuparia espaço sem dizer nada. *@
+                        @if (!Accepted && HasTyped)
+                        {
+                            <div class="wr-result wr-result--bad">
+                                <span class="wr-result__label">Sua resposta</span>
+                                <span class="wr-result__text">@typed</span>
+                            </div>
+                        }
+
+                        @* A única prosa que sobrou na revisão. O "porquê" saiu daqui de
+                           propósito: ele é um retrato do erro que criou o card, e numa
+                           revisão você erra de outro jeito — o texto discutia uma palavra
+                           que você não escreveu, e às vezes até endossava a que escreveu.
+                           Quem quiser o porquê tem ele inteiro em "Ver o deck", que é a
+                           tela de leitura. Aqui a sessão é de recuperação: ver a resposta
+                           e seguir. *@
+                        @if (RepeatedTheOriginalMistake)
+                        {
+                            @* Repetir o erro NÃO reimprime o erro: ele já está logo
+                               acima, na caixa vermelha, com as mesmas letras. Repetir a
+                               palavra daria a impressão de dois erros diferentes. *@
+                            <p class="wr-card__origin">Você repetiu o erro que criou este card.</p>
+                        }
+                        else
+                        {
+                            <p class="wr-card__origin">
+                                Este card nasceu porque, numa prática, você escreveu
+                                <strong>@revealed.YourAttempt</strong>.
+                            </p>
+                        }
+                    </div>
+
+                    @if (revealed.Verdict == CardVerdict.NearMiss && adjudicated is null)
+                    {
+                        @* O "quase" é decisão do usuário: só ele sabe se tropeçou na
+                           tecla ou não sabia. O servidor não arbitra isso sozinho. *@
+                        <p class="wr-card__near">Foi só um deslize de digitação?</p>
+                        <div class="wr-card__actions">
+                            <button class="btn btn-outline-secondary" @onclick="() => Adjudicate(true)" disabled="@busy">
+                                Foi deslize, acertei
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="() => Adjudicate(false)" disabled="@busy">
+                                Não sabia, errei
+                            </button>
+                        </div>
+                    }
+                    else if (Accepted)
+                    {
+                        @* Os dois com o MESMO peso visual, de propósito. Destacar o
+                           "Fácil" empurraria a auto-avaliação pra cima — e ela governa
+                           o ease, que governa o quanto os intervalos crescem. O app
+                           não pode ter opinião sobre o quanto você achou fácil. *@
+                        <div class="wr-card__actions">
+                            <button class="btn btn-outline-secondary" @onclick="() => Commit(CardRating.Hard)" disabled="@busy">
+                                Difícil
+                                @if (RatingChangesTheDate)
+                                {
+                                    <span class="wr-card__when">@Short(revealed.HardDays)</span>
+                                }
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="() => Commit(CardRating.Easy)" disabled="@busy">
+                                Fácil
+                                @if (RatingChangesTheDate)
+                                {
+                                    <span class="wr-card__when">@Short(revealed.EasyDays)</span>
+                                }
+                            </button>
+                        </div>
+
+                        @* Nos dois primeiros passos o prazo é fixo. Repetir "1 dia" nos
+                           dois botões faria a escolha parecer inútil — ela não é: mexe
+                           no ease, que decide o tamanho dos saltos daqui pra frente. *@
+                        @if (!RatingChangesTheDate)
+                        {
+                            @* Diz a consequência, não o mecanismo. A versão anterior
+                               falava em "ajustar o ritmo das próximas revisões, não
+                               esta data" — obrigava a montar o sentido, e "ritmo" não
+                               é nada que se possa ver. Nomear o botão e o efeito
+                               resolve numa leitura. *@
+                            <p class="wr-card__equal">
+                                Volta em @Short(revealed.EasyDays) nos dois casos.
+                                A escolha ainda conta: com “Fácil”, os próximos intervalos
+                                crescem mais rápido.
+                            </p>
+                        }
+                    }
+                    else
+                    {
+                        <div class="wr-card__actions">
+                            <button class="btn btn-primary" @onclick="() => Commit(CardRating.Again)" disabled="@busy">
+                                Continuar <span class="wr-card__when">@Short(revealed.AgainDays)</span>
+                            </button>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        @if (last is not null)
+        {
+            <p class="wr-session__last text-muted">Anterior: volta em @Short(last.IntervalDays).</p>
+        }
+    </div>
+}
+
+@code {
+    private List<CardReviewItem>? queue;
+    private CardCheckResult? revealed;
+    private CardReviewResult? last;
+
+    /// <summary>Decisão do usuário sobre um "quase". Null enquanto ele não decidiu.</summary>
+    private bool? adjudicated;
+
+    private string typed = "";
+    private int reviewed;
+    private int correct;
+
+    /// <summary>Tamanho do deck, lido só quando a fila vem vazia — pra saber se é
+    /// "acabei por hoje" ou "não tenho card nenhum".</summary>
+    private int deckSize;
+
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+    private ElementReference input;
+
+    /// <summary>Último card que recebeu foco, pra não repetir a chamada a cada tecla.</summary>
+    private int? focusedCardId;
+
+    private CardReviewItem? Current => queue is { Count: > 0 } ? queue[0] : null;
+
+    /// <summary>
+    /// Se a revisão conta como acerto. Um "quase" só conta depois de o usuário
+    /// adjudicar — antes disso não há resposta, e é por isso que os botões de
+    /// fácil/difícil ainda não aparecem.
+    /// </summary>
+    private bool Accepted => revealed?.Verdict switch
+    {
+        CardVerdict.Correct => true,
+        CardVerdict.NearMiss => adjudicated == true,
+        _ => false,
+    };
+
+    /// <summary>
+    /// O veredito da revisão: texto, cor e ícone. Fica aqui e não no markup porque
+    /// são quatro desfechos e escolher entre eles é lógica, não layout. A ordem das
+    /// cláusulas importa: o "quase" ainda indeciso vem primeiro porque nesse estado
+    /// não existe acerto nem erro — existe uma pergunta em aberto.
+    /// </summary>
+    private (string Text, string Modifier, string? Icon) Outcome
+    {
+        get
+        {
+            if (revealed is { Verdict: CardVerdict.NearMiss } && adjudicated is null)
+                return ("Quase", "near", null);
+
+            if (Accepted)
+                return ("Você acertou", "ok", "check");
+
+            // "Não sei" tem a mesma consequência de errar (o card volta amanhã), então
+            // leva a mesma cor. Só o texto muda: quem desiste sabe que desistiu, e
+            // chamar isso de erro seria trocar um fato por um julgamento.
+            return HasTyped
+                ? ("Você errou", "bad", "x")
+                : ("Você não sabia", "bad", "x");
+        }
+    }
+
+    /// <summary>
+    /// Se o que você acabou de escrever é o mesmo erro que gerou o card — a
+    /// coincidência que o deck existe pra pegar, e que sem aviso apareceria como
+    /// a mesma palavra impressa duas vezes com dois rótulos diferentes.
+    /// </summary>
+    private bool RepeatedTheOriginalMistake =>
+        revealed is not null && !Accepted && HasTyped
+        && AnswerMatch.Normalize(typed) == AnswerMatch.Normalize(revealed.YourAttempt);
+
+    protected override Task OnInitializedAsync() => Load();
+
+    /// <summary>
+    /// Foco no campo a cada card NOVO: a sessão é uma sequência de digitação, e ter
+    /// que clicar entre um card e outro quebraria o ritmo.
+    ///
+    /// A guarda por id não é detalhe: o campo usa <c>@@bind:event="oninput"</c>, então
+    /// cada tecla dispara um render — sem ela, era uma chamada de interop JS por
+    /// caractere digitado, todas para focar o que já estava focado.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Current is null || revealed is not null || busy) return;
+        if (focusedCardId == Current.Id) return;
+
+        focusedCardId = Current.Id;
+        try { await input.FocusAsync(); } catch { /* elemento já saiu da tela */ }
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            queue = (await Api.GetDueCardsAsync()).ToList();
+            DueCards.Set(queue.Count); // a fila que acabou de chegar É o contador
+
+            // Só quando não há nada a fazer: aí a pergunta passa a ser "o deck está
+            // vazio ou eu já terminei?", e ela precisa do total pra ser respondida.
+            if (queue.Count == 0 && reviewed == 0)
+                deckSize = (await Api.GetDeckAsync()).Summary.Total;
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private bool HasTyped => !string.IsNullOrWhiteSpace(typed);
+
+    /// <summary>
+    /// Se fácil e difícil levam a datas diferentes. Nos dois primeiros passos não
+    /// levam (são fixos), e aí mostrar o mesmo prazo nos dois botões só faria a
+    /// escolha parecer sem efeito.
+    /// </summary>
+    private bool RatingChangesTheDate =>
+        revealed is not null && Math.Abs(revealed.EasyDays - revealed.HardDays) > 0.01;
+
+    /// <summary>
+    /// Enter só vale com algo digitado. Depois de classificar um card o foco volta
+    /// sozinho pro campo, então um Enter fora de ritmo marcaria o card SEGUINTE como
+    /// errado antes de você ter lido a frase. Desistir tem que ser um ato deliberado
+    /// — o botão "Não sei" —, nunca o resto de uma tecla apertada rápido demais.
+    /// </summary>
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || !HasTyped) return;
+        await Check();
+    }
+
+    private async Task Check()
+    {
+        if (Current is null || busy) return;
+
+        busy = true;
+        error = null;
+        try
+        {
+            revealed = await Api.CheckCardAsync(Current.Id, typed);
+            if (revealed is null) error = "Não foi possível conferir a resposta.";
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Adjudicate(bool correct) => adjudicated = correct;
+
+    private async Task Commit(CardRating rating)
+    {
+        if (Current is null || busy) return;
+
+        busy = true;
+        error = null;
+        try
+        {
+            last = await Api.ReviewCardAsync(
+                Current.Id, new CardReviewRequest(typed, Accepted, rating));
+
+            if (last is null)
+            {
+                error = "Não foi possível registrar a revisão.";
+                return;
+            }
+
+            reviewed++;
+            if (Accepted) correct++;
+            queue!.RemoveAt(0);
+            revealed = null;
+            adjudicated = null;
+            typed = "";
+
+            // A resposta da revisão já traz quantos sobraram — atualizar o selo aqui
+            // não custa requisição nenhuma. É o caminho mais comum de o número mudar,
+            // e o único em que ele DIMINUI.
+            DueCards.Set(last.RemainingDue);
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    /// <summary>
+    /// O intervalo em palavras. Os limites (60 dias, 730) não são arbitrários: eles
+    /// mantêm a unidade sempre no plural, o que evita o "1 meses" que a divisão
+    /// produzia — e de quebra são mais precisos, porque "32 dias" diz mais que
+    /// "1 mês". A única forma singular que sobra é "1 dia", escrita à mão.
+    /// </summary>
+    private static string Short(double days) => days switch
+    {
+        < 2 => "1 dia",
+        < 60 => $"{Math.Round(days)} dias",
+        < 730 => $"{Math.Round(days / 30)} meses",
+        _ => $"{Math.Round(days / 365, 1)} anos",
+    };
+
+    private static string Friendly(Exception ex) =>
+        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056)?";
+}

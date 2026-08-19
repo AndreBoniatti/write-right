@@ -59,6 +59,24 @@
     color: var(--wr-primary);
 }
 
+/* Contador de cards vencidos. Encostado à direita do item, com o acento do tema
+   — é convite, não alerta: nada quebra se ficar por revisar. */
+.nav-item ::deep .nav-badge {
+    margin-left: auto;
+    background: var(--wr-primary-soft);
+    color: var(--wr-primary);
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.nav-item ::deep .nav-link.active .nav-badge {
+    background: var(--wr-primary);
+    color: var(--wr-on-primary);
+}
+
 /* Toggler (hambúrguer) — só no mobile */
 .navbar-toggler {
     margin-left: auto;

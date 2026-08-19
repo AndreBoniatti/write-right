@@ -28,6 +28,9 @@ internal static class CorrectionPrompt
         sb.AppendLine("- Use \"Other\" apenas quando nada mais encaixar.");
         sb.AppendLine("- 'severity': BreaksMeaning (compromete o entendimento), Understandable (dá pra entender mas está errado), Polish (correto, só lapidação).");
         sb.AppendLine("- 'original' = o trecho errado como o aluno escreveu; 'correction' = esse mesmo trecho corrigido.");
+        sb.AppendLine("- 'sourcePhrase' = o trecho do TEXTO ORIGINAL (no idioma de origem) que corresponde a este erro,");
+        sb.AppendLine("  copiado literalmente. Vira a dica de um card de revisão, então recorte o menor trecho que ainda");
+        sb.AppendLine("  identifique a ideia sozinho. String VAZIA quando não houver correspondência (ortografia, pontuação).");
         sb.AppendLine("- 'correctedText' = a tradução inteira, corrigida e natural.");
         sb.AppendLine("- Se a tradução estiver perfeita, devolva 'errors' vazio.");
         sb.AppendLine();
@@ -64,8 +67,12 @@ internal static class CorrectionPrompt
                 original = new { type = "string" },
                 correction = new { type = "string" },
                 explanation = new { type = "string" },
+                sourcePhrase = new { type = "string" },
             },
-            required = new[] { "category", "severity", "original", "correction", "explanation" },
+            // 'sourcePhrase' entra como OBRIGATÓRIO com string vazia permitida, e não
+            // como campo opcional: modelo pula campo opcional com frequência, e aí a
+            // ausência ficaria ambígua — "não havia correspondência" ou "esqueceu"?
+            required = new[] { "category", "severity", "original", "correction", "explanation", "sourcePhrase" },
             additionalProperties = false,
         };
 

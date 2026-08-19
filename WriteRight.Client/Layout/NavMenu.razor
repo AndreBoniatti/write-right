@@ -14,6 +14,15 @@
             </NavLink>
         </div>
         <div class="nav-item">
+            <NavLink class="nav-link" href="cards">
+                <Icon Name="cards" Size="20" /> <span>Vocabulário</span>
+                @if (DueCards.Count > 0)
+                {
+                    <span class="nav-badge">@DueCards.Count</span>
+                }
+            </NavLink>
+        </div>
+        <div class="nav-item">
             <NavLink class="nav-link" href="profile">
                 <Icon Name="chart" Size="20" /> <span>Meu perfil</span>
             </NavLink>
@@ -21,8 +30,31 @@
     </nav>
 </div>
 
+@implements IDisposable
+@inject DueCardsState DueCards
+
 @code {
     private bool collapseNavMenu = true;
+
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
     private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+
+    /// <summary>
+    /// O menu é montado uma vez e sobrevive a toda a navegação, então ele OUVE o
+    /// contador em vez de buscá-lo: quem muda o número avisa. A leitura inicial é a
+    /// única ida ao servidor daqui.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        DueCards.Changed += OnDueCardsChanged;
+        await DueCards.RefreshAsync();
+    }
+
+    /// <summary>
+    /// O aviso pode vir de outro componente, fora do contexto de sincronização do
+    /// Blazor — <c>InvokeAsync</c> traz o re-render de volta pra thread certa.
+    /// </summary>
+    private void OnDueCardsChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => DueCards.Changed -= OnDueCardsChanged;
 }

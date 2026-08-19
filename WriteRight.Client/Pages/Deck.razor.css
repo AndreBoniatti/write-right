@@ -1,0 +1,57 @@
+/* Contadores do deck — linha de números grandes, que respondem "tenho o que
+   fazer hoje?" antes de a lista carregar a atenção. */
+
+.wr-deck-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.wr-stat {
+    flex: 1 1 6rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.85rem 0.6rem;
+    background: var(--wr-surface);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    box-shadow: var(--wr-shadow-sm);
+}
+
+.wr-stat__n {
+    font-size: 1.5rem;
+    font-weight: 650;
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.wr-stat__l {
+    font-size: 0.75rem;
+    color: var(--wr-text-muted);
+}
+
+/* A frente do card na listagem: aqui é leitura, não teste — a lacuna e a
+   resposta aparecem juntas. */
+.wr-deck-card__prompt {
+    line-height: 1.55;
+}
+
+.wr-deck-card__answer {
+    margin-top: 0.2rem;
+    font-weight: 600;
+    color: var(--wr-success);
+}
+
+.wr-deck-card__hint {
+    margin-top: 0.15rem;
+    font-size: 0.88rem;
+    color: var(--wr-text-muted);
+}
+
+/* Descartado continua visível (pra saber que existe e não estranhar a ausência),
+   mas apagado — não é mais matéria de estudo. */
+.wr-deck-card--out {
+    opacity: 0.55;
+}

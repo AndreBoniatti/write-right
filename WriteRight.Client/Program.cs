@@ -22,4 +22,8 @@ builder.Services.AddScoped(_ => new HttpClient
 });
 builder.Services.AddScoped<WriteRightApiClient>();
 
+// Contador de cards vencidos, compartilhado entre as telas que o mudam e o menu que
+// o mostra. Scoped = uma instância por app no WASM, que é o que se quer aqui.
+builder.Services.AddScoped<DueCardsState>();
+
 await builder.Build().RunAsync();

@@ -1,0 +1,191 @@
+@page "/cards/deck"
+@inject WriteRightApiClient Api
+@inject DueCardsState DueCards
+
+<PageTitle>WriteRight — Meu deck</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">Meu deck</h1>
+    <a class="btn btn-primary" href="cards">Revisar</a>
+</div>
+
+@if (error is not null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@if (loading)
+{
+    <p class="text-muted">Carregando…</p>
+}
+else if (deck is null)
+{
+    <div class="alert alert-info">Nada por aqui ainda.</div>
+}
+else
+{
+    @* Os quatro do meio são uma PARTIÇÃO do deck, na ordem em que um card os
+       percorre: novo → aprendendo → em revisão → aprendido. Somados dão o total, e é
+       isso que responde "estou progredindo?". "Aprendendo" faltava, e era justamente
+       onde ficam os cards com progresso de verdade — a fileira pulava de "novos" pra
+       um estado que só chega no segundo acerto, então mostrava zero em tudo que
+       importava. "Pra revisar" fica de fora da soma de propósito: é trabalho de agora,
+       e se sobrepõe aos outros (card novo também está vencido). *@
+    <div class="wr-deck-stats">
+        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Due</span><span class="wr-stat__l">pra revisar</span></div>
+        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.New</span><span class="wr-stat__l">novos</span></div>
+        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Learning</span><span class="wr-stat__l">aprendendo</span></div>
+        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Review</span><span class="wr-stat__l">em revisão</span></div>
+        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Retired</span><span class="wr-stat__l">aprendidos</span></div>
+        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Total</span><span class="wr-stat__l">no total</span></div>
+    </div>
+
+    @if (deck.Summary.Leeches > 0)
+    {
+        <div class="alert alert-warning mt-3">
+            <strong>@deck.Summary.Leeches card(s) travado(s).</strong>
+            Você já esqueceu cada um deles @CardScheduler.LeechLapses vezes ou mais — revisar de
+            novo provavelmente não resolve. Vale descartar e reencontrar o item numa prática.
+        </div>
+    }
+
+    @if (deck.Cards.Count == 0)
+    {
+        <div class="alert alert-info mt-3">
+            Nenhum card ainda. Eles nascem sozinhos dos seus erros de vocabulário
+            (escolha de palavra, falso cognato, colocação, tradução literal) quando
+            você corrige uma prática.
+        </div>
+    }
+    else
+    {
+        <div class="list-group mt-3">
+            @foreach (var c in deck.Cards)
+            {
+                <div class="list-group-item @(c.State == CardState.Discarded ? "wr-deck-card--out" : "")">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                                <span class="@StateClass(c.State)">@StateLabel(c.State)</span>
+                                <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(c.Category).LabelPt</span>
+                                @if (c.IsLeech && c.State != CardState.Discarded)
+                                {
+                                    <span class="wr-badge wr-badge--danger">travado</span>
+                                }
+                            </div>
+
+                            <div class="wr-deck-card__prompt">@c.Prompt</div>
+                            <div class="wr-deck-card__answer">@c.Answer</div>
+
+                            <div class="wr-deck-card__hint">@c.Hint</div>
+
+                            <div class="text-muted small mt-2">
+                                @if (c.DueAt is { } due)
+                                {
+                                    <span>Volta em @due.ToLocalTime().ToString("dd/MM/yyyy") · </span>
+                                }
+                                <span>@c.Reps revisão(ões)</span>
+                                @if (c.Lapses > 0)
+                                {
+                                    <span> · @c.Lapses esquecimento(s)</span>
+                                }
+                            </div>
+                        </div>
+
+                        @if (c.State != CardState.Discarded)
+                        {
+                            <div class="text-nowrap">
+                                @if (discardingId == c.Id)
+                                {
+                                    <span class="small text-muted me-1">Descartar?</span>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDiscard(c.Id)" disabled="@busy">Sim</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => discardingId = null" disabled="@busy">Não</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => discardingId = c.Id"
+                                            title="Card ruim (trecho sem resposta única, erro de digitação)">
+                                        <Icon Name="trash" Size="14" />
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private DeckView? deck;
+    private bool loading = true;
+    private bool busy;
+    private int? discardingId;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            deck = await Api.GetDeckAsync();
+            // Summary.Due é a mesma fila da sessão (ver CardService.Queue), então
+            // serve de fonte pro selo sem uma segunda chamada.
+            DueCards.Set(deck.Summary.Due);
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task ConfirmDiscard(int id)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            await Api.DiscardCardAsync(id);
+            discardingId = null;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string StateLabel(CardState s) => s switch
+    {
+        CardState.New => "Novo",
+        CardState.Learning => "Aprendendo",
+        CardState.Review => "Em revisão",
+        CardState.Retired => "Aprendido",
+        CardState.Discarded => "Descartado",
+        _ => s.ToString(),
+    };
+
+    private static string StateClass(CardState s) => s switch
+    {
+        CardState.New => "wr-badge wr-badge--info",
+        CardState.Learning => "wr-badge wr-badge--warning",
+        CardState.Review => "wr-badge wr-badge--info",
+        CardState.Retired => "wr-badge wr-badge--success",
+        _ => "wr-badge wr-badge--muted",
+    };
+
+    private static string Friendly(Exception ex) =>
+        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056)?";
+}

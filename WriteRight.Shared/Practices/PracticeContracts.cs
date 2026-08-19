@@ -42,6 +42,12 @@ public sealed record PracticeSummary(
 /// Detalhe completo de uma prática — abrir/retomar (InProgress) ou ler (Completed).
 /// Correção só vem preenchida quando concluída.
 /// </summary>
+/// <param name="MintedCards">
+/// Cards de vocabulário que ESTA correção acabou de gerar. Vem preenchido só na
+/// resposta da correção, e null na leitura — a contagem é um fato do instante da
+/// cunhagem, não um atributo da prática. Inventar um número na releitura (contando
+/// erros de vocabulário, digamos) mentiria: nem todo erro vira card.
+/// </param>
 public sealed record PracticeDetail(
     int Id,
     Language SourceLanguage,
@@ -54,4 +60,5 @@ public sealed record PracticeDetail(
     string? CorrectedText,
     IReadOnlyList<WritingError> Errors,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    int? MintedCards = null);

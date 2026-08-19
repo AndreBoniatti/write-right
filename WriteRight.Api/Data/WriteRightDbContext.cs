@@ -10,6 +10,8 @@ public class WriteRightDbContext : DbContext
     public DbSet<ExerciseError> Errors => Set<ExerciseError>();
     public DbSet<AnalysisRecord> Analyses => Set<AnalysisRecord>();
     public DbSet<LlmCall> LlmCalls => Set<LlmCall>();
+    public DbSet<VocabCard> Cards => Set<VocabCard>();
+    public DbSet<CardReview> CardReviews => Set<CardReview>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,5 +54,34 @@ public class WriteRightDbContext : DbContext
         // que SUM/ORDER BY não descem pro SQL — agrega-se em memória, igual ao
         // resto do app (mesmo motivo do ListPracticesAsync).
         call.Property(c => c.CostUsd).HasColumnType("TEXT");
+
+        var card = modelBuilder.Entity<VocabCard>();
+
+        // NOT NULL no banco, não só no C#: a garantia de que todo card tem dica passa
+        // a ser do schema, e não da disciplina de quem escreve o serviço. O CHECK
+        // completa — sozinho, NOT NULL ainda deixaria passar string vazia, que na
+        // tela dá exatamente o mesmo card sem resposta possível.
+        card.Property(c => c.Hint).IsRequired();
+        card.ToTable(t => t.HasCheckConstraint("CK_Card_HintNotEmpty", "trim(Hint) <> ''"));
+
+        card.Property(c => c.State).HasConversion<string>();
+        card.Property(c => c.Category).HasConversion<string>();
+        card.Property(c => c.SourceLanguage).HasConversion<string>();
+        card.Property(c => c.TargetLanguage).HasConversion<string>();
+
+        // Índice pelo estado: a consulta quente é "o que está vencido" (State ativo +
+        // DueAt). DueAt fora do índice de propósito — é DateTimeOffset, que o SQLite
+        // não compara direito, e o filtro por data acontece em memória.
+        card.HasIndex(c => c.State);
+
+        var review = modelBuilder.Entity<CardReview>();
+        review.Property(r => r.Rating).HasConversion<string>();
+
+        // Aqui a FK EXISTE e cascateia: uma revisão sem o card que ela revisou não
+        // significa nada. É o oposto do caso acima, e de propósito.
+        review.HasOne(r => r.VocabCard)
+              .WithMany(c => c.Reviews)
+              .HasForeignKey(r => r.VocabCardId)
+              .OnDelete(DeleteBehavior.Cascade);
     }
 }

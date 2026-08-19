@@ -2,6 +2,7 @@
 @inject WriteRightApiClient Api
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject DueCardsState DueCards
 
 <PageTitle>WriteRight — Prática</PageTitle>
 
@@ -109,8 +110,23 @@ else
         }
         else
         {
-            <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
                 <h5 class="mb-0">@practice.Errors.Count erro(s) encontrado(s)</h5>
+
+                @* Fato, não convite: quem acabou de corrigir quer ler os erros, não
+                   sair pra revisar. Sem botão — o contador do menu já leva pro deck
+                   e agora acompanha sozinho. Fica ao lado da contagem de erros de
+                   propósito: a diferença entre os dois números é que mostra o filtro
+                   trabalhando (gramática não vira card). Só aparece na resposta da
+                   correção; na releitura MintedCards vem null. *@
+                @if (practice.MintedCards is > 0)
+                {
+                    <span class="text-muted small">
+                        · @(practice.MintedCards == 1
+                            ? "1 virou card de vocabulário"
+                            : $"{practice.MintedCards} viraram cards de vocabulário")
+                    </span>
+                }
 
                 @if (drill && revealed.Count < practice.Errors.Count)
                 {
@@ -268,9 +284,18 @@ else
         {
             var updated = await Api.CorrectPracticeAsync(Id, translation);
             if (updated is null)
+            {
                 error = "Não deu pra corrigir (a prática pode já estar concluída).";
+            }
             else
+            {
                 practice = updated; // vira a visão readonly com a correção
+
+                // Relê em vez de somar MintedCards ao selo: cunhar 3 cards pode
+                // acrescentar só 1 à fila, porque irmãos da mesma frase não entram
+                // na mesma sessão. O servidor é quem sabe o número.
+                if (updated.MintedCards is > 0) await DueCards.RefreshAsync();
+            }
         }
         catch (Exception ex)
         {

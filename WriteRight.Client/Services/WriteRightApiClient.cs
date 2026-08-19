@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using WriteRight.Shared.Analysis;
+using WriteRight.Shared.Cards;
 using WriteRight.Shared.Practices;
 using WriteRight.Shared.Profile;
 using WriteRight.Shared.Taxonomy;
@@ -117,4 +118,41 @@ public sealed class WriteRightApiClient
             _ => GenerateAnalysisStatus.Failed,
         };
     }
+
+    // ── Deck de vocabulário ──────────────────────────────────
+
+    /// <summary>A fila da sessão: os cards vencidos, na ordem. Sem as respostas.</summary>
+    public async Task<IReadOnlyList<CardReviewItem>> GetDueCardsAsync(CancellationToken ct = default) =>
+        await _http.GetFromJsonAsync<List<CardReviewItem>>("api/cards/due", Json, ct) ?? new();
+
+    /// <summary>
+    /// Confere o que foi digitado e revela a resposta. Só aqui ela chega ao
+    /// navegador — antes disso o card seria leitura passiva.
+    /// </summary>
+    public async Task<CardCheckResult?> CheckCardAsync(int id, string typed, CancellationToken ct = default)
+    {
+        var resp = await _http.PostAsJsonAsync(
+            $"api/cards/{id}/check", new CardCheckRequest(typed), Json, ct);
+        return resp.IsSuccessStatusCode
+            ? await resp.Content.ReadFromJsonAsync<CardCheckResult>(Json, ct)
+            : null;
+    }
+
+    /// <summary>Fecha a revisão: agenda o card e grava o log.</summary>
+    public async Task<CardReviewResult?> ReviewCardAsync(
+        int id, CardReviewRequest request, CancellationToken ct = default)
+    {
+        var resp = await _http.PostAsJsonAsync($"api/cards/{id}/review", request, Json, ct);
+        return resp.IsSuccessStatusCode
+            ? await resp.Content.ReadFromJsonAsync<CardReviewResult>(Json, ct)
+            : null;
+    }
+
+    /// <summary>O deck inteiro (contadores + cards). Tela de leitura: as respostas vêm.</summary>
+    public async Task<DeckView> GetDeckAsync(CancellationToken ct = default) =>
+        (await _http.GetFromJsonAsync<DeckView>("api/cards", Json, ct))!;
+
+    /// <summary>Descarta um card ruim. True se descartou.</summary>
+    public async Task<bool> DiscardCardAsync(int id, CancellationToken ct = default) =>
+        (await _http.DeleteAsync($"api/cards/{id}", ct)).IsSuccessStatusCode;
 }

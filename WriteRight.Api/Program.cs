@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using WriteRight.Api.Data;
 using WriteRight.Api.Llm;
 using WriteRight.Api.Services;
+using WriteRight.Shared.Cards;
 using WriteRight.Shared.Practices;
 using WriteRight.Shared.Taxonomy;
 
@@ -34,6 +35,7 @@ builder.Services.AddSingleton<LlmPricing>(); // só depende de IOptions — sem 
 builder.Services.AddScoped<UsageService>();
 builder.Services.AddScoped<PracticeService>();
 builder.Services.AddScoped<AnalysisService>();
+builder.Services.AddScoped<CardService>();
 
 // A análise roda fora da requisição: fila (singleton, sobrevive ao fim do request)
 // + worker que a consome. Ver AnalysisJobQueue pro porquê.
@@ -162,6 +164,61 @@ app.MapPost("/api/analysis",
         return Results.Accepted();
     })
    .WithName("GenerateAnalysis");
+
+// Deck de vocabulário: cards cunhados dos erros reais, com repetição espaçada.
+// Nenhum endpoint aqui chama a IA — o conteúdo já foi pago na correção.
+var cards = app.MapGroup("/api/cards");
+
+// A fila da sessão: tudo que está vencido, na ordem de revisão. SEM a resposta —
+// ela só chega no /check, depois de digitar.
+cards.MapGet("/due",
+    async (CardService service, CancellationToken ct) =>
+        Results.Ok(await service.GetDueAsync(ct)))
+   .WithName("GetDueCards");
+
+// Confere a resposta digitada e revela. NÃO agenda: quem agenda é o POST /review,
+// depois que o usuário classifica (ou adjudica um "quase").
+cards.MapPost("/{id:int}/check",
+    async (int id, CardCheckRequest request, CardService service, CancellationToken ct) =>
+    {
+        var (outcome, result) = await service.CheckAsync(id, request.TypedAnswer, ct);
+        return outcome switch
+        {
+            CardOutcome.Ok => Results.Ok(result),
+            CardOutcome.Inactive => Results.Conflict(),
+            _ => Results.NotFound(),
+        };
+    })
+   .WithName("CheckCard");
+
+// Fecha a revisão: reprograma o card e grava a linha do log.
+cards.MapPost("/{id:int}/review",
+    async (int id, CardReviewRequest request, CardService service, CancellationToken ct) =>
+    {
+        var (outcome, result) = await service.ReviewAsync(id, request, ct);
+        return outcome switch
+        {
+            CardOutcome.Ok => Results.Ok(result),
+            CardOutcome.Inactive => Results.Conflict(),
+            _ => Results.NotFound(),
+        };
+    })
+   .WithName("ReviewCard");
+
+// O deck inteiro (contadores + cards) — tela de leitura, aqui a resposta aparece.
+cards.MapGet("/",
+    async (CardService service, CancellationToken ct) =>
+        Results.Ok(await service.GetDeckAsync(ct)))
+   .WithName("GetDeck");
+
+// Descarta um card ruim. Marca como descartado, não apaga — apagar faria o mesmo
+// card renascer no próximo erro igual.
+cards.MapDelete("/{id:int}",
+    async (int id, CardService service, CancellationToken ct) =>
+        (await service.DiscardAsync(id, ct)) == CardOutcome.Ok
+            ? Results.NoContent()
+            : Results.NotFound())
+   .WithName("DiscardCard");
 
 // Consumo da IA: quanto custou, por operação, e a média por prática/análise.
 // Releitura pura do registrado — não chama a IA.
