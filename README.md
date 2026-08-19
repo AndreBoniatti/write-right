@@ -11,6 +11,20 @@ WriteRight is a small app I built to practice writing in another language — an
 
 It's a personal tool first (I use it to study English) and a portfolio piece second.
 
+## Screenshots
+
+**Correction.** Your translation against the corrected text, and every mistake tagged with a category and a severity — grouped by category, not listed as prose.
+
+![Correction screen: the source text, your translation, the corrected text, and four mistakes grouped by category with their severity and an explanation](docs/screenshots/correcao.png)
+
+**Weakness profile.** The same categories aggregated — recent practices next to the whole history — which is what steers the next exercise.
+
+![Weakness profile: totals, the current focus category, and errors aggregated by category with severity-weighted bars, for the last 5 practices and for the whole history](docs/screenshots/perfil.png)
+
+**Vocabulary review.** A card minted from a real mistake: the corrected sentence with the answer blanked out, the source-language phrase as the hint, and — on a miss — what you actually wrote.
+
+![Vocabulary review: a cloze sentence with the source-language hint, the revealed answer, and your own wrong answer below it](docs/screenshots/deck.png)
+
 ## The idea: an adaptive error loop
 
 Most correction tools tell you what's wrong once and forget it. WriteRight remembers. The core is a closed loop — **error → category → profile → targeted generation**:
@@ -206,3 +220,7 @@ The suite covers the parts with real logic and real regression risk:
 The loop works end to end: generate → translate → correct → profile → review. The UI is functional but intentionally plain — I'm refining it. This is a personal project I use to study, kept clean because the repo is public; it isn't aiming for monetization.
 
 **Not measured yet:** whether the scheduler's intervals are any good. The review log records the interval a card was shown at and whether it was hit, which is what makes the question answerable — but it needs months of reviews before the answer means anything, and there's no screen for it yet.
+
+## License
+
+[MIT](LICENSE) © 2026 André Augusto Boniatti
