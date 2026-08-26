@@ -28,10 +28,16 @@ internal static class CorrectionPrompt
         sb.AppendLine("- Use \"Other\" apenas quando nada mais encaixar.");
         sb.AppendLine("- 'severity': BreaksMeaning (compromete o entendimento), Understandable (dá pra entender mas está errado), Polish (correto, só lapidação).");
         sb.AppendLine("- 'original' = o trecho errado como o aluno escreveu; 'correction' = esse mesmo trecho corrigido.");
-        sb.AppendLine("- 'sourcePhrase' = o trecho do TEXTO ORIGINAL (no idioma de origem) que corresponde a este erro,");
-        sb.AppendLine("  copiado literalmente. Vira a dica de um card de revisão, então recorte o menor trecho que ainda");
-        sb.AppendLine("  identifique a ideia sozinho. String VAZIA quando não houver correspondência (ortografia, pontuação).");
         sb.AppendLine("- 'correctedText' = a tradução inteira, corrigida e natural.");
+        // Esta regra já foi longa. Uma versão de 11 linhas — com a conferência nos dois
+        // sentidos e dois exemplos — foi medida contra esta, sobre os mesmos 195 erros
+        // do histórico: a longa acertou ~5 dos 9 recortes que estavam errados no banco e
+        // QUEBROU 2 que estavam certos; esta acertou 8 e não quebrou nenhum. Instrução
+        // empilhada aqui piora o resultado — o modelo dá conta do recorte quando a regra
+        // é uma frase. Se for mexer, meça antes de acrescentar.
+        sb.AppendLine("- 'sourcePhrase' = o trecho do TEXTO ORIGINAL (no idioma de origem) que 'correction'");
+        sb.AppendLine("  traduz. Exatamente esse trecho — nem mais, nem menos. Copiado literalmente.");
+        sb.AppendLine("  String VAZIA quando não houver correspondência (ortografia, pontuação).");
         sb.AppendLine("- Se a tradução estiver perfeita, devolva 'errors' vazio.");
         sb.AppendLine();
         sb.AppendLine("CATEGORIAS (use exatamente estes identificadores no campo 'category'):");
@@ -54,6 +60,17 @@ internal static class CorrectionPrompt
     /// JSON schema do <see cref="CorrectionResult"/> pro structured output. Os
     /// enums vêm direto do C# (<see cref="Enum.GetNames{T}()"/>) → o schema fica
     /// sempre em sincronia com a taxonomia, sem lista duplicada.
+    ///
+    /// <b>A ordem dentro do item de erro carrega peso — não é cosmética.</b> O modelo
+    /// escreve o JSON da esquerda pra direita, e o que já saiu vira contexto do que
+    /// vem depois. A regra do 'sourcePhrase' é definida EM FUNÇÃO de 'correction'
+    /// ("o trecho que 'correction' traduz"), então o modelo precisa ter escrito a
+    /// correção daquele erro antes de recortar a dica — por isso 'sourcePhrase' é o
+    /// último campo do item.
+    ///
+    /// Subir 'sourcePhrase' na lista não quebra nada visível: compila, desserializa,
+    /// a tela não muda. Só as dicas dos cards pioram, semanas depois e uma por vez.
+    /// <c>CorrectionSchemaTests</c> trava essa ordem.
     /// </summary>
     public static Dictionary<string, JsonElement> BuildResultSchema()
     {

@@ -51,6 +51,28 @@ public class CorrectionSchemaTests
         Assert.False(property.TryGetProperty("minLength", out _));
     }
 
+    /// <summary>
+    /// A ordem das propriedades do erro é REGRA DE NEGÓCIO, não estética. O modelo
+    /// escreve o JSON da esquerda pra direita, e a dica é definida em função de
+    /// 'correction' ("o trecho que 'correction' traduz") — então a correção daquele
+    /// erro precisa já estar escrita quando 'sourcePhrase' for recortado.
+    ///
+    /// Subir 'sourcePhrase' na lista não quebraria nada visível: nem compilação, nem
+    /// tela, nem desserialização. Quebraria só a qualidade das dicas dos cards,
+    /// semanas depois e um card por vez. Daí o teste.
+    /// </summary>
+    [Fact]
+    public void Source_phrase_is_the_last_field_of_an_error()
+    {
+        var properties = ErrorItem().GetProperty("properties").EnumerateObject()
+            .Select(p => p.Name).ToList();
+
+        Assert.Equal("sourcePhrase", properties[^1]);
+        Assert.True(
+            properties.IndexOf("correction") < properties.IndexOf("sourcePhrase"),
+            "'correction' precisa ser gerado antes de 'sourcePhrase'.");
+    }
+
     [Fact]
     public void Category_enum_lists_every_ErrorCategory()
     {
