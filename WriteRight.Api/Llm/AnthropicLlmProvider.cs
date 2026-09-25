@@ -23,6 +23,41 @@ namespace WriteRight.Api.Llm;
 /// </summary>
 public sealed class AnthropicLlmProvider : ILlmProvider
 {
+    /// <summary>
+    /// Effort das chamadas em Sonnet 5. <c>High</c> é o default do modelo — está aqui
+    /// EXPLÍCITO justamente por isso: default é decisão do PROVEDOR, e depender dele
+    /// significa que uma mudança do lado da Anthropic altera o custo e o comportamento
+    /// do app sem passar por um commit. Effort é a alavanca de custo mais forte que
+    /// existe aqui; ela não pode ser implícita.
+    ///
+    /// NÃO vai na geração: o Haiku 4.5 não suporta o parâmetro (a chamada erraria).
+    ///
+    /// <b>Medium</b>, em avaliação desde 2026-08-30. Medido em 14 correções reais:
+    /// custa ~37% menos que <c>High</c> e responde em metade do tempo (14s contra 25s),
+    /// com a mesma cobertura de erros — 6,8 contra 6,6 por prática. O <c>High</c> gasta
+    /// o excedente deliberando à toa: num texto de 8 palavras queimou 3.432 tokens de
+    /// saída pra achar 2 erros.
+    ///
+    /// <b>RISCO CONHECIDO E AINDA ABERTO.</b> O Medium arquiva mais erro gramatical em
+    /// categoria de vocabulário, e isso vaza pra cunhagem: na mesma medição, "the
+    /// schedule → my schedule" e "wait for nobody → wait for anybody" viraram card —
+    /// o primeiro ensina um mapeamento falso ("a agenda" É "the schedule"), o segundo é
+    /// dupla negação, gramática pura. Card ruim é dano DURÁVEL: entra no SM-2 e é
+    /// treinado por meses.
+    ///
+    /// Isso NÃO está mitigado. A guarda que barrava esses dois casos foi descartada de
+    /// propósito — o módulo de vocabulário vai ser reestruturado, e blindar o filtro
+    /// atual só pra deletá-lo depois não se paga. Enquanto a reestruturação não vier,
+    /// o deck aceita card de gramática arquivado como vocabulário; o descarte manual é
+    /// a única contenção.
+    ///
+    /// O que observar no uso: card cuja resposta não ensina item léxico nenhum (troca
+    /// só de artigo, possessivo ou pronome), e severidade fora do lugar (ela diverge
+    /// ~30% entre execuções em QUALQUER effort — não é sintoma de Medium). Voltar pra
+    /// High é trocar esta linha.
+    /// </summary>
+    private static readonly Effort ReasoningEffort = Effort.Medium;
+
     private readonly LlmOptions _options;
 
     public AnthropicLlmProvider(IOptions<LlmOptions> options)
@@ -74,6 +109,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
             OutputConfig = new OutputConfig
             {
                 Format = new JsonOutputFormat { Schema = CorrectionPrompt.BuildResultSchema() },
+                Effort = ReasoningEffort,
             },
         });
 
@@ -100,6 +136,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
             OutputConfig = new OutputConfig
             {
                 Format = new JsonOutputFormat { Schema = AnalysisPrompt.BuildResultSchema(request) },
+                Effort = ReasoningEffort,
             },
         });
 
