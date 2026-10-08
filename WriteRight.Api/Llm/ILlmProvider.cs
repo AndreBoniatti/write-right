@@ -1,4 +1,5 @@
 using WriteRight.Shared.Analysis;
+using WriteRight.Shared.Cards;
 using WriteRight.Shared.Corrections;
 using WriteRight.Shared.Exercises;
 
@@ -37,4 +38,12 @@ public interface ILlmProvider
     /// </summary>
     Task<LlmResult<AnalysisDraft>> AnalyzeAsync(
         AnalysisRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Decide, erro a erro, o que vira card de vocabulário e desenha o card. A saída é
+    /// <b>proposta</b>: quem confere contra o texto (resposta literal, dica literal,
+    /// tamanho) é o <c>CardGate</c>, não o provider.
+    /// </summary>
+    Task<LlmResult<CardDesign>> DesignCardsAsync(
+        CardDesignRequest request, CancellationToken ct = default);
 }

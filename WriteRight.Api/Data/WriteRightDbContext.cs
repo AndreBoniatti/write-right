@@ -20,6 +20,7 @@ public class WriteRightDbContext : DbContext
         exercise.Property(e => e.SourceLanguage).HasConversion<string>();
         exercise.Property(e => e.TargetLanguage).HasConversion<string>();
         exercise.Property(e => e.Level).HasConversion<string>();
+        exercise.Property(e => e.CardsStatus).HasConversion<string>();
 
         // Blindagem no banco (defense-in-depth): origem e alvo nunca podem ser
         // iguais. A validação da aplicação dá o erro amigável; isto é a rede de

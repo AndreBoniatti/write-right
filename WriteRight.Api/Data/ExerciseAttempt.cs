@@ -31,5 +31,8 @@ public class ExerciseAttempt
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? CompletedAt { get; set; }
 
+    /// <summary>Cunhagem dos cards desta prática. Ver <see cref="Data.CardsStatus"/>.</summary>
+    public CardsStatus? CardsStatus { get; set; }
+
     public List<ExerciseError> Errors { get; set; } = new();
 }

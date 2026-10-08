@@ -66,6 +66,7 @@ public class LlmOptionsBindingTests
 
         Assert.Equal("claude-haiku-4-5", options.GenerationModel);
         Assert.Equal("claude-sonnet-5", options.CorrectionModel);
+        Assert.Equal("claude-opus-5-5", options.CardModel);
         Assert.Empty(options.Pricing);
     }
 }
@@ -79,12 +80,13 @@ public class LlmOptionsValidatorTests
 {
     private static readonly LlmOptionsValidator Validator = new();
 
-    /// <summary>Options válidas: os três modelos em uso com tarifa.</summary>
+    /// <summary>Options válidas: os quatro modelos em uso com tarifa.</summary>
     private static LlmOptions Valid()
     {
         var options = new LlmOptions();
         options.Pricing["claude-haiku-4-5"] = new ModelRate { InputPerMTok = 1m, OutputPerMTok = 5m };
         options.Pricing["claude-sonnet-5"] = new ModelRate { InputPerMTok = 3m, OutputPerMTok = 15m };
+        options.Pricing["claude-opus-5-5"] = new ModelRate { InputPerMTok = 4m, OutputPerMTok = 20m };
         return options;
     }
 
@@ -150,6 +152,7 @@ public class LlmOptionsValidatorTests
         var options = new LlmOptions();
         options.Pricing["Claude-Haiku-4-5"] = new ModelRate { InputPerMTok = 1m, OutputPerMTok = 5m };
         options.Pricing["CLAUDE-SONNET-5"] = new ModelRate { InputPerMTok = 3m, OutputPerMTok = 15m };
+        options.Pricing["Claude-Opus-5-5"] = new ModelRate { InputPerMTok = 4m, OutputPerMTok = 20m };
 
         Assert.True(Validator.Validate(null, options).Succeeded);
     }

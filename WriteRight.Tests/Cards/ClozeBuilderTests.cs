@@ -109,4 +109,32 @@ public class ClozeBuilderTests
         Assert.Null(Cloze.Split("Uma frase sem lacuna nenhuma."));
         Assert.Null(Cloze.Split(""));
     }
+
+    /// <summary>
+    /// Caso real da avaliação de 2026-10-07: a resposta "law" virou a lacuna dentro de
+    /// "lawyer" — "The ___yer advised…". Só palavra inteira vira lacuna.
+    /// </summary>
+    [Fact]
+    public void Never_blanks_the_answer_inside_another_word()
+    {
+        Assert.Null(ClozeBuilder.Build("The lawyer advised the citizens about their rights.", "law"));
+    }
+
+    /// <summary>A ocorrência dentro de outra palavra é pulada, e a inteira, mais adiante, vira a lacuna.</summary>
+    [Fact]
+    public void Skips_a_match_inside_a_word_and_takes_the_whole_one()
+    {
+        Assert.Equal(
+            "My grandmother ___ to the store before lunch.",
+            ClozeBuilder.Build("My grandmother ran to the store before lunch.", "ran"));
+    }
+
+    /// <summary>Pontuação colada não é letra: "court." e "carrier's" continuam sendo palavra inteira.</summary>
+    [Theory]
+    [InlineData("It was registered at the local court.", "court", "It was registered at the local ___.")]
+    [InlineData("Access the carrier's website to track it.", "carrier", "Access the ___'s website to track it.")]
+    public void Punctuation_next_to_the_answer_is_a_word_boundary(string text, string answer, string expected)
+    {
+        Assert.Equal(expected, ClozeBuilder.Build(text, answer));
+    }
 }

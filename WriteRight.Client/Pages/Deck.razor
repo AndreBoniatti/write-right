@@ -40,6 +40,30 @@ else
         <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Total</span><span class="wr-stat__l">no total</span></div>
     </div>
 
+    @* Os cards nascem fora da correção, então falha ali não aparece em lugar nenhum
+       — a não ser aqui. Sem este aviso, uma prática sem cards seria indistinguível
+       de uma prática sem nada que virasse card. *@
+    @if (deck.Summary.FailedPractices > 0)
+    {
+        <div class="alert alert-warning mt-3 d-flex align-items-center gap-3 flex-wrap">
+            <span>
+                <strong>Os cards de @deck.Summary.FailedPractices prática(s) não puderam ser criados.</strong>
+                Normalmente é a IA sobrecarregada.
+            </span>
+            <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="Retry" disabled="@busy">
+                Tentar de novo
+            </button>
+        </div>
+    }
+    @* Independente do aviso de falha: uma prática pode ter falhado enquanto outras
+       ainda estão na fila. A tela não se atualiza sozinha — daí o "recarregue". *@
+    @if (deck.Summary.PendingPractices > 0)
+    {
+        <p class="text-muted small mt-3 mb-0">
+            Preparando os cards de @deck.Summary.PendingPractices prática(s). Leva alguns segundos — recarregue a página pra ver.
+        </p>
+    }
+
     @if (deck.Summary.Leeches > 0)
     {
         <div class="alert alert-warning mt-3">
@@ -52,9 +76,9 @@ else
     @if (deck.Cards.Count == 0)
     {
         <div class="alert alert-info mt-3">
-            Nenhum card ainda. Eles nascem sozinhos dos seus erros de vocabulário
-            (escolha de palavra, falso cognato, colocação, tradução literal) quando
-            você corrige uma prática.
+            Nenhum card ainda. Eles nascem sozinhos dos seus erros quando você corrige
+            uma prática — só os de vocabulário (palavra, colocação, falso cognato), e só
+            quando a resposta é inequívoca. Erro de gramática não vira card.
         </div>
     }
     else
@@ -75,7 +99,13 @@ else
                             </div>
 
                             <div class="wr-deck-card__prompt">@c.Prompt</div>
-                            <div class="wr-deck-card__answer">@c.Answer</div>
+                            <div class="wr-deck-card__answer">
+                                @c.Answer
+                                @if (c.Alternatives.Count > 0)
+                                {
+                                    <span class="wr-deck-card__also">· também vale: @string.Join(", ", c.Alternatives)</span>
+                                }
+                            </div>
 
                             <div class="wr-deck-card__hint">@c.Hint</div>
 
@@ -156,6 +186,29 @@ else
             await Api.DiscardCardAsync(id);
             discardingId = null;
             await Load();
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Retry()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            if (!await Api.RetryFailedCardsAsync())
+            {
+                error = "Não foi possível pedir de novo.";
+                return;
+            }
+            await Load(); // o aviso vira "preparando"
         }
         catch (Exception ex)
         {

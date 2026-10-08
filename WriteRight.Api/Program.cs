@@ -36,11 +36,18 @@ builder.Services.AddScoped<UsageService>();
 builder.Services.AddScoped<PracticeService>();
 builder.Services.AddScoped<AnalysisService>();
 builder.Services.AddScoped<CardService>();
+builder.Services.AddScoped<CardMintingService>();
 
 // A análise roda fora da requisição: fila (singleton, sobrevive ao fim do request)
 // + worker que a consome. Ver AnalysisJobQueue pro porquê.
 builder.Services.AddSingleton<AnalysisJobQueue>();
 builder.Services.AddHostedService<AnalysisWorker>();
+
+// Os cards também — mas com a fila no BANCO (CardsStatus), não em memória: perder
+// um job de análise se resolve pedindo de novo; perder os cards de uma prática não
+// tem "de novo". O sinal só acorda o worker. Ver CardsStatus.
+builder.Services.AddSingleton<CardJobSignal>();
+builder.Services.AddHostedService<CardWorker>();
 
 // CORS pro front (Blazor WASM roda em outra origem).
 const string clientCors = "WriteRightClient";
@@ -166,7 +173,8 @@ app.MapPost("/api/analysis",
    .WithName("GenerateAnalysis");
 
 // Deck de vocabulário: cards cunhados dos erros reais, com repetição espaçada.
-// Nenhum endpoint aqui chama a IA — o conteúdo já foi pago na correção.
+// Nenhum endpoint aqui chama a IA — quem desenha os cards é o CardWorker, depois
+// da correção.
 var cards = app.MapGroup("/api/cards");
 
 // A fila da sessão: tudo que está vencido, na ordem de revisão. SEM a resposta —
@@ -219,6 +227,16 @@ cards.MapDelete("/{id:int}",
             ? Results.NoContent()
             : Results.NotFound())
    .WithName("DiscardCard");
+
+// Devolve pra fila as práticas cujos cards falharam. É o único caminho de volta —
+// falha não se repete sozinha, porque cada tentativa é uma chamada paga.
+cards.MapPost("/retry",
+    async (CardMintingService minting, CardJobSignal signal, CancellationToken ct) =>
+    {
+        if (await minting.RetryFailedAsync(ct) > 0) signal.Notify();
+        return Results.Accepted();
+    })
+   .WithName("RetryFailedCards");
 
 // Consumo da IA: quanto custou, por operação, e a média por prática/análise.
 // Releitura pura do registrado — não chama a IA.

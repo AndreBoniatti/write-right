@@ -56,7 +56,7 @@ public class ProductionConfigTests
         var pricing = new LlmPricing(Microsoft.Extensions.Options.Options.Create(options));
 
         // Um token de cada modelo em uso tem que produzir custo — não null.
-        foreach (var model in new[] { options.GenerationModel, options.CorrectionModel, options.AnalysisModel })
+        foreach (var model in new[] { options.GenerationModel, options.CorrectionModel, options.AnalysisModel, options.CardModel })
             Assert.NotNull(pricing.CostOf(new LlmUsage(model, 1_000, 500, 0, 0)));
     }
 

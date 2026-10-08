@@ -6,10 +6,9 @@ namespace WriteRight.Api.Services;
 /// <summary>
 /// Monta a frente do card: a frase corrigida com uma lacuna no lugar da resposta.
 ///
-/// Por string matching, sem chamada de IA — medido em 76 erros de vocabulário
-/// reais, a correção aparece literal no texto corrigido em 75 (99%). Pagar um
-/// modelo pra recortar o que um <c>IndexOf</c> acha não se justifica; e como é
-/// determinístico, roda retroativo em quem já está no banco.
+/// Por string matching, sem chamada de IA: quem escolhe a resposta é o passo de
+/// desenho de cards, e ela vem pedida como trecho LITERAL do texto corrigido — então
+/// achar a lacuna é um <c>IndexOf</c> por palavra inteira, não um julgamento.
 ///
 /// Quando não dá, devolve null e o card simplesmente NÃO NASCE. É de propósito:
 /// um card com frente ruim é pior que card nenhum — vai ser respondido errado
@@ -37,9 +36,7 @@ internal static partial class ClozeBuilder
 
         correction = correction.Trim();
 
-        // Case-insensitive porque a correção pode vir do meio da frase e o texto
-        // ter a palavra no início (maiúscula) — é a mesma resposta.
-        var index = correctedText.IndexOf(correction, StringComparison.OrdinalIgnoreCase);
+        var index = WholeWordIndexOf(correctedText, correction);
         if (index < 0) return null;
 
         var (start, end) = SentenceBounds(correctedText, index, correction.Length);
@@ -52,6 +49,30 @@ internal static partial class ClozeBuilder
             sentence[..offset], Cloze.Blank, sentence[(offset + correction.Length)..]).Trim();
 
         return HasContext(cloze) ? cloze : null;
+    }
+
+    /// <summary>
+    /// Primeira ocorrência de <paramref name="value"/> como palavra(s) INTEIRA(s): letra
+    /// ou número colado antes ou depois desclassifica a ocorrência. Sem isto a resposta
+    /// curta "law" virava a lacuna dentro de "lawyer" — "The ___yer advised…" — e isso
+    /// aconteceu de verdade, na avaliação de 2026-10-07. Quanto mais curta a resposta,
+    /// mais fácil ela aparecer dentro de outra palavra.
+    ///
+    /// Case-insensitive porque a resposta pode vir do meio da frase e o texto ter a
+    /// palavra no início (maiúscula) — é a mesma resposta.
+    /// </summary>
+    internal static int WholeWordIndexOf(string text, string value)
+    {
+        for (var i = text.IndexOf(value, StringComparison.OrdinalIgnoreCase);
+             i >= 0;
+             i = text.IndexOf(value, i + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            var end = i + value.Length;
+            var cleanBefore = i == 0 || !char.IsLetterOrDigit(text[i - 1]);
+            var cleanAfter = end == text.Length || !char.IsLetterOrDigit(text[end]);
+            if (cleanBefore && cleanAfter) return i;
+        }
+        return -1;
     }
 
     /// <summary>Limites da frase que envolve o trecho (recorte por pontuação forte).</summary>

@@ -3,7 +3,10 @@ using System.Text;
 
 namespace WriteRight.Shared.Cards;
 
-/// <summary>Veredito de uma resposta digitada.</summary>
+/// <summary>
+/// Veredito de uma resposta digitada. A ORDEM é contrato: do melhor pro pior — a
+/// conferência com alternativas fica com o menor valor.
+/// </summary>
 public enum CardVerdict
 {
     Correct,
@@ -65,6 +68,17 @@ public static class AnswerMatch
 
         return CardVerdict.NearMiss;
     }
+
+    /// <summary>
+    /// Confere contra a resposta E as alternativas aceitas, e fica com o melhor
+    /// veredito. Sem isto o card teria que escolher entre dois males: recusar todo
+    /// item que tem sinônimo ("advogado" → lawyer/attorney) ou punir quem escreveu o
+    /// sinônimo certo. A régua por palavra vale igual pra cada candidata — um "quase"
+    /// contra "attorney" é tão deslize quanto contra "lawyer".
+    /// </summary>
+    public static CardVerdict Check(string typed, string expected, IEnumerable<string> alternatives) =>
+        // CardVerdict vai do melhor pro pior (Correct, NearMiss, Wrong): o menor vence.
+        alternatives.Prepend(expected).Min(candidate => Check(typed, candidate));
 
     /// <summary>
     /// Minúsculas, sem acento, sem pontuação de borda, espaços colapsados. Aspas e

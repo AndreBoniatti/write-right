@@ -7,8 +7,9 @@ namespace WriteRight.Api.Data;
 ///
 /// É tabela própria, e não colunas em <see cref="ExerciseAttempt"/>, por três
 /// motivos concretos:
-///  • Uma prática faz DUAS chamadas em momentos diferentes (geração na criação,
-///    correção depois) — em colunas viraria oito campos e um mapeamento torto.
+///  • Uma prática faz TRÊS chamadas em momentos diferentes (geração na criação,
+///    correção depois, desenho dos cards em segundo plano) — em colunas viraria
+///    doze campos e um mapeamento torto.
 ///  • Chamada que gastou e não produziu registro existe: a análise sem lastro
 ///    (<c>NoGrounding</c>) não persiste <see cref="AnalysisRecord"/> nenhum, mas
 ///    foi cobrada. Em coluna, esse custo sumiria — e é justamente o que interessa ver.

@@ -11,9 +11,9 @@ namespace WriteRight.Tests.Cards;
 
 /// <summary>
 /// A cunhagem e o ciclo de revisão, contra SQLite real (value-converters de
-/// verdade). O que importa aqui é o recorte: o deck existe porque o loop por
-/// CATEGORIA não alcança vocabulário — item léxico não generaliza como regra —,
-/// então cunhar a categoria errada descaracteriza o módulo.
+/// verdade). O que vira card é decidido ANTES, pelo passo de desenho
+/// (<see cref="CardMintingService"/>) — aqui a cunhagem recebe propostas prontas e
+/// cuida do resto: portão, deduplicação, reincidência, descarte.
 /// </summary>
 public sealed class CardServiceTests : IDisposable
 {
@@ -26,12 +26,20 @@ public sealed class CardServiceTests : IDisposable
     }
 
     /// <summary>
-    /// Semeia uma prática concluída e cunha seus cards. Salva antes de cunhar
-    /// porque a cunhagem precisa dos Ids dos erros — a mesma ordem da produção.
+    /// Semeia uma prática concluída e cunha seus cards como o passo de desenho faria
+    /// se aprovasse tudo: cada erro vira proposta de card, com a correção como resposta.
+    /// O texto de origem é montado com as dicas, pra elas serem literais nele — o
+    /// portão confere.
     /// </summary>
+    private Task<int> SeedAndMintAsync(
+        string correctedText,
+        params (ErrorCategory Category, string Original, string Correction, string Hint)[] errors) =>
+        SeedAndMintAsync(correctedText, errors, _ => []);
+
     private async Task<int> SeedAndMintAsync(
         string correctedText,
-        params (ErrorCategory Category, string Original, string Correction, string? SourcePhrase)[] errors)
+        (ErrorCategory Category, string Original, string Correction, string Hint)[] errors,
+        Func<int, string[]> alternatives)
     {
         await using var ctx = _db.NewContext();
 
@@ -40,7 +48,7 @@ public sealed class CardServiceTests : IDisposable
             Status = PracticeStatus.Completed,
             SourceLanguage = Language.Portuguese,
             TargetLanguage = Language.English,
-            SourceText = "Um texto em português.",
+            SourceText = string.Join(". ", errors.Select(e => e.Hint)) + ".",
             UserTranslation = "A translation.",
             CorrectedText = correctedText,
             CompletedAt = DateTimeOffset.UtcNow,
@@ -51,56 +59,46 @@ public sealed class CardServiceTests : IDisposable
                 Original = e.Original,
                 Correction = e.Correction,
                 Explanation = "porquê",
-                SourcePhrase = e.SourcePhrase,
             }).ToList(),
         };
 
         ctx.Exercises.Add(practice);
         await ctx.SaveChangesAsync();
 
-        var minted = await new CardService(ctx).MintForPracticeAsync(practice);
+        var proposals = errors
+            .Select((e, i) => new CardProposal(i + 1, "item", CardDecisionKind.Card, e.Correction, e.Hint, alternatives(i)))
+            .ToList();
+
+        var minted = await new CardService(ctx).MintAsync(
+            practice, practice.Errors.OrderBy(e => e.Id).ToList(), proposals);
         await ctx.SaveChangesAsync();
         return minted;
     }
 
     [Fact]
-    public async Task Mints_a_card_from_a_vocabulary_error()
+    public async Task Mints_a_card_from_an_accepted_proposal()
     {
         await SeedAndMintAsync(
             "The old buildings have colorful façades and clay roofs.",
-            (ErrorCategory.WordChoice, "color façades", "colorful façades", "fachadas coloridas"));
+            [(ErrorCategory.WordChoice, "color façades", "colorful façades", "fachadas coloridas")],
+            _ => ["colourful façades"]);
 
         await using var ctx = _db.NewContext();
         var card = await ctx.Cards.SingleAsync();
 
         Assert.Equal("The old buildings have ___ and clay roofs.", card.Prompt);
         Assert.Equal("colorful façades", card.Answer);
+        Assert.Equal(["colourful façades"], card.Alternatives);
         Assert.Equal("fachadas coloridas", card.Hint);
         Assert.Equal("color façades", card.YourAttempt);
+        Assert.Equal(ErrorCategory.WordChoice, card.Category);
         Assert.Equal(CardState.New, card.State);
     }
 
     /// <summary>
-    /// Erro de gramática NÃO vira card. Regra generaliza (aprendeu "excited about",
-    /// transfere) e quem cuida disso é o loop de categorias, que dirige a geração
-    /// do próximo texto. Cunhar aqui duplicaria o mecanismo com o pior dos dois.
+    /// Proposta que o portão recusa não vira card — a cunhagem não tem caminho que
+    /// contorne o <see cref="CardGate"/>. (As regras em si estão em CardGateTests.)
     /// </summary>
-    [Theory]
-    [InlineData(ErrorCategory.Preposition)]
-    [InlineData(ErrorCategory.VerbTense)]
-    [InlineData(ErrorCategory.Spelling)]
-    [InlineData(ErrorCategory.Agreement)]
-    public async Task Does_not_mint_grammar_or_mechanics_errors(ErrorCategory category)
-    {
-        var minted = await SeedAndMintAsync(
-            "I was excited about the trip to the mountains.",
-            (category, "excited with", "excited about", "animado com"));
-
-        Assert.Equal(0, minted);
-        await using var ctx = _db.NewContext();
-        Assert.Empty(ctx.Cards);
-    }
-
     [Fact]
     public async Task Does_not_mint_when_the_sentence_yields_no_usable_cloze()
     {
@@ -114,59 +112,67 @@ public sealed class CardServiceTests : IDisposable
     }
 
     /// <summary>
-    /// Sem trecho de origem o card NÃO nasce. A lacuna sozinha não tem resposta
-    /// única — "at the ___ center" aceita qualquer coisa —, então o card seria
-    /// errado pra sempre, contando lapso e sujando a estatística do agendador.
-    /// Mesmo critério do ClozeBuilder: card ruim é pior que card nenhum.
+    /// Dois erros da mesma prática que ensinam o mesmo item são UM card — e um card
+    /// NOVO. Sem deduplicar antes, a segunda proposta cairia no caminho da
+    /// reincidência e reprogramaria como esquecido um card que acabou de nascer.
     /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public async Task Does_not_mint_when_the_source_phrase_is_missing(string? sourcePhrase)
+    [Fact]
+    public async Task The_same_answer_twice_in_one_practice_is_one_fresh_card()
     {
         var minted = await SeedAndMintAsync(
-            "Sleeping well is as important as exercising regularly and eating healthily.",
-            (ErrorCategory.WordChoice, "doing regular exercises", "exercising regularly", sourcePhrase));
+            "I found out they were inside the jacket that I had left in the wardrobe.",
+            (ErrorCategory.VerbTense, "have stayed", "left", "deixado"),
+            (ErrorCategory.WordChoice, "stayed", "left", "deixado"));
 
-        Assert.Equal(0, minted);
+        Assert.Equal(1, minted);
         await using var ctx = _db.NewContext();
-        Assert.Empty(ctx.Cards);
+        var card = await ctx.Cards.SingleAsync();
+        Assert.Equal(CardState.New, card.State);
+        Assert.Equal(0, card.Lapses);
     }
 
     /// <summary>
-    /// Reincidência sem dica nova: a reprogramação acontece (o sinal de que o item
-    /// não entrou é real), mas o conteúdo NÃO é trocado — enunciado novo com dica
-    /// velha apontaria pra uma frase que não é mais a da tela.
+    /// Reincidência troca o conteúdo INTEIRO pelo do fracasso mais recente —
+    /// alternativas incluídas: a lista antiga valia pra frase antiga.
     /// </summary>
     [Fact]
-    public async Task A_recurrence_without_a_hint_reschedules_but_keeps_the_old_content()
+    public async Task A_recurrence_replaces_the_alternatives_with_the_new_ones()
     {
         await SeedAndMintAsync(
-            "I have a coffee at the bar every morning before work.",
-            (ErrorCategory.Collocation, "drink a coffee", "have a coffee", "tomar um café"));
-
-        await using (var seed = _db.NewContext())
-        {
-            var card = await seed.Cards.SingleAsync();
-            card.State = CardState.Review;
-            card.IntervalDays = 20;
-            card.Reps = 3;
-            await seed.SaveChangesAsync();
-        }
-
+            "The lawyer advised the citizens about their rights.",
+            [(ErrorCategory.FalseCognate, "advogate", "lawyer", "advogado")],
+            _ => ["attorney"]);
         await SeedAndMintAsync(
-            "She decided to have a coffee while she waited for the train.",
-            (ErrorCategory.Collocation, "take a coffee", "have a coffee", null));
+            "She hired a lawyer to review the contract.",
+            [(ErrorCategory.FalseCognate, "advocate", "lawyer", "advogado")],
+            _ => ["attorney", "solicitor"]);
 
-        await using var check = _db.NewContext();
-        var single = await check.Cards.SingleAsync();
+        await using var ctx = _db.NewContext();
+        var card = await ctx.Cards.SingleAsync();
+        Assert.Equal(["attorney", "solicitor"], card.Alternatives);
+        Assert.Equal("She hired a ___ to review the contract.", card.Prompt);
+        Assert.Equal("advocate", card.YourAttempt);
+    }
 
-        Assert.Equal(1, single.Lapses);                                   // o sinal contou
-        Assert.Equal(CardScheduler.FirstStepDays, single.IntervalDays);   // e reprogramou
-        Assert.Equal("I ___ at the bar every morning before work.", single.Prompt); // par antigo intacto
-        Assert.Equal("tomar um café", single.Hint);
-        Assert.Equal("drink a coffee", single.YourAttempt);
+    /// <summary>A alternativa conta como acerto na conferência — é pra isso que ela existe.</summary>
+    [Fact]
+    public async Task Checking_accepts_an_alternative_answer()
+    {
+        await SeedAndMintAsync(
+            "The lawyer advised the citizens about their rights.",
+            [(ErrorCategory.FalseCognate, "advogate", "lawyer", "advogado")],
+            _ => ["attorney"]);
+
+        var service = Service(out var ctx);
+        await using (ctx)
+        {
+            var id = (await ctx.Cards.SingleAsync()).Id;
+            var (_, result) = await service.CheckAsync(id, "Attorney");
+
+            Assert.Equal(CardVerdict.Correct, result!.Verdict);
+            Assert.Equal("lawyer", result.Answer);
+            Assert.Equal(["attorney"], result.Alternatives);
+        }
     }
 
     /// <summary>
@@ -178,7 +184,7 @@ public sealed class CardServiceTests : IDisposable
     {
         await SeedAndMintAsync(
             "Yesterday I spent the whole afternoon looking for my keys.",
-            (ErrorCategory.WordChoice, "stayed the whole afternoon", "spent the whole afternoon", "passei a tarde toda"));
+            (ErrorCategory.WordChoice, "stayed the whole afternoon", "spent", "passei"));
 
         await using (var ctx = _db.NewContext())
         {
@@ -189,7 +195,7 @@ public sealed class CardServiceTests : IDisposable
         await using var check = _db.NewContext();
         Assert.Empty(check.Errors);
         var card = await check.Cards.SingleAsync();
-        Assert.Equal("spent the whole afternoon", card.Answer);
+        Assert.Equal("spent", card.Answer);
         Assert.Equal(Language.Portuguese, card.SourceLanguage);
         Assert.Equal(Language.English, card.TargetLanguage);
     }
@@ -362,7 +368,7 @@ public sealed class CardServiceTests : IDisposable
             "I have a coffee at the bar every morning before work. She spent the whole afternoon reading a book. "
             + "The old buildings have colorful façades and clay roofs. He is mastering grammar with real effort.",
             (ErrorCategory.Collocation, "drink a coffee", "have a coffee", "tomar um café"),
-            (ErrorCategory.WordChoice, "stayed the whole afternoon", "spent the whole afternoon", "passou a tarde toda"),
+            (ErrorCategory.WordChoice, "stayed the whole afternoon", "spent", "passou"),
             (ErrorCategory.WordChoice, "color façades", "colorful façades", "fachadas coloridas"),
             (ErrorCategory.WordChoice, "dominating", "mastering", "dominando"));
 
@@ -554,8 +560,8 @@ public sealed class CardServiceTests : IDisposable
             "Yesterday I spent the whole afternoon looking for my keys. "
             + "Later we went back home and prepared a wonderful meal.",
             // frase 1 — dois erros, viram irmãos
-            (ErrorCategory.WordChoice, "stayed the whole afternoon", "spent the whole afternoon", "passei a tarde toda"),
-            (ErrorCategory.WordChoice, "my keys", "looking for my keys", "procurando minhas chaves"),
+            (ErrorCategory.WordChoice, "stayed the whole afternoon", "spent", "passei"),
+            (ErrorCategory.WordChoice, "finding", "looking for", "procurando"),
             // frase 2 — erro isolado, não é irmão de ninguém
             (ErrorCategory.LiteralTranslation, "turned back to home", "went back home", "voltamos para casa"));
 
@@ -591,7 +597,7 @@ public sealed class CardServiceTests : IDisposable
             (ErrorCategory.Collocation, "drink a coffee", "have a coffee", "tomar um café"));
         await SeedAndMintAsync(
             "Yesterday I spent the whole afternoon looking for my keys.",
-            (ErrorCategory.WordChoice, "stayed the whole afternoon", "spent the whole afternoon", "passei a tarde toda"));
+            (ErrorCategory.WordChoice, "stayed the whole afternoon", "spent", "passei"));
 
         var service = Service(out var ctx);
         await using (ctx) Assert.Equal(2, (await service.GetDueAsync()).Count);

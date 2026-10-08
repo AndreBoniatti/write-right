@@ -2,7 +2,12 @@ namespace WriteRight.Client.Services;
 
 /// <summary>
 /// Quantos cards esperam revisão — estado compartilhado entre quem MUDA esse número
-/// (corrigir uma prática, revisar um card, descartar) e quem o EXIBE (o selo do menu).
+/// (revisar um card, descartar) e quem o EXIBE (o selo do menu).
+///
+/// Corrigir uma prática NÃO avisa: os cards nascem segundos depois, fora da
+/// requisição, e o número só alcança o real na próxima visita ao deck ou à revisão
+/// (ou ao recarregar). Escolha consciente — consultar o servidor até os cards
+/// aparecerem custaria mais que um selo atrasado alguns segundos.
 ///
 /// Existe porque o menu vive no layout: ele é montado uma vez e sobrevive a toda a
 /// navegação do SPA. Sem um canal de aviso, o contador ficaria congelado no valor do
@@ -12,8 +17,7 @@ namespace WriteRight.Client.Services;
 /// <see cref="Set"/> é o caminho normal: quase sempre quem mudou o número já sabe o
 /// novo (a revisão devolve <c>RemainingDue</c>, a sessão sabe o tamanho da fila), e
 /// então atualizar não custa requisição nenhuma. <see cref="RefreshAsync"/> fica para
-/// os casos em que o novo valor não é dedutível — cunhar 3 cards pode somar só 1 à
-/// fila, porque irmãos da mesma frase não entram juntos.
+/// quando não há valor conhecido — o boot do menu.
 /// </summary>
 public sealed class DueCardsState
 {

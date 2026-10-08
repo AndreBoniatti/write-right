@@ -35,14 +35,14 @@ public sealed class PracticeService
     private readonly ILlmProvider _llm;
     private readonly WriteRightDbContext _db;
     private readonly UsageService _usage;
-    private readonly CardService _cards;
+    private readonly CardJobSignal _cardJobs;
 
-    public PracticeService(ILlmProvider llm, WriteRightDbContext db, UsageService usage, CardService cards)
+    public PracticeService(ILlmProvider llm, WriteRightDbContext db, UsageService usage, CardJobSignal cardJobs)
     {
         _llm = llm;
         _db = db;
         _usage = usage;
-        _cards = cards;
+        _cardJobs = cardJobs;
     }
 
     /// <summary>
@@ -210,28 +210,24 @@ public sealed class PracticeService
             Original = e.Original,
             Correction = e.Correction,
             Explanation = e.Explanation,
-            // "sem correspondência" tem UMA representação (null): o schema pede string
-            // vazia, o banco guarda null. Sem isto, "" e null significariam a mesma
-            // coisa em colunas diferentes e todo consumidor teria que testar os dois.
-            SourcePhrase = string.IsNullOrWhiteSpace(e.SourcePhrase) ? null : e.SourcePhrase.Trim(),
         }).ToList();
         practice.Status = PracticeStatus.Completed;
         practice.CompletedAt = DateTimeOffset.UtcNow;
+
+        // Os cards ficam pra depois, fora desta requisição (ver CardWorker) — mas a
+        // PROMESSA deles entra aqui, na mesma transação da correção. Assim não existe
+        // prática corrigida sem cards pendentes: se o app cair antes de o worker
+        // rodar, o próximo boot retoma. O deck é consequência da correção, não
+        // condição dela.
+        practice.CardsStatus = CardsStatus.Pending;
 
         // Correção e consumo na mesma transação, com o token não cancelável: se o
         // navegador desistiu, a prática fica corrigida e o usuário a encontra ao
         // recarregar, em vez de pagar outra correção.
         await _db.SaveChangesAsync(UsageService.AfterBilling);
+        _cardJobs.Notify();
 
-        // Cards num SaveChanges SEPARADO, e não junto do de cima: se a cunhagem
-        // falhar dentro da mesma transação, a correção some com ela — e ela já foi
-        // paga. Perder alguns cards (os erros continuam no perfil) é muito melhor
-        // que fazer o usuário pagar outra correção. O deck é consequência da
-        // correção, não condição dela.
-        var minted = await _cards.MintForPracticeAsync(practice, UsageService.AfterBilling);
-        await _db.SaveChangesAsync(UsageService.AfterBilling);
-
-        return (PracticeOutcome.Ok, ToDetail(practice) with { MintedCards = minted });
+        return (PracticeOutcome.Ok, ToDetail(practice));
     }
 
     /// <summary>Exclui uma prática (e seus erros, por cascade). Permitido em qualquer status.</summary>
@@ -349,7 +345,7 @@ public sealed class PracticeService
             p.SourceText, p.UserTranslation,
             completed ? p.CorrectedText : null,
             p.Errors.Select(e => new WritingError(
-                e.Category, e.Severity, e.Original, e.Correction, e.Explanation, e.SourcePhrase)).ToList(),
+                e.Category, e.Severity, e.Original, e.Correction, e.Explanation)).ToList(),
             p.CreatedAt, p.CompletedAt);
     }
 }

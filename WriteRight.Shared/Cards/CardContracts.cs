@@ -40,13 +40,18 @@ public sealed record CardCheckRequest(string TypedAnswer);
 /// É o intervalo AGENDADO. Um card com irmãos pode aparecer um pouco depois
 /// disso, porque a frase entrega um card por dia.
 /// </remarks>
+/// <param name="Alternatives">
+/// Outras respostas que também contam como certas. Vêm na revelação pra que acertar
+/// com "attorney" não pareça sorte quando a resposta mostrada é "lawyer".
+/// </param>
 public sealed record CardCheckResult(
     CardVerdict Verdict,
     string Answer,
     string YourAttempt,
     double AgainDays,
     double HardDays,
-    double EasyDays);
+    double EasyDays,
+    IReadOnlyList<string> Alternatives);
 
 /// <summary>
 /// Fecha a revisão: agenda o card e grava a linha do log.
@@ -71,6 +76,12 @@ public sealed record CardReviewResult(
 /// irmãos (mesma frase de origem) esperam a próxima rodada, e anunciar aqui um
 /// número que a sessão não cumpre seria pior que anunciar o menor.
 /// </param>
+/// <param name="PendingPractices">Práticas corrigidas cujos cards ainda estão sendo preparados.</param>
+/// <param name="FailedPractices">
+/// Práticas cujos cards falharam depois de todas as tentativas. Contadas aqui porque
+/// a cunhagem roda fora da requisição: sem este número, uma falha seria invisível —
+/// ninguém sabe que deviam ter nascido três cards.
+/// </param>
 public sealed record DeckSummary(
     int Total,
     int New,
@@ -78,13 +89,16 @@ public sealed record DeckSummary(
     int Learning,
     int Review,
     int Retired,
-    int Leeches);
+    int Leeches,
+    int PendingPractices,
+    int FailedPractices);
 
 /// <summary>Card na listagem do deck — aqui a resposta aparece: é tela de leitura, não de teste.</summary>
 public sealed record DeckCard(
     int Id,
     string Prompt,
     string Answer,
+    IReadOnlyList<string> Alternatives,
     string Hint,
     string YourAttempt,
     ErrorCategory Category,

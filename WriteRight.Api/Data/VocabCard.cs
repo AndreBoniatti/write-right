@@ -38,14 +38,21 @@ public class VocabCard
     public string Answer { get; set; } = "";
 
     /// <summary>
+    /// Outras respostas que também contam como certas ("attorney" pra um card de
+    /// "lawyer"). É o que deixa o card existir sem punir sinônimo: medido no deck real,
+    /// recusar todo item com sinônimo derrubava 30% dos cards bons. Gravado como JSON
+    /// (coleção primitiva do EF).
+    /// </summary>
+    public List<string> Alternatives { get; set; } = new();
+
+    /// <summary>
     /// Dica no idioma de ORIGEM. <b>Obrigatória</b>: sem ela a lacuna não tem resposta
     /// única ("at the ___ center" aceita qualquer coisa), e o card seria errado pra
     /// sempre, contando lapso e sujando a estatística do agendador.
     ///
-    /// Não-anulável de propósito, e a coluna é NOT NULL. O erro de origem PODE não ter
-    /// trecho correspondente — lá o campo é anulável, porque a ausência significa algo.
-    /// Aqui não significa nada: um card sem dica não é um card incompleto, é um card
-    /// que não deveria existir. Quem filtra é a cunhagem; o tipo é o que garante.
+    /// Não-anulável de propósito, e a coluna é NOT NULL: um card sem dica não é um card
+    /// incompleto, é um card que não deveria existir. Quem filtra é o <c>CardGate</c>;
+    /// o tipo é o que garante.
     /// </summary>
     public string Hint { get; set; } = "";
 

@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using WriteRight.Api.Data;
 using WriteRight.Shared.Cards;
-using WriteRight.Shared.Taxonomy;
 
 namespace WriteRight.Api.Services;
 
@@ -15,12 +14,13 @@ public enum CardOutcome
 }
 
 /// <summary>
-/// O deck de vocabulário: cunha cards a partir dos erros reais, entrega a sessão
-/// de revisão, agenda e registra.
+/// O deck de vocabulário: cunha cards a partir das propostas do modelo, entrega a
+/// sessão de revisão, agenda e registra.
 ///
-/// Cunha SÓ erros de vocabulário/estilo. Erro de gramática é regra, e regra
-/// generaliza — quem cuida disso é o loop de categorias, que dirige a geração do
-/// próximo texto. Item léxico não generaliza: por isso precisa de deck.
+/// O que vira card NÃO é decidido aqui nem pela categoria do erro — isso é do passo
+/// de desenho (<see cref="CardMintingService"/>), que julga o erro em si. Aqui ficam o
+/// portão mecânico (<see cref="CardGate"/>), a deduplicação e a reincidência. Nenhum
+/// método desta classe chama a IA.
 /// </summary>
 public sealed class CardService
 {
@@ -29,32 +29,39 @@ public sealed class CardService
     public CardService(WriteRightDbContext db) => _db = db;
 
     /// <summary>
-    /// Categorias que viram card, derivadas do catálogo — assim uma categoria nova
-    /// no grupo Vocabulário passa a cunhar sozinha, sem lista paralela pra esquecer.
+    /// Cunha os cards de uma prática a partir das propostas do modelo. Não salva — os
+    /// cards entram no change tracker e são persistidos na transação de quem chamou.
     /// </summary>
-    public static IReadOnlySet<ErrorCategory> MintableCategories { get; } =
-        ErrorCatalog.All
-            .Where(i => i.Group is ErrorGroup.Vocabulary or ErrorGroup.Style)
-            .Select(i => i.Category)
-            .ToHashSet();
-
-    /// <summary>
-    /// Cunha os cards de uma prática já corrigida. Não salva — os cards entram no
-    /// change tracker e são persistidos na MESMA transação de quem chamou.
-    /// </summary>
-    public async Task<int> MintForPracticeAsync(ExerciseAttempt practice, CancellationToken ct = default)
+    /// <param name="sentErrors">Os erros na ORDEM em que foram enviados ao modelo — a proposta os cita pela posição.</param>
+    public async Task<int> MintAsync(
+        ExerciseAttempt practice,
+        IReadOnlyList<ExerciseError> sentErrors,
+        IReadOnlyList<CardProposal> proposals,
+        CancellationToken ct = default)
     {
-        var candidates = practice.Errors
-            .Where(e => MintableCategories.Contains(e.Category))
+        // Mesma resposta proposta duas vezes na mesma prática (dois erros do mesmo
+        // item) é UM card. Sem isto a segunda passaria por "reincidência" e
+        // reprogramaria como esquecido um card que acabou de nascer.
+        var gated = proposals
+            .Select(p => CardGate.Check(practice, sentErrors, p))
+            .OfType<GatedCard>()
+            .DistinctBy(g => AnswerMatch.Normalize(g.Answer))
             .ToList();
 
-        if (candidates.Count == 0) return 0;
+        if (gated.Count == 0) return 0;
 
         // A chave de deduplicação é a resposta NORMALIZADA, que não desce pro SQL —
         // então materializa e cruza em memória (volume pessoal; mesmo compromisso do
         // resto do app). Inclui DESCARTADOS de propósito: se o usuário jogou um card
         // fora, errar de novo não pode ressuscitá-lo, senão o descarte não significa nada.
-        var keys = candidates.Select(c => AnswerMatch.Normalize(c.Correction)).ToHashSet();
+        //
+        // Só a resposta, NÃO as alternativas, de propósito. Casar por alternativa
+        // juntaria itens diferentes ("orientar → advised", que aceita "informed", com
+        // "informar → informed") — e a reincidência trocaria o enunciado de um card
+        // pelo de outro item, deixando a lacuna e a resposta desencontradas. O preço é
+        // o caso raro de o mesmo item nascer duas vezes por sinônimo; card duplicado
+        // é chato, card desencontrado é errado.
+        var keys = gated.Select(g => AnswerMatch.Normalize(g.Answer)).ToHashSet();
         var existing = (await _db.Cards.ToListAsync(ct))
             .Where(c => keys.Contains(AnswerMatch.Normalize(c.Answer)))
             .GroupBy(c => AnswerMatch.Normalize(c.Answer))
@@ -63,15 +70,9 @@ public sealed class CardService
         var now = DateTimeOffset.UtcNow;
         var minted = 0;
 
-        foreach (var error in candidates)
+        foreach (var proposal in gated)
         {
-            var prompt = ClozeBuilder.Build(practice.CorrectedText, error.Correction);
-            if (prompt is null) continue; // sem frase utilizável, o card não nasce
-
-            var hint = Clean(error.SourcePhrase);
-            var key = AnswerMatch.Normalize(error.Correction);
-
-            if (existing.TryGetValue(key, out var card))
+            if (existing.TryGetValue(AnswerMatch.Normalize(proposal.Answer), out var card))
             {
                 if (card.State == CardState.Discarded) continue;
 
@@ -88,44 +89,30 @@ public sealed class CardService
                 Apply(card, CardScheduler.Next(Snapshot(card), wasCorrect: false, CardRating.Again, now));
 
                 // Conteúdo atualizado pro fracasso mais recente: mesmo item léxico,
-                // contexto mais fresco. O histórico do card não se perde (ele guarda
-                // resposta digitada, não enunciado).
-                //
-                // Mas só troca se o par novo estiver COMPLETO: enunciado novo com
-                // dica velha apontaria pra uma frase que não é mais a da tela. Sem
-                // dica, o par antigo (coerente) fica, e a reincidência é registrada
-                // do mesmo jeito — o sinal não se perde.
-                if (hint is not null)
-                {
-                    card.Prompt = prompt;
-                    card.Hint = hint;
-                    card.YourAttempt = error.Original;
-                }
+                // contexto mais fresco. Troca o conjunto inteiro (enunciado, dica,
+                // alternativas) — misturar o enunciado novo com a dica velha apontaria
+                // pra uma frase que não é mais a da tela. O histórico do card não se
+                // perde: ele guarda resposta digitada, não enunciado.
+                card.Prompt = proposal.Prompt;
+                card.Hint = proposal.Hint;
+                card.Alternatives = proposal.Alternatives.ToList();
+                card.YourAttempt = proposal.Source.Original;
                 continue;
             }
 
-            // Sem dica o card NÃO NASCE. A lacuna sozinha não tem resposta única —
-            // "at the ___ center" aceita qualquer coisa —, então o card seria errado
-            // pra sempre, contando lapso e sujando a estatística que diz se o
-            // agendador funciona. Mesmo critério do ClozeBuilder: card ruim é pior
-            // que card nenhum. Custa ~2% dos erros de vocabulário, e vale.
-            if (hint is null) continue;
-
-            var fresh = new VocabCard
+            _db.Cards.Add(new VocabCard
             {
                 SourceLanguage = practice.SourceLanguage,
                 TargetLanguage = practice.TargetLanguage,
-                Prompt = prompt,
-                Answer = error.Correction.Trim(),
-                Hint = hint,
-                YourAttempt = error.Original,
-                Category = error.Category,
+                Prompt = proposal.Prompt,
+                Answer = proposal.Answer,
+                Alternatives = proposal.Alternatives.ToList(),
+                Hint = proposal.Hint,
+                YourAttempt = proposal.Source.Original,
+                Category = proposal.Source.Category,
                 CreatedAt = now,
                 DueAt = now, // card novo nasce vencido: revisável na mesma hora
-            };
-
-            _db.Cards.Add(fresh);
-            existing[key] = fresh; // dois erros iguais na mesma prática não viram dois cards
+            });
             minted++;
         }
 
@@ -239,12 +226,13 @@ public sealed class CardService
             CardScheduler.Next(atual, acertou, rating, now).IntervalDays;
 
         return (CardOutcome.Ok, new CardCheckResult(
-            AnswerMatch.Check(typedAnswer, card.Answer),
+            AnswerMatch.Check(typedAnswer, card.Answer, card.Alternatives),
             card.Answer,
             card.YourAttempt,
             AgainDays: Quando(false, CardRating.Again),
             HardDays: Quando(true, CardRating.Hard),
-            EasyDays: Quando(true, CardRating.Easy)));
+            EasyDays: Quando(true, CardRating.Easy),
+            card.Alternatives));
     }
 
     /// <summary>Fecha a revisão: reprograma o card e grava a linha do log.</summary>
@@ -316,13 +304,15 @@ public sealed class CardService
             Learning: active.Count(c => c.State == CardState.Learning),
             Review: active.Count(c => c.State == CardState.Review),
             Retired: active.Count(c => c.State == CardState.Retired),
-            Leeches: active.Count(c => CardScheduler.IsLeech(c.Lapses)));
+            Leeches: active.Count(c => CardScheduler.IsLeech(c.Lapses)),
+            PendingPractices: await _db.Exercises.CountAsync(p => p.CardsStatus == CardsStatus.Pending, ct),
+            FailedPractices: await _db.Exercises.CountAsync(p => p.CardsStatus == CardsStatus.Failed, ct));
 
         var rows = cards
             .OrderByDescending(c => c.CreatedAt)
             .ThenByDescending(c => c.Id)
             .Select(c => new DeckCard(
-                c.Id, c.Prompt, c.Answer, c.Hint, c.YourAttempt,
+                c.Id, c.Prompt, c.Answer, c.Alternatives, c.Hint, c.YourAttempt,
                 c.Category, c.State,
                 c.State == CardState.New ? null : c.DueAt,
                 c.IntervalDays, c.Reps, c.Lapses, CardScheduler.IsLeech(c.Lapses)))
@@ -347,7 +337,4 @@ public sealed class CardService
     private static CardReviewItem ToReviewItem(VocabCard c) => new(
         c.Id, c.Prompt, c.Hint, c.Category, c.SourceLanguage, c.TargetLanguage,
         c.State, c.Reps, c.Lapses);
-
-    private static string? Clean(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

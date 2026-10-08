@@ -8,7 +8,8 @@ namespace WriteRight.Api.Llm;
 ///   dotnet user-secrets set "Llm:ApiKey" "sk-ant-..."   (no projeto Api)
 ///
 /// Os modelos são configuráveis (split barato/bom decidido no projeto):
-/// Haiku gera, Sonnet corrige. Trocáveis por config sem tocar no código.
+/// Haiku gera, Sonnet corrige, Opus desenha os cards. Trocáveis por config sem
+/// tocar no código.
 /// </summary>
 public sealed class LlmOptions
 {
@@ -31,6 +32,14 @@ public sealed class LlmOptions
     /// chamada pesa pouco.
     /// </summary>
     public string AnalysisModel { get; set; } = "claude-sonnet-5";
+
+    /// <summary>
+    /// Modelo pro desenho dos cards de vocabulário. O MAIOR dos quatro, de propósito:
+    /// card errado entra no SM-2 e é treinado por meses, então é onde precisão vale
+    /// mais que custo. E, medido, nem custa mais — o Opus 5.5 pensa bem menos que o
+    /// Sonnet 5 nessa tarefa. Ver <c>CardPrompt</c>.
+    /// </summary>
+    public string CardModel { get; set; } = "claude-opus-5-5";
 
     /// <summary>
     /// Tarifas por modelo, em USD por 1M de tokens. <b>Única</b> fonte de preço — não

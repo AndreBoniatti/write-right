@@ -55,5 +55,6 @@ public sealed class LlmOptionsValidator : IValidateOptions<LlmOptions>
         yield return (nameof(LlmOptions.GenerationModel), options.GenerationModel);
         yield return (nameof(LlmOptions.CorrectionModel), options.CorrectionModel);
         yield return (nameof(LlmOptions.AnalysisModel), options.AnalysisModel);
+        yield return (nameof(LlmOptions.CardModel), options.CardModel);
     }
 }

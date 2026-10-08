@@ -1,5 +1,6 @@
 using System.Text.Json;
 using WriteRight.Api.Llm;
+using WriteRight.Shared.Cards;
 using WriteRight.Shared.Corrections;
 using WriteRight.Shared.Taxonomy;
 
@@ -81,4 +82,35 @@ public class LlmJsonTests
 
     public static IEnumerable<object[]> EveryCategory() =>
         Enum.GetValues<ErrorCategory>().Select(c => new object[] { c });
+
+    /// <summary>
+    /// O desenho de cards, no formato do structured output — veredito como STRING e
+    /// as alternativas como lista. Um card que não desserializa não falha alto: vira
+    /// prática com zero cards, que é justamente o resultado legítimo mais comum.
+    /// </summary>
+    [Fact]
+    public void Deserializes_a_card_design_payload()
+    {
+        const string json = """
+        {
+          "decisions": [
+            { "error": 1, "item": "advogado = lawyer", "verdict": "Card",
+              "answer": "lawyer", "hint": "advogado", "alsoCorrect": ["attorney"] },
+            { "error": 2, "item": "concordância", "verdict": "Grammar",
+              "answer": "", "hint": "", "alsoCorrect": [] }
+          ]
+        }
+        """;
+
+        var design = JsonSerializer.Deserialize<CardDesign>(json, LlmJson.Options);
+
+        Assert.NotNull(design);
+        Assert.Equal(2, design.Decisions.Count);
+        var card = design.Decisions[0];
+        Assert.Equal(1, card.Error);
+        Assert.Equal(CardDecisionKind.Card, card.Verdict);
+        Assert.Equal("lawyer", card.Answer);
+        Assert.Equal(["attorney"], card.AlsoCorrect);
+        Assert.Equal(CardDecisionKind.Grammar, design.Decisions[1].Verdict);
+    }
 }

@@ -116,6 +116,13 @@ else
                         <div class="wr-result wr-result--ok">
                             <span class="wr-result__label">Resposta certa</span>
                             <span class="wr-result__text">@revealed.Answer</span>
+                            @* Dentro da caixa verde, e não solta embaixo: são respostas
+                               certas também. Sem isto, acertar com "attorney" e ver
+                               "lawyer" escrito como A resposta pareceria acerto por sorte. *@
+                            @if (revealed.Alternatives.Count > 0)
+                            {
+                                <span class="wr-result__also">também vale: @string.Join(", ", revealed.Alternatives)</span>
+                            }
                         </div>
 
                         @* Só mostra o que foi escrito se houver o que mostrar: depois de
@@ -213,6 +220,25 @@ else
                             </button>
                         </div>
                     }
+
+                    @* Descartar mora AQUI, depois da revelação: é o instante em que você
+                       vê a resposta e percebe que o card está errado — o momento de
+                       maior sinal do deck inteiro. Antes ele só existia na tela do deck,
+                       e na prática nunca foi usado (0 descartes em 95 cards). *@
+                    <div class="wr-card__discard">
+                        @if (confirmingDiscard)
+                        {
+                            <span>Descartar este card? Ele não volta mais.</span>
+                            <button class="btn btn-sm btn-danger" @onclick="Discard" disabled="@busy">Descartar</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmingDiscard = false" disabled="@busy">Manter</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="wr-linkish" @onclick="() => confirmingDiscard = true" disabled="@busy">
+                                Card errado? Descartar
+                            </button>
+                        }
+                    </div>
                 }
             </div>
         </div>
@@ -231,6 +257,9 @@ else
 
     /// <summary>Decisão do usuário sobre um "quase". Null enquanto ele não decidiu.</summary>
     private bool? adjudicated;
+
+    /// <summary>Pediu pra descartar e ainda não confirmou.</summary>
+    private bool confirmingDiscard;
 
     private string typed = "";
     private int reviewed;
@@ -403,10 +432,7 @@ else
 
             reviewed++;
             if (Accepted) correct++;
-            queue!.RemoveAt(0);
-            revealed = null;
-            adjudicated = null;
-            typed = "";
+            Advance();
 
             // A resposta da revisão já traz quantos sobraram — atualizar o selo aqui
             // não custa requisição nenhuma. É o caminho mais comum de o número mudar,
@@ -421,6 +447,48 @@ else
         {
             busy = false;
         }
+    }
+
+    /// <summary>
+    /// Tira o card da sessão SEM registrar revisão: um card descartado não foi
+    /// "acertado" nem "errado", e contá-lo sujaria a estatística da sessão e o log.
+    /// </summary>
+    private async Task Discard()
+    {
+        if (Current is null || busy) return;
+
+        busy = true;
+        error = null;
+        try
+        {
+            if (!await Api.DiscardCardAsync(Current.Id))
+            {
+                error = "Não foi possível descartar o card.";
+                return;
+            }
+
+            Advance();
+            // Releitura, e não "menos um": descartar libera o irmão da mesma frase,
+            // e só o servidor sabe se ele entra hoje.
+            await DueCards.RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Advance()
+    {
+        queue!.RemoveAt(0);
+        revealed = null;
+        adjudicated = null;
+        confirmingDiscard = false;
+        typed = "";
     }
 
     /// <summary>

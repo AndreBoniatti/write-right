@@ -155,4 +155,8 @@ public sealed class WriteRightApiClient
     /// <summary>Descarta um card ruim. True se descartou.</summary>
     public async Task<bool> DiscardCardAsync(int id, CancellationToken ct = default) =>
         (await _http.DeleteAsync($"api/cards/{id}", ct)).IsSuccessStatusCode;
+
+    /// <summary>Devolve pra fila as práticas cujos cards falharam. True se o pedido foi aceito.</summary>
+    public async Task<bool> RetryFailedCardsAsync(CancellationToken ct = default) =>
+        (await _http.PostAsync("api/cards/retry", null, ct)).IsSuccessStatusCode;
 }

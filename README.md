@@ -85,7 +85,7 @@ So there's a deck, and it's built from the same source of truth as everything el
 flowchart LR
     E[Categorized errors] --> P[(Persist)]
     P --> W[Weakness profile] -->|focus categories| G[Generate text]
-    P --> D[Vocabulary cards] -->|spaced repetition| R[Review session]
+    P -->|after the correction| C[Card design] --> D[Vocabulary cards] -->|spaced repetition| R[Review session]
     R -->|failed again| D
 ```
 
@@ -93,14 +93,17 @@ flowchart LR
 
 A few decisions worth naming:
 
-- **The cloze is free.** The correction appears verbatim in the corrected text in 81 of 82 real cases, so the blank is cut by string matching — no extra model call, and it works retroactively on history. When the sentence yields nothing usable, **the card isn't minted**: a bad front would be answered wrong forever and poison the scheduler's statistics.
-- **No hint, no card either.** The blank alone rarely has a unique answer — "at the ___ center" accepts anything — so a card whose source phrase is missing would be wrong forever, counting lapses and corrupting the very statistics that say whether the scheduler works. The rule is enforced three times over: the minting guard skips it, the field is non-nullable, and the column is `NOT NULL` with a `CHECK` against the empty string. Two unanswerable cards had already been minted before the rule existed.
+- **What becomes a card is its own decision.** At first the correction's category decided it: anything filed under vocabulary became a card. Measured on my real deck — 24 practices, 76 cards labelled by hand *before* running anything — **32% of the cards were bad**: grammar filed as vocabulary, a perfectly valid answer punished ("unique aspects" for "unique characteristics"), a sentence fragment instead of an item. And the reverse: "wait *for*" was filed as a preposition and never became a card at all. A label built for the weakness profile was answering a question it was never asked. Now a separate model call looks at each error and decides — and "no card" is a valid answer, because a wrong card costs months of training and the credibility of every other card.
+- **The bigger model was the cheaper one.** Asking Sonnet 5 the right question still let 37% of the bad cards through. Opus 5.5 at high effort let 17% through and kept 93% of the good ones — and, against my estimate, cost *less* (≈900 output tokens per practice against ≈3,000) and answered six times faster. What made it work was letting a card carry **accepted alternatives** (lawyer / attorney): without them the stricter model refused anything that has a synonym and dropped 30% of the good cards.
+- **The model proposes; code checks.** The blank is still cut by string matching, so the answer must appear verbatim in the corrected text; the hint must appear verbatim in the source; at most three words; at most four alternatives; and no alternative may equal what you wrote — if it does, the model has just admitted you were right. Any mechanical doubt and **the card isn't minted**.
+- **No hint, no card either.** The blank alone rarely has a unique answer — "at the ___ center" accepts anything — so a card without a hint would be wrong forever, counting lapses and corrupting the very statistics that say whether the scheduler works. The rule is enforced three times over: the gate rejects it, the field is non-nullable, and the column is `NOT NULL` with a `CHECK` against the empty string.
 - **The hint is language-neutral.** It's the phrase in the exercise's *source* language, not "the Portuguese" — EN→PT practices already exist, and source and target swap with the direction. A third language is in play elsewhere in the app (corrections are written in yours), which is exactly why a field named after a language rather than a role eventually names the wrong one.
 - **You type the answer.** Self-rating measures the *feeling* of knowing, which is a poor estimate of memory. Typing gives an objective right/wrong, and easy/hard only refines the interval afterwards — the buttons don't even appear on a miss. A near miss (exactly one word wrong, and that word within one edit — two if it's long) is adjudicated by you, not the server.
 - **Cards copy their content** — no id, no foreign key, nothing pointing back. Practices can be deleted, and cascade would take months of review history with them. Same snapshot decision as the analysis evidence, taken to its conclusion: a reference that may dangle is worse than no reference at all.
 - **Failing the same item again while writing reschedules the existing card** rather than minting a second one — real-world failure is stronger evidence than any button. It deliberately writes no review row: the log answers "coming back after N days, what's the hit rate?", and a failure with no interval attached would corrupt exactly that.
 - **The scheduler is boring on purpose.** Plain SM-2. The value of this module is in the card content, not the arithmetic; writing FSRS would be effort spent on the part that's already solved.
-- **Minting commits separately from the correction.** If it shared the transaction, a failure while minting would roll the correction back — and that correction has already been paid for. Losing a few cards is the cheaper failure; the errors behind them are still in the profile either way.
+- **Minting runs after the correction, and the queue is the database.** The correction writes a *cards pending* status in its own transaction and returns; a background worker drains the pending practices on startup and whenever a correction lands. The status is the point: nobody asks for cards, so a job lost on restart would go unnoticed forever. Three attempts, then the worker gives up and the deck page says so — retrying forever would mean paying forever for an error that repeats.
+- **Discarding lives where you notice.** Every revealed card has a discard button, because that's the moment you see the answer and realise the card is wrong. It used to exist only on the deck page, and across 95 cards it was used zero times.
 - **At most one card per source sentence per session.** A sentence that collected three errors mints three cards, and each one's front spells out the other two's answers. On my real deck that was **39 of 75 cards** — over half a session answering itself. The siblings aren't dropped; they surface once the one ahead leaves the queue. Only real data exposed this: every synthetic test I'd written used one error per sentence.
 
 ## Tech stack
@@ -113,7 +116,7 @@ A few decisions worth naming:
 
 Blazor earns its place here for one concrete reason: the API and the UI **share the same C# data contracts** (`WriteRight.Shared`), so there's no parallel TypeScript model to keep in sync.
 
-The AI work is split by cost: a fast, cheap model **generates** exercises and a stronger model **corrects** them — both are configurable.
+The AI work is split by cost: a fast, cheap model **generates** exercises, a stronger model **corrects** them, and the strongest **designs the vocabulary cards**, where a mistake is the most expensive — all configurable.
 
 ## Project structure
 
@@ -166,6 +169,7 @@ Then open **http://localhost:5193**. The SQLite database is created automaticall
 | `POST` | `/api/cards/{id}/review` | Close the review: reschedule the card and log it |
 | `GET`  | `/api/cards` | The whole deck (counters + cards) |
 | `DELETE` | `/api/cards/{id}` | Discard a bad card (marks, never deletes) |
+| `POST` | `/api/cards/retry` | Put practices whose cards failed back in the queue |
 | `GET`  | `/api/usage` | Token/cost report per operation, and the average cost of a practice (no AI call) |
 
 ## Configuration
@@ -178,9 +182,10 @@ Under the `Llm` section (user-secrets or `appsettings`):
 | `Llm:GenerationModel` | `claude-haiku-4-5` | Model that generates exercises |
 | `Llm:CorrectionModel` | `claude-sonnet-5` | Model that corrects translations |
 | `Llm:AnalysisModel` | `claude-sonnet-5` | Model that analyses the error history |
+| `Llm:CardModel` | `claude-opus-5-5` | Model that decides what becomes a vocabulary card and designs it |
 | `Llm:Pricing:<model>` | **required** | USD per MTok for that model — see below |
 
-The vocabulary deck adds no configuration and makes no AI calls of its own — the content of every card was already paid for by the correction that produced it.
+The card step adds about US$ 0.025 per practice, counted as part of the practice's cost in `/api/usage`. A practice without errors makes no call.
 
 **Pricing.** The API returns token counts, never a monetary cost, so turning tokens into dollars is always the client's job. The rates live in `appsettings.json` and **only** there — there is no built-in table in code, because a price that exists in two places just raises the question of which one is winning:
 
@@ -211,7 +216,7 @@ The suite covers the parts with real logic and real regression risk:
 - **Adaptive generation** — the prompt injects focus categories when there are weaknesses, and doesn't when there aren't.
 - **Persistence + aggregation** — correcting stores the attempt and its errors, and the profile aggregates by category ordered by frequency, tested against a **real in-memory SQLite** database (so the enum-as-string value converters run for real).
 - **Evidence grounding** — the analysis drops any pattern that cites error ids it was never sent or that falls under the evidence floor, and persists nothing when none survive. The window sizing (by error volume, not practice count) and the snapshotting of evidence — an analysis stays intact even after the practice it cited is deleted — are covered too.
-- **The deck** — mostly the failure paths, because they're the ones that quietly corrupt data: an unusable sentence mints no card, a recurring error reschedules instead of duplicating (and writes no review row), a discarded card is never resurrected, a card outlives the practice that created it, and siblings from one sentence never share a session. Plus the interval arithmetic, where a wrong sign breaks nothing visible — it just makes reviews arrive at the wrong time for months.
+- **The deck** — mostly the failure paths, because they're the ones that quietly corrupt data: every rule of the gate (each one named after a real bad card), a correction that queues its cards in the same transaction, a failed card call that records its cost and stays pending, a recurring error that reschedules instead of duplicating (and writes no review row), a discarded card that's never resurrected, a card that outlives the practice that created it, and siblings from one sentence that never share a session. Plus the interval arithmetic, where a wrong sign breaks nothing visible — it just makes reviews arrive at the wrong time for months.
 
 **Conscious gap:** the real HTTP call to Anthropic isn't tested — it costs money and is flaky. The model sits behind an interface and is swapped for a fake in tests, so everything *around* the call is covered. New logic ships with tests, and the suite runs on every change.
 

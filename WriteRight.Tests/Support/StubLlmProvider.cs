@@ -1,5 +1,6 @@
 using WriteRight.Api.Llm;
 using WriteRight.Shared.Analysis;
+using WriteRight.Shared.Cards;
 using WriteRight.Shared.Corrections;
 using WriteRight.Shared.Exercises;
 
@@ -62,6 +63,17 @@ public sealed class StubLlmProvider : ILlmProvider
     public ExerciseGenerationRequest? LastGenerationRequest { get; private set; }
     public AnalysisRequest? LastAnalysisRequest { get; private set; }
 
+    /// <summary>
+    /// Desenho de cards que toda chamada devolve. Mutável (e não parâmetro do
+    /// construtor) porque os testes de cunhagem trocam as propostas entre práticas.
+    /// </summary>
+    public CardDesign? CardDesign { get; set; }
+
+    public CardDesignRequest? LastCardRequest { get; private set; }
+
+    /// <summary>Quantas vezes o desenho de cards foi chamado — "não chamou" também é resultado.</summary>
+    public int CardCalls { get; private set; }
+
     public Task<LlmResult<GeneratedExercise>> GenerateExerciseAsync(
         ExerciseGenerationRequest request, CancellationToken ct = default)
     {
@@ -92,6 +104,17 @@ public sealed class StubLlmProvider : ILlmProvider
         if (FailAfterBilling) throw Failure();
         return Task.FromResult(new LlmResult<AnalysisDraft>(
             _analysis ?? throw new InvalidOperationException("StubLlmProvider sem análise configurada."),
+            Usage));
+    }
+
+    public Task<LlmResult<CardDesign>> DesignCardsAsync(
+        CardDesignRequest request, CancellationToken ct = default)
+    {
+        LastCardRequest = request;
+        CardCalls++;
+        if (FailAfterBilling) throw Failure();
+        return Task.FromResult(new LlmResult<CardDesign>(
+            CardDesign ?? throw new InvalidOperationException("StubLlmProvider sem desenho de cards configurado."),
             Usage));
     }
 }

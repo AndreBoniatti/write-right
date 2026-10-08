@@ -94,8 +94,8 @@ public sealed class UsageService
             .ThenBy(o => o.Operation)
             .ToList();
 
-        // Custo de prática = toda geração e correção, inclusive a de práticas
-        // abandonadas e a de chamadas que falharam sem gerar prática nenhuma (essas
+        // Custo de prática = toda geração, correção e desenho de cards, inclusive o de
+        // práticas abandonadas e o de chamadas que falharam sem gerar prática nenhuma (essas
         // ficam sem PracticeId, por isso o corte é por OPERAÇÃO e não pelo vínculo).
         // Dividir pelas CONCLUÍDAS é o número honesto: abandono e falha são custo real.
         var practiceCost = calls

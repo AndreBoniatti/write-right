@@ -3,6 +3,7 @@ using Anthropic;
 using Anthropic.Models.Messages;
 using Microsoft.Extensions.Options;
 using WriteRight.Shared.Analysis;
+using WriteRight.Shared.Cards;
 using WriteRight.Shared.Corrections;
 using WriteRight.Shared.Exercises;
 
@@ -24,7 +25,7 @@ namespace WriteRight.Api.Llm;
 public sealed class AnthropicLlmProvider : ILlmProvider
 {
     /// <summary>
-    /// Effort das chamadas em Sonnet 5. <c>High</c> é o default do modelo — está aqui
+    /// Effort da correção e da análise (Sonnet 5). <c>High</c> é o default do modelo — está aqui
     /// EXPLÍCITO justamente por isso: default é decisão do PROVEDOR, e depender dele
     /// significa que uma mudança do lado da Anthropic altera o custo e o comportamento
     /// do app sem passar por um commit. Effort é a alavanca de custo mais forte que
@@ -38,25 +39,29 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     /// o excedente deliberando à toa: num texto de 8 palavras queimou 3.432 tokens de
     /// saída pra achar 2 erros.
     ///
-    /// <b>RISCO CONHECIDO E AINDA ABERTO.</b> O Medium arquiva mais erro gramatical em
-    /// categoria de vocabulário, e isso vaza pra cunhagem: na mesma medição, "the
-    /// schedule → my schedule" e "wait for nobody → wait for anybody" viraram card —
-    /// o primeiro ensina um mapeamento falso ("a agenda" É "the schedule"), o segundo é
-    /// dupla negação, gramática pura. Card ruim é dano DURÁVEL: entra no SM-2 e é
-    /// treinado por meses.
+    /// O Medium arquiva mais erro gramatical em categoria de vocabulário ("the schedule
+    /// → my schedule" como WordChoice). Isso era um risco pro deck enquanto a categoria
+    /// decidia o que virava card; deixou de ser quando a cunhagem ganhou passo próprio
+    /// (<see cref="CardEffort"/>), que julga o erro em si. Sobra o efeito no perfil, que
+    /// é ruído pequeno numa agregação.
     ///
-    /// Isso NÃO está mitigado. A guarda que barrava esses dois casos foi descartada de
-    /// propósito — o módulo de vocabulário vai ser reestruturado, e blindar o filtro
-    /// atual só pra deletá-lo depois não se paga. Enquanto a reestruturação não vier,
-    /// o deck aceita card de gramática arquivado como vocabulário; o descarte manual é
-    /// a única contenção.
-    ///
-    /// O que observar no uso: card cuja resposta não ensina item léxico nenhum (troca
-    /// só de artigo, possessivo ou pronome), e severidade fora do lugar (ela diverge
-    /// ~30% entre execuções em QUALQUER effort — não é sintoma de Medium). Voltar pra
-    /// High é trocar esta linha.
+    /// O que observar no uso: severidade fora do lugar (ela diverge ~30% entre execuções
+    /// em QUALQUER effort — não é sintoma de Medium). Voltar pra High é trocar esta linha.
     /// </summary>
     private static readonly Effort ReasoningEffort = Effort.Medium;
+
+    /// <summary>
+    /// Effort do desenho de cards: <b>High</b>, e no Opus 5.5 (cujo default é Medium —
+    /// mais um motivo pra não depender de default). Ao contrário da correção, aqui a
+    /// pergunta central é "existe outra resposta igualmente certa?", um julgamento
+    /// contra si mesmo, que é onde deliberar rende.
+    ///
+    /// Medido em 2026-10-07 sobre 24 práticas: o Opus 5.5 em High pensou ~900 tokens
+    /// por prática contra ~3.000 do Sonnet 5 em High — saiu MAIS BARATO (US$ 0,025
+    /// contra 0,033), seis vezes mais rápido (~10 s) e muito mais preciso (o Sonnet
+    /// deixou passar 37% dos cards ruins; o Opus, 17%).
+    /// </summary>
+    private static readonly Effort CardEffort = Effort.High;
 
     private readonly LlmOptions _options;
 
@@ -147,6 +152,33 @@ public sealed class AnthropicLlmProvider : ILlmProvider
             ?? throw new InvalidOperationException("Falha ao desserializar a análise da IA."));
 
         return new LlmResult<AnalysisDraft>(draft, usage);
+    }
+
+    public async Task<LlmResult<CardDesign>> DesignCardsAsync(
+        CardDesignRequest request, CancellationToken ct = default)
+    {
+        var client = CreateClient();
+
+        var response = await client.Messages.Create(new MessageCreateParams
+        {
+            Model = _options.CardModel,
+            MaxTokens = 16000,
+            System = CardPrompt.BuildSystemPrompt(),
+            Messages = [new() { Role = Role.User, Content = CardPrompt.BuildUserMessage(request) }],
+            OutputConfig = new OutputConfig
+            {
+                Format = new JsonOutputFormat { Schema = CardPrompt.BuildResultSchema() },
+                Effort = CardEffort,
+            },
+        });
+
+        var usage = UsageOf(response, _options.CardModel);
+
+        var design = Interpret(response, usage, "o desenho dos cards", json =>
+            JsonSerializer.Deserialize<CardDesign>(json, LlmJson.Options)
+            ?? throw new InvalidOperationException("Falha ao desserializar o desenho dos cards."));
+
+        return new LlmResult<CardDesign>(design, usage);
     }
 
     /// <summary>

@@ -106,6 +106,13 @@
     font-weight: 550;
 }
 
+/* As outras respostas aceitas: na mesma caixa (são certas também), mas abaixo e
+   menores — a resposta do card continua sendo a primeira coisa que se lê. */
+.wr-result__also {
+    font-size: 0.82rem;
+    opacity: 0.8;
+}
+
 /* A origem: a única linha de prosa da revisão, e o que faz o card ser SEU e não
    de uma lista genérica. A borda separa o que aconteceu agora (veredito, as duas
    respostas) de onde o card nasceu. */
@@ -148,4 +155,16 @@
     line-height: 1.5;
     color: var(--wr-text-muted);
     text-align: center;
+}
+
+/* Descartar: presente em todo card revelado, mas discreto — é válvula, não fluxo. */
+.wr-card__discard {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    font-size: 0.82rem;
+    color: var(--wr-text-muted);
 }

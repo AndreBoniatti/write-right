@@ -22,6 +22,9 @@ public sealed class PracticeServiceTests : IDisposable
 {
     private readonly TestDatabase _db = new();
 
+    /// <summary>Singleton em produção — um só por teste, pra dar pra ver se a correção o acordou.</summary>
+    private readonly CardJobSignal _cardJobs = new();
+
     // Um serviço novo por operação = um contexto novo, como em produção (scoped por request).
     // O UsageService compartilha o MESMO contexto de propósito: ele só enfileira o
     // registro de consumo e quem salva é o PracticeService. Contextos separados
@@ -29,7 +32,7 @@ public sealed class PracticeServiceTests : IDisposable
     private PracticeService Service(StubLlmProvider stub)
     {
         var ctx = _db.NewContext();
-        return new(stub, ctx, new UsageService(ctx, TestPricing.Default()), new CardService(ctx));
+        return new(stub, ctx, new UsageService(ctx, TestPricing.Default()), _cardJobs);
     }
 
     private static CreatePracticeRequest CreateRequest(bool focusOnWeaknesses = false) =>
@@ -232,6 +235,38 @@ public sealed class PracticeServiceTests : IDisposable
         await using var ctx = _db.NewContext();
         Assert.Equal(1, ctx.Exercises.Count());
         Assert.Equal(2, ctx.Errors.Count());
+    }
+
+    /// <summary>
+    /// A correção NÃO cunha card nem chama o desenho de cards: só deixa a promessa —
+    /// a prática pendente, gravada na mesma transação — e acorda o worker. Se a
+    /// promessa não entrasse junto, um restart entre a correção e o worker perderia
+    /// os cards daquela prática em silêncio.
+    /// </summary>
+    [Fact]
+    public async Task Correcting_queues_the_cards_instead_of_minting_them()
+    {
+        var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.WordChoice));
+        var created = await Service(stub).CreatePracticeAsync(CreateRequest());
+
+        await Service(stub).CorrectPracticeAsync(created.Id, "I have a car.");
+
+        await using var ctx = _db.NewContext();
+        Assert.Equal(CardsStatus.Pending, (await ctx.Exercises.SingleAsync()).CardsStatus);
+        Assert.Empty(ctx.Cards);
+        Assert.Equal(0, stub.CardCalls);
+        Assert.True(_cardJobs.WaitAsync(CancellationToken.None).IsCompleted, "a correção não acordou o worker");
+    }
+
+    /// <summary>Prática em andamento não tem cards a fazer — "não se aplica", não "pendente".</summary>
+    [Fact]
+    public async Task A_practice_in_progress_has_no_card_status()
+    {
+        var stub = new StubLlmProvider(SampleExercise());
+        await Service(stub).CreatePracticeAsync(CreateRequest());
+
+        await using var ctx = _db.NewContext();
+        Assert.Null((await ctx.Exercises.SingleAsync()).CardsStatus);
     }
 
     [Fact]
@@ -538,8 +573,8 @@ public sealed class PracticeServiceTests : IDisposable
     [Fact]
     public async Task CorrectPracticeAsync_records_a_second_call_on_the_same_practice()
     {
-        // Uma prática = DUAS chamadas em momentos diferentes. É o motivo de o consumo
-        // ser tabela própria em vez de colunas na prática.
+        // A prática faz chamadas em momentos diferentes (aqui, as duas que passam pelo
+        // PracticeService). É o motivo de o consumo ser tabela própria em vez de colunas.
         var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
         var detail = await Service(stub).CreatePracticeAsync(CreateRequest());
         await Service(stub).CorrectPracticeAsync(detail.Id, "my translation");

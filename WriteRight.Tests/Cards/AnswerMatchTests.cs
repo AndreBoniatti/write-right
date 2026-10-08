@@ -99,4 +99,39 @@ public class AnswerMatchTests
         Assert.Equal(CardVerdict.Wrong,
             AnswerMatch.Check("high-quality camera", "a high-quality camera"));
     }
+
+    // ── Alternativas aceitas ─────────────────────────────────────────────────
+
+    [Fact]
+    public void An_accepted_alternative_is_correct()
+    {
+        Assert.Equal(CardVerdict.Correct,
+            AnswerMatch.Check("Attorney", "lawyer", ["attorney"]));
+    }
+
+    /// <summary>A régua do "quase" vale igual pra cada alternativa.</summary>
+    [Fact]
+    public void A_slip_on_an_alternative_is_a_near_miss()
+    {
+        Assert.Equal(CardVerdict.NearMiss,
+            AnswerMatch.Check("atorney", "lawyer", ["attorney"]));
+    }
+
+    /// <summary>
+    /// Fica o MELHOR veredito, não o primeiro: um "quase" contra a resposta não pode
+    /// esconder o acerto exato numa alternativa.
+    /// </summary>
+    [Fact]
+    public void The_best_verdict_wins_over_the_first()
+    {
+        Assert.Equal(CardVerdict.Correct,
+            AnswerMatch.Check("lawyers", "lawyer", ["lawyers"]));
+    }
+
+    [Fact]
+    public void Matching_nothing_is_still_wrong()
+    {
+        Assert.Equal(CardVerdict.Wrong,
+            AnswerMatch.Check("advocate", "lawyer", ["attorney"]));
+    }
 }
