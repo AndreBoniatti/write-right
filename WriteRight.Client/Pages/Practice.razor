@@ -1,6 +1,8 @@
 @page "/practice/{Id:int}"
 @inject WriteRightApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>WriteRight — Prática</PageTitle>
 
@@ -52,24 +54,134 @@ else
             @(saving ? "Salvando…" : "Salvar e sair")
         </button>
     }
-    else
+    else if (markup is not null)
     {
-        <div class="card p-3 mb-3">
-            <h6 class="text-muted">Sua tradução</h6>
-            <p class="mb-0">@practice.UserTranslation</p>
-        </div>
-
+        @* Um card só: o texto riscado mais o sem marcação já É a tradução do usuário,
+           e o seletor mostra cada versão limpa. *@
         <div class="card p-3 mb-3 border-success">
-            <h6 class="d-flex align-items-center gap-1">
-                <Icon Name="check" Size="18" /> Texto corrigido
-            </h6>
-            <p class="lead mb-0">@practice.CorrectedText</p>
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                <h6 class="d-flex align-items-center gap-1 mb-0">
+                    <Icon Name="check" Size="18" /> Correção
+                </h6>
+                <div class="wr-seg" role="group" aria-label="Modo de exibição">
+                    @foreach (var (mode, label) in Views)
+                    {
+                        <button type="button" aria-pressed="@(view == mode ? "true" : "false")"
+                                @onclick="() => SetView(mode)">@label</button>
+                    }
+                </div>
+            </div>
+
+            <div class="wr-correction">
+                <p class="lead mb-0 wr-correction__text @(filter is null ? "" : "is-filtering")">
+                    @if (view == TextView.Corrected)
+                    {
+                        @practice.CorrectedText
+                    }
+                    else if (view == TextView.Translation)
+                    {
+                        @practice.UserTranslation
+                    }
+                    else
+                    {
+                        @for (var s = 0; s < markup.Segments.Count; s++)
+                        {
+                            var index = s;
+                            if (markup.Segments[index] is UnchangedText plain)
+                            {
+                                @plain.Text
+                            }
+                            else if (markup.Segments[index] is ChangedText change)
+                            {
+                                if (change.IsWordRemoval)
+                                {
+                                    @(" ")
+                                }
+                                <span id="@MarkId(index)" class="@MarkClass(change, index)" role="button" tabindex="0"
+                                      aria-label="@MarkLabel(change)"
+                                      @onclick="() => TogglePin(index)" @onclick:stopPropagation="true"
+                                      @onmouseenter="() => Preview(index)" @onmouseleave="EndPreview"
+                                      @onkeydown="e => OnMarkKey(e, index)">
+                                    @if (change.Removed.Length > 0)
+                                    {
+                                        <del>@change.Removed</del>
+                                    }
+                                    @if (change.Inserted.Length > 0)
+                                    {
+                                        <ins>@change.Inserted</ins>
+                                    }
+                                </span>
+                            }
+                        }
+                    }
+                </p>
+
+                @if (open is int o && markup.Segments[o] is ChangedText opened)
+                {
+                    @* @key troca o elemento a cada trecho aberto: nasce invisível, o JS
+                       posiciona e mostra — sem piscar na posição do balão anterior. *@
+                    <div @key="o" id="@PopoverId" class="wr-mark-pop" role="dialog" aria-label="Explicação da correção"
+                         style="visibility: hidden" @onclick:stopPropagation="true">
+                        @* Navegação só no balão fixado: o do hover some quando o mouse sai
+                           do trecho, antes de alcançar as setas. *@
+                        @if (pinned)
+                        {
+                            var route = Route();
+                            var at = route.IndexOf(o);
+                            <div class="wr-mark-pop__nav">
+                                <span>
+                                    Correção @(at + 1) de @route.Count
+                                    @if (opened.Errors.Count > 1)
+                                    {
+                                        @($" · {opened.Errors.Count} erros")
+                                    }
+                                </span>
+                                <span class="wr-mark-pop__steps">
+                                    <button type="button" aria-label="Correção anterior" title="Anterior (←)" disabled="@(at <= 0)"
+                                            @onclick="() => Step(-1)"><Icon Name="chevron-left" Size="16" /></button>
+                                    <button type="button" aria-label="Próxima correção" title="Próxima (→)" disabled="@(at >= route.Count - 1)"
+                                            @onclick="() => Step(1)"><Icon Name="chevron-right" Size="16" /></button>
+                                </span>
+                            </div>
+                        }
+                        else if (opened.Errors.Count > 1)
+                        {
+                            <div class="wr-mark-pop__nav">@opened.Errors.Count erros nesta correção</div>
+                        }
+
+                        @if (opened.Errors.Count == 0)
+                        {
+                            <div class="wr-mark-pop__error">
+                                <strong>Mudança sem erro registrado</strong>
+                                <div class="text-muted">O corretor mudou este trecho, mas não registrou um erro aqui. Não conta no seu perfil.</div>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var e in opened.Errors.Select(i => practice.Errors[i]))
+                            {
+                                <div class="wr-mark-pop__error">
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <strong>@ErrorCatalog.Info(e.Category).LabelPt</strong>
+                                        <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                                    </div>
+                                    <div>
+                                        <s class="text-danger">@e.Original</s>
+                                        → <strong class="text-success">@e.Correction</strong>
+                                    </div>
+                                    <div class="text-muted">@e.Explanation</div>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
         </div>
 
         @if (practice.Errors.Count == 0)
         {
-            @* Sem erros não há card nenhum pra listar: sem isto, a única prática em
-               que o usuário acertou tudo seria a tela mais vazia do app. *@
+            @* Sem erros não há resumo nenhum: sem isto, a única prática em que o
+               usuário acertou tudo seria a tela mais vazia do app. *@
             <div class="card p-3 mb-2 border-success" style="max-width: 720px;">
                 <div class="d-flex align-items-center gap-2">
                     <Icon Name="check" Size="18" />
@@ -79,29 +191,45 @@ else
         }
         else
         {
-            <h5 class="mb-3">@practice.Errors.Count erro(s) encontrado(s)</h5>
-
-            @foreach (var group in ByCategory(practice.Errors))
-            {
-                <h6 class="wr-error-group">
-                    @ErrorCatalog.Info(group.Key).LabelPt
-                    <span class="wr-error-group__count">· @group.Count()</span>
-                </h6>
-                @foreach (var e in group)
+            <div class="wr-summary mb-3">
+                <span class="wr-summary__total">@practice.Errors.Count @(practice.Errors.Count == 1 ? "erro" : "erros")</span>
+                @foreach (var group in ByCategory(practice.Errors))
                 {
-                    <div class="card p-3 mb-2" style="max-width: 720px;">
-                        @* Sem o badge de categoria: o cabeçalho do grupo já a nomeia. *@
-                        <div class="d-flex gap-2 flex-wrap">
-                            <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
-                        </div>
-
-                        <div class="mt-2">
-                            <s class="text-danger">@e.Original</s>
-                            → <strong class="text-success">@e.Correction</strong>
-                        </div>
-                        <div class="text-muted small mt-1">@e.Explanation</div>
-                    </div>
+                    var category = group.Key;
+                    <button type="button" class="wr-chip" aria-pressed="@(filter == category ? "true" : "false")"
+                            title="Destacar os trechos de @ErrorCatalog.Info(category).LabelPt"
+                            @onclick="() => ToggleFilter(category)">
+                        <span class="wr-chip__dot wr-chip__dot--@TopSeverity(group)" aria-hidden="true"></span>
+                        @ErrorCatalog.Info(category).LabelPt
+                        <span class="wr-chip__count">×@group.Count()</span>
+                    </button>
                 }
+                <button type="button" class="wr-route" title="Abre a primeira e segue com ← →" @onclick="StartRoute">
+                    Ler explicações <Icon Name="chevron-right" Size="16" />
+                </button>
+            </div>
+        }
+
+        @if (markup.UnlocatedErrors.Count > 0)
+        {
+            @* Rede de segurança: erro cujo trecho não foi achado no texto não pode sumir. *@
+            <h6 class="wr-error-group">
+                Fora do texto
+                <span class="wr-error-group__count">· @markup.UnlocatedErrors.Count</span>
+            </h6>
+            @foreach (var e in markup.UnlocatedErrors.Select(i => practice.Errors[i]))
+            {
+                <div class="card p-3 mb-2" style="max-width: 720px;">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(e.Category).LabelPt</span>
+                        <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                    </div>
+                    <div class="mt-2">
+                        <s class="text-danger">@e.Original</s>
+                        → <strong class="text-success">@e.Correction</strong>
+                    </div>
+                    <div class="text-muted small mt-1">@e.Explanation</div>
+                </div>
             }
         }
 
@@ -117,6 +245,27 @@ else
     private PracticeDetail? practice;
     private string translation = "";
 
+    // Calculada uma vez por prática: o componente redesenha a cada hover e clique.
+    private CorrectionMarkup? markup;
+    private List<int> changes = [];   // índices dos segmentos alterados, na ordem do texto
+
+    private enum TextView { Marks, Corrected, Translation }
+
+    private static readonly (TextView Mode, string Label)[] Views =
+    [
+        (TextView.Marks, "Marcações"),
+        (TextView.Corrected, "Só o corrigido"),
+        (TextView.Translation, "Sua tradução"),
+    ];
+
+    private const string PopoverId = "wr-mark-pop";
+
+    private TextView view = TextView.Marks;
+    private ErrorCategory? filter;
+    private int? open;     // índice do segmento cujo balão está aberto
+    private bool pinned;   // aberto por clique (fica) ou por hover (some ao sair)
+    private int? placed;   // balão que o JS já posicionou
+
     private bool loading = true;
     private bool busy;         // qualquer ação em andamento
     private bool correcting;
@@ -130,7 +279,7 @@ else
         error = null;
         try
         {
-            practice = await Api.GetPracticeAsync(Id);
+            Show(await Api.GetPracticeAsync(Id));
             translation = practice?.UserTranslation ?? "";
         }
         catch (Exception ex)
@@ -157,7 +306,7 @@ else
             }
             else
             {
-                practice = updated; // vira a visão readonly com a correção
+                Show(updated); // vira a visão readonly com a correção
             }
         }
         catch (Exception ex)
@@ -194,13 +343,208 @@ else
         }
     }
 
+    private void Show(PracticeDetail? detail)
+    {
+        practice = detail;
+        markup = detail is { Status: PracticeStatus.Completed }
+            ? CorrectionMarkup.Build(detail.UserTranslation, detail.CorrectedText ?? "", detail.Errors)
+            : null;
+        changes = markup is null
+            ? []
+            : Enumerable.Range(0, markup.Segments.Count).Where(i => markup.Segments[i] is ChangedText).ToList();
+        view = TextView.Marks;
+        filter = null;
+        Close();
+    }
+
+    // ── Balão da explicação ──
+
+    private DotNetObjectReference<Practice>? self;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Esc, clique fora e ← → valem na página toda: presos ao card, morriam
+        // assim que o foco saía dele (um clique no próprio balão já bastava).
+        if (firstRender)
+        {
+            self = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("writerightMarks.watch", self, PopoverId);
+        }
+
+        // Blazor não mede layout: o JS põe o balão sob a última linha do trecho, e,
+        // fixado, leva o foco pra ele (leitor de tela e Enter seguem o balão).
+        if (open is int o && placed != o)
+        {
+            placed = o;
+            await JS.InvokeVoidAsync("writerightMarks.place", MarkId(o), PopoverId, pinned);
+        }
+    }
+
+    /// <summary>
+    /// Os trechos que as setas percorrem, na ordem do texto. Com uma categoria em
+    /// destaque, só os dela: "Escolha de palavra ×5" vira um roteiro de cinco paradas.
+    /// Se o trecho aberto não é da categoria (clicado apagado), vale o texto todo.
+    /// </summary>
+    private List<int> Route()
+    {
+        if (filter is not { } category) return changes;
+        var ofCategory = changes.Where(i => HasCategory((ChangedText)markup!.Segments[i], category)).ToList();
+        return open is int o && !ofCategory.Contains(o) ? changes : ofCategory;
+    }
+
+    /// <summary>
+    /// A entrada pra ler as explicações em sequência — sem ela, ler todas seria caçar
+    /// marca por marca, e a explicação é a parte da correção que ensina.
+    /// </summary>
+    private void StartRoute()
+    {
+        var route = Route();
+        if (route.Count == 0) return;
+        view = TextView.Marks;
+        placed = null;
+        open = route[0];
+        pinned = true;
+    }
+
+    private void Step(int delta)
+    {
+        if (open is not int o) return;
+        var route = Route();
+        var next = route.IndexOf(o) + delta;
+        if (next < 0 || next >= route.Count) return;
+        open = route[next];
+        pinned = true;
+    }
+
+    private void TogglePin(int index)
+    {
+        if (pinned && open == index)
+        {
+            Close();
+            return;
+        }
+        open = index;
+        pinned = true;
+    }
+
+    private void Preview(int index)
+    {
+        if (!pinned) open = index;
+    }
+
+    private void EndPreview()
+    {
+        if (!pinned) Close();
+    }
+
+    private void Close()
+    {
+        open = null;
+        pinned = false;
+        placed = null;
+    }
+
+    private void OnMarkKey(KeyboardEventArgs e, int index)
+    {
+        if (e.Key is "Enter" or " ") TogglePin(index);
+    }
+
+    /// <summary>Clique fora do balão e das marcas (o JS só chama com balão aberto).</summary>
+    [JSInvokable]
+    public void ClosePopover()
+    {
+        Close();
+        StateHasChanged();
+    }
+
+    /// <summary>Esc e setas de qualquer ponto da página (o JS só chama com balão aberto).</summary>
+    [JSInvokable]
+    public void OnPopoverKey(string key)
+    {
+        switch (key)
+        {
+            case "Escape": Close(); break;
+            case "ArrowRight": Step(1); break;
+            case "ArrowLeft": Step(-1); break;
+            default: return;
+        }
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("writerightMarks.unwatch");
+        }
+        catch (JSDisconnectedException)
+        {
+            // Página sendo descartada: não há mais listener pra tirar.
+        }
+        self?.Dispose();
+    }
+
+    private void SetView(TextView mode)
+    {
+        view = mode;
+        Close();
+    }
+
+    private void ToggleFilter(ErrorCategory category)
+    {
+        filter = filter == category ? null : category;
+        view = TextView.Marks;
+        Close();
+    }
+
+    private static string MarkId(int index) => $"wr-mark-{index}";
+
+    private string MarkClass(ChangedText change, int index)
+    {
+        var css = change.Errors.Count == 0 ? "wr-mark wr-mark--loose" : "wr-mark";
+        if (IsSevere(change)) css += " wr-mark--severe";
+        if (open == index) css += " is-open";
+        if (filter is { } category && HasCategory(change, category)) css += " is-highlighted";
+        return css;
+    }
+
+    private bool HasCategory(ChangedText change, ErrorCategory category) =>
+        change.Errors.Any(i => practice!.Errors[i].Category == category);
+
+    /// <summary>
+    /// Trecho que quebra o sentido ganha destaque no próprio texto: sem isso, "i → I"
+    /// pesaria o mesmo que "stayed → left", e a gravidade só apareceria abrindo o balão.
+    /// </summary>
+    private bool IsSevere(ChangedText change) =>
+        change.Errors.Any(i => practice!.Errors[i].Severity == ErrorSeverity.BreaksMeaning);
+
+    private string MarkLabel(ChangedText change)
+    {
+        var label = change.Errors.Count switch
+        {
+            0 => "Mudança sem erro registrado",
+            1 => $"1 erro: {ErrorCatalog.Info(practice!.Errors[change.Errors[0]].Category).LabelPt}",
+            var n => $"{n} erros: " + string.Join(", ", change.Errors
+                .Select(i => ErrorCatalog.Info(practice!.Errors[i].Category).LabelPt).Distinct()),
+        };
+        return IsSevere(change) ? $"{label} — quebra o sentido" : label;
+    }
+
+    /// <summary>A cor do ponto no resumo: a gravidade mais alta da categoria.</summary>
+    private static string TopSeverity(IEnumerable<WritingError> group) =>
+        group.MaxBy(e => SeverityWeight.Of(e.Severity))!.Severity switch
+        {
+            ErrorSeverity.BreaksMeaning => "danger",
+            ErrorSeverity.Understandable => "warning",
+            _ => "info",
+        };
+
     /// <summary>
     /// Agrupa os erros por categoria, do grupo de maior peso pro menor. Espalhados na
     /// ordem do texto, três erros da mesma categoria parecem três deslizes avulsos;
-    /// empilhados sob um cabeçalho com a contagem, viram o padrão que são — é a tela
-    /// deixando o diagnóstico à vista em vez de pedir que o usuário o monte de cabeça.
+    /// juntos num resumo com a contagem, viram o padrão que são — é a tela deixando o
+    /// diagnóstico à vista em vez de pedir que o usuário o monte de cabeça.
     /// A régua é o <see cref="SeverityWeight"/>, o mesmo que ordena o perfil.
-    /// Dentro do grupo o GroupBy preserva a ordem original (= a ordem do texto).
     /// </summary>
     private static IEnumerable<IGrouping<ErrorCategory, WritingError>> ByCategory(
         IReadOnlyList<WritingError> errors) =>

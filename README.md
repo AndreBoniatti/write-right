@@ -13,9 +13,9 @@ It's a personal tool first (I use it to study English) and a portfolio piece sec
 
 ## Screenshots
 
-**Correction.** Your translation against the corrected text, and every mistake tagged with a category and a severity — grouped by category, not listed as prose.
+**Correction.** Every change marked in place inside your own translation, struck through and replaced. Click one for its category, severity and explanation, or step through them all in order; below, the mistakes summed up by category.
 
-![Correction screen: the source text, your translation, the corrected text, and four mistakes grouped by category with their severity and an explanation](docs/screenshots/correcao.png)
+![Correction screen: the source text, the translation with each change struck through and replaced in place, the explanation of one change open (category, severity and why), and the four mistakes summed up by category](docs/screenshots/correcao.png)
 
 **Weakness profile.** The same categories aggregated — recent practices next to the whole history — which is what steers the next exercise.
 

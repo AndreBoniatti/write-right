@@ -4,3 +4,260 @@
     font-size: 1.05rem;
     line-height: 1.55;
 }
+
+/* ── Seletor de versão do texto ── */
+
+.wr-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    background: var(--wr-surface-2);
+    border-radius: 10px;
+}
+
+.wr-seg button {
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 550;
+    border: 0;
+    background: transparent;
+    color: var(--wr-text-muted);
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.wr-seg button[aria-pressed="true"] {
+    background: var(--wr-surface);
+    color: var(--wr-text);
+    box-shadow: var(--wr-shadow-sm);
+}
+
+/* ── Correção marcada no texto ── */
+
+.wr-correction {
+    position: relative; /* âncora do balão */
+}
+
+/* Mais entrelinha que o .lead: as marcas ganham fundo e não podem encostar. */
+.wr-correction__text {
+    line-height: 1.9;
+}
+
+.wr-mark {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 2px 3px;
+    margin: 0 -1px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    transition: background-color .12s ease, opacity .15s ease;
+}
+
+/* Quebra o sentido: o fundo diz por onde começar. Vem antes do hover/aberto pra eles
+   ainda darem retorno ao passar o mouse. */
+.wr-mark--severe {
+    background: var(--wr-danger-soft);
+}
+
+.wr-mark:hover,
+.wr-mark.is-open {
+    background: var(--wr-surface-2);
+}
+
+.wr-mark:focus-visible {
+    outline: 2px solid var(--wr-primary);
+    outline-offset: 2px;
+}
+
+.wr-mark del {
+    color: var(--wr-danger);
+    text-decoration-thickness: 1.5px;
+}
+
+.wr-mark ins {
+    color: var(--wr-success);
+    font-weight: 650;
+    text-decoration: none;
+}
+
+/* Sem seta entre o riscado e o novo (convenção de "controlar alterações"): em texto
+   carregado, a seta era o que mais poluía. */
+.wr-mark del + ins {
+    margin-left: 0.3em;
+}
+
+
+/* Mudança que o corretor fez sem registrar erro: aparece, mas sem o peso de um erro. */
+.wr-mark--loose {
+    text-decoration: underline dashed var(--wr-text-muted);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 5px;
+}
+
+.wr-mark--loose del {
+    color: var(--wr-text-muted);
+}
+
+.wr-mark--loose ins {
+    color: var(--wr-text);
+    font-weight: 500;
+}
+
+.is-filtering .wr-mark {
+    opacity: 0.3;
+}
+
+.is-filtering .wr-mark.is-highlighted {
+    opacity: 1;
+    background: var(--wr-primary-soft);
+}
+
+/* ── Balão da explicação ── */
+
+.wr-mark-pop {
+    position: absolute;
+    z-index: 5;
+    width: min(380px, 100%);
+    background: var(--wr-surface);
+    border: 1px solid var(--wr-border);
+    border-radius: 12px;
+    box-shadow: var(--wr-shadow);
+    padding: 0 0 4px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.wr-mark-pop__nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 40px;
+    padding: 6px 8px 6px 14px;
+    border-bottom: 1px solid var(--wr-border);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--wr-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.wr-mark-pop__steps {
+    display: inline-flex;
+    gap: 2px;
+}
+
+.wr-mark-pop__steps button {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--wr-text);
+    cursor: pointer;
+}
+
+.wr-mark-pop__steps button:hover:not(:disabled) {
+    background: var(--wr-surface-2);
+}
+
+.wr-mark-pop__steps button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.wr-mark-pop__steps button:focus-visible {
+    outline: 2px solid var(--wr-primary);
+    outline-offset: 1px;
+}
+
+.wr-mark-pop__error {
+    display: grid;
+    gap: 5px;
+    padding: 10px 14px;
+}
+
+.wr-mark-pop__error + .wr-mark-pop__error {
+    border-top: 1px solid var(--wr-border);
+}
+
+/* ── Resumo por categoria ── */
+
+.wr-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.wr-summary__total {
+    font-size: 1rem;
+    font-weight: 650;
+    margin-right: 4px;
+}
+
+.wr-chip {
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 550;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--wr-border);
+    background: var(--wr-surface);
+    color: var(--wr-text);
+    cursor: pointer;
+}
+
+.wr-chip:hover {
+    border-color: var(--wr-primary);
+}
+
+.wr-chip[aria-pressed="true"] {
+    border-color: var(--wr-primary);
+    background: var(--wr-primary-soft);
+}
+
+.wr-chip__count {
+    color: var(--wr-text-muted);
+}
+
+.wr-chip__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+/* A entrada pra ler as explicações em sequência: mesma forma dos chips, cor de ação. */
+.wr-route {
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 5px 8px 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--wr-primary);
+    background: transparent;
+    color: var(--wr-primary);
+    cursor: pointer;
+}
+
+.wr-route:hover {
+    background: var(--wr-primary-soft);
+}
+
+.wr-chip__dot--danger { background: var(--wr-danger); }
+.wr-chip__dot--warning { background: var(--wr-warning); }
+.wr-chip__dot--info { background: var(--wr-info); }
+
+@media (prefers-reduced-motion: reduce) {
+    .wr-mark {
+        transition: none;
+    }
+}
