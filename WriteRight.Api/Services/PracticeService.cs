@@ -26,7 +26,15 @@ public enum PracticeOutcome
 /// </summary>
 public sealed class PracticeService
 {
-    private const int PreviewLength = 120;
+    /// <summary>Práticas por página da listagem — quem chama não escolhe, só pede a próxima.</summary>
+    public const int PageSize = 20;
+
+    /// <summary>
+    /// Longo o bastante pra encher uma linha de tela larga: quem corta no que cabe é
+    /// o CSS, com reticências. Se o corte daqui aparecesse antes, a linha acabaria
+    /// no meio de uma palavra.
+    /// </summary>
+    private const int PreviewLength = 160;
     private const int FocusCategoryCount = 3;
 
     /// <summary>Tamanho do recorte "recente" do perfil: as N práticas concluídas mais novas.</summary>
@@ -113,13 +121,23 @@ public sealed class PracticeService
         return ToDetail(practice);
     }
 
-    /// <summary>Listagem da tela inicial: resumos leves, da mais recente pra mais antiga.</summary>
-    public async Task<IReadOnlyList<PracticeSummary>> ListPracticesAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Uma página da listagem da tela inicial: as em andamento primeiro (são as que
+    /// pedem ação, e não podem ficar enterradas três páginas abaixo), depois da mais
+    /// recente pra mais antiga.
+    /// </summary>
+    public async Task<PracticePage> ListPracticesAsync(
+        int skip = 0, int take = PageSize, CancellationToken ct = default)
     {
-        // Projeta os campos necessários (ErrorCount vira subquery COUNT). O preview
-        // é truncado e a ordenação é feita EM MEMÓRIA: o SQLite não traduz nem
-        // Substring nem ORDER BY sobre DateTimeOffset. (Volume pessoal — custo irrelevante.)
+        // Ordena pelo Id, não pelo CreatedAt: o SQLite não faz ORDER BY sobre
+        // DateTimeOffset, e a ordem tem que estar no SQL pra a página sair do banco.
+        // O Id cresce junto com a data — os dois nascem no mesmo insert.
+        // ErrorCount vira subquery COUNT; o preview é cortado em memória.
         var rows = await _db.Exercises
+            .OrderByDescending(p => p.Status == PracticeStatus.InProgress)
+            .ThenByDescending(p => p.Id)
+            .Skip(Math.Max(0, skip))
+            .Take(take)
             .Select(p => new
             {
                 p.Id,
@@ -134,12 +152,15 @@ public sealed class PracticeService
             })
             .ToListAsync(ct);
 
-        return rows
-            .OrderByDescending(r => r.CreatedAt)
+        var total = await _db.Exercises.CountAsync(ct);
+
+        var items = rows
             .Select(r => new PracticeSummary(
                 r.Id, r.SourceLanguage, r.TargetLanguage, r.Level, r.Theme, r.Status,
                 Preview(r.SourceText), r.ErrorCount, r.CreatedAt))
             .ToList();
+
+        return new PracticePage(items, total);
     }
 
     /// <summary>Detalhe completo de uma prática (retomar ou ler). Null se não existe.</summary>
@@ -335,7 +356,7 @@ public sealed class PracticeService
     private sealed record ErrorRow(ErrorCategory Category, ErrorSeverity Severity, int AttemptId);
 
     private static string Preview(string sourceText) =>
-        sourceText.Length <= PreviewLength ? sourceText : sourceText[..PreviewLength];
+        sourceText.Length <= PreviewLength ? sourceText : sourceText[..PreviewLength] + "…";
 
     private static PracticeDetail ToDetail(ExerciseAttempt p)
     {

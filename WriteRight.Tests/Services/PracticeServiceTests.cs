@@ -295,35 +295,68 @@ public sealed class PracticeServiceTests : IDisposable
     public async Task GetPracticeAsync_returns_null_for_missing() =>
         Assert.Null(await Service(new StubLlmProvider()).GetPracticeAsync(999));
 
-    [Fact]
-    public async Task ListPracticesAsync_orders_newest_first()
+    /// <summary>
+    /// Semeia práticas na ordem dada, uma por save — é o que garante que o Id cresça
+    /// na mesma ordem, como em produção (cada prática nasce no seu próprio insert).
+    /// </summary>
+    private async Task SeedListAsync(params (string Text, PracticeStatus Status)[] practices)
     {
-        await using (var ctx = _db.NewContext())
+        await using var ctx = _db.NewContext();
+        foreach (var (text, status) in practices)
         {
             ctx.Exercises.Add(new ExerciseAttempt
             {
                 SourceLanguage = Language.Portuguese,
                 TargetLanguage = Language.English,
-                SourceText = "antiga",
-                Status = PracticeStatus.Completed,
-                CreatedAt = DateTimeOffset.UtcNow.AddHours(-2),
-            });
-            ctx.Exercises.Add(new ExerciseAttempt
-            {
-                SourceLanguage = Language.Portuguese,
-                TargetLanguage = Language.English,
-                SourceText = "recente",
-                Status = PracticeStatus.InProgress,
+                SourceText = text,
+                Status = status,
                 CreatedAt = DateTimeOffset.UtcNow,
             });
             await ctx.SaveChangesAsync();
         }
+    }
 
-        var list = await Service(new StubLlmProvider()).ListPracticesAsync();
+    private async Task<string[]> ListPreviewsAsync(int skip = 0, int take = PracticeService.PageSize) =>
+        (await Service(new StubLlmProvider()).ListPracticesAsync(skip, take)).Items
+            .Select(p => p.Preview).ToArray();
 
-        Assert.Equal(2, list.Count);
-        Assert.Equal("recente", list[0].Preview);
-        Assert.Equal("antiga", list[1].Preview);
+    [Fact]
+    public async Task ListPracticesAsync_orders_newest_first()
+    {
+        await SeedListAsync(("antiga", PracticeStatus.Completed), ("recente", PracticeStatus.Completed));
+
+        Assert.Equal(["recente", "antiga"], await ListPreviewsAsync());
+    }
+
+    [Fact]
+    public async Task ListPracticesAsync_puts_in_progress_first_even_when_older()
+    {
+        // A em andamento é a única que pede ação: com paginação, deixá-la no lugar
+        // cronológico a enterraria embaixo de páginas de práticas concluídas.
+        await SeedListAsync(
+            ("andamento antiga", PracticeStatus.InProgress),
+            ("concluída", PracticeStatus.Completed),
+            ("andamento nova", PracticeStatus.InProgress));
+
+        Assert.Equal(["andamento nova", "andamento antiga", "concluída"], await ListPreviewsAsync());
+    }
+
+    [Fact]
+    public async Task ListPracticesAsync_pages_with_skip_and_reports_the_whole_total()
+    {
+        await SeedListAsync(
+            ("p1", PracticeStatus.Completed), ("p2", PracticeStatus.Completed),
+            ("p3", PracticeStatus.Completed), ("p4", PracticeStatus.Completed),
+            ("p5", PracticeStatus.Completed));
+
+        Assert.Equal(["p5", "p4"], await ListPreviewsAsync(skip: 0, take: 2));
+        Assert.Equal(["p3", "p2"], await ListPreviewsAsync(skip: 2, take: 2));
+        Assert.Equal(["p1"], await ListPreviewsAsync(skip: 4, take: 2));
+        Assert.Empty(await ListPreviewsAsync(skip: 5, take: 2));
+
+        // O total é da lista inteira, não da página — é por ele que o cliente sabe se há mais.
+        var page = await Service(new StubLlmProvider()).ListPracticesAsync(skip: 4, take: 2);
+        Assert.Equal(5, page.Total);
     }
 
     [Fact]
@@ -333,10 +366,10 @@ public sealed class PracticeServiceTests : IDisposable
         var stub = new StubLlmProvider(SampleExercise(longText));
         await Service(stub).CreatePracticeAsync(CreateRequest());
 
-        var item = Assert.Single(await Service(stub).ListPracticesAsync());
+        var item = Assert.Single((await Service(stub).ListPracticesAsync()).Items);
         Assert.Equal(PracticeStatus.InProgress, item.Status);
         Assert.Equal(0, item.ErrorCount);
-        Assert.Equal(120, item.Preview.Length); // truncado
+        Assert.Equal(new string('a', 160) + "…", item.Preview); // cortado, e diz que foi
     }
 
     // ── Excluir ──────────────────────────────────────────────────────────────

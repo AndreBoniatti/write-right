@@ -155,7 +155,7 @@ Then open **http://localhost:5193**. The SQLite database is created automaticall
 | Method | Route | Purpose |
 |---|---|---|
 | `POST` | `/api/practices` | Create a practice (generates the text, stores it as in-progress) |
-| `GET` | `/api/practices` | List practices for the home screen |
+| `GET` | `/api/practices?skip=` | List practices for the home screen, a page at a time (in-progress first, then newest) |
 | `GET` | `/api/practices/{id}` | Full practice detail (resume or read) |
 | `PUT` | `/api/practices/{id}/translation` | Save a draft translation without correcting |
 | `POST` | `/api/practices/{id}/correct` | Correct the translation, store the errors, complete the practice |

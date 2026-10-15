@@ -39,6 +39,12 @@ public sealed record PracticeSummary(
     DateTimeOffset CreatedAt);
 
 /// <summary>
+/// Uma página da listagem. <see cref="Total"/> é o tamanho da lista inteira: o
+/// cliente sabe se ainda há o que carregar comparando com quantas já tem.
+/// </summary>
+public sealed record PracticePage(IReadOnlyList<PracticeSummary> Items, int Total);
+
+/// <summary>
 /// Detalhe completo de uma prática — abrir/retomar (InProgress) ou ler (Completed).
 /// Correção só vem preenchida quando concluída.
 /// </summary>

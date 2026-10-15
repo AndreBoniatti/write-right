@@ -91,10 +91,10 @@ practices.MapPost("/",
     })
    .WithName("CreatePractice");
 
-// Lista as práticas pra tela inicial (resumos).
+// Lista as práticas pra tela inicial (resumos), uma página por vez a partir de ?skip=.
 practices.MapGet("/",
-    async (PracticeService service, CancellationToken ct) =>
-        Results.Ok(await service.ListPracticesAsync(ct)))
+    async (int? skip, PracticeService service, CancellationToken ct) =>
+        Results.Ok(await service.ListPracticesAsync(skip ?? 0, ct: ct)))
    .WithName("ListPractices");
 
 // Detalhe de uma prática (retomar ou ler).

@@ -41,9 +41,12 @@ public sealed class WriteRightApiClient
 
     public WriteRightApiClient(HttpClient http) => _http = http;
 
-    /// <summary>Lista as práticas pra tela inicial (mais recente primeiro).</summary>
-    public async Task<IReadOnlyList<PracticeSummary>> ListPracticesAsync(CancellationToken ct = default) =>
-        await _http.GetFromJsonAsync<List<PracticeSummary>>("api/practices", Json, ct) ?? new();
+    /// <summary>
+    /// Uma página da listagem da tela inicial, pulando as <paramref name="skip"/> que já
+    /// estão na tela. O tamanho da página é o servidor quem decide.
+    /// </summary>
+    public async Task<PracticePage> ListPracticesAsync(int skip = 0, CancellationToken ct = default) =>
+        (await _http.GetFromJsonAsync<PracticePage>($"api/practices?skip={skip}", Json, ct))!;
 
     /// <summary>Detalhe de uma prática (retomar ou ler). Null se não existe (404).</summary>
     public async Task<PracticeDetail?> GetPracticeAsync(int id, CancellationToken ct = default)

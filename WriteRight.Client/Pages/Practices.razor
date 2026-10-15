@@ -19,7 +19,7 @@
 {
     <p class="text-muted">Carregando…</p>
 }
-else if (practices is null || practices.Count == 0)
+else if (practices.Count == 0)
 {
     <div class="alert alert-info">
         Nenhuma prática ainda. Clique em <strong>Nova prática</strong> pra começar!
@@ -27,52 +27,89 @@ else if (practices is null || practices.Count == 0)
 }
 else
 {
-    <div class="list-group">
-        @foreach (var p in practices)
-        {
-            <div class="list-group-item">
-                <div class="d-flex justify-content-between align-items-start">
-                    <a href="practice/@p.Id" class="flex-grow-1 text-reset text-decoration-none">
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <span class="@StatusClass(p.Status)">
-                                <Icon Name="@StatusIcon(p.Status)" Size="13" /> @StatusLabel(p.Status)
+    @* Agrupar por mês é o que dá orientação numa lista longa ("isso foi em agosto"),
+       e o rótulo do grupo tira o mês de cada linha. O servidor manda as em andamento
+       primeiro e o resto em ordem, então os grupos saem contíguos — também entre
+       páginas: o fim de agosto que chega no "Carregar mais" entra no grupo de agosto. *@
+    @foreach (var group in practices.GroupBy(GroupLabel))
+    {
+        <section class="wr-feed">
+            <h2 class="wr-feed__label">@group.Key</h2>
+            <div class="wr-feed__list">
+                @foreach (var p in group)
+                {
+                    var open = p.Status == PracticeStatus.InProgress;
+                    var at = p.CreatedAt.ToLocalTime();
+                    <div class="wr-row">
+                        <a class="wr-row__link" href="practice/@p.Id">
+                            @* No grupo do mês, o dia da semana; no "Em andamento", que
+                               junta meses diferentes, o mês. *@
+                            <span class="wr-row__day">
+                                <span class="wr-row__day-n">@at.Day</span>
+                                <span class="wr-row__day-sub">@(open ? MonthsShort[at.Month - 1] : Weekdays[(int)at.DayOfWeek])</span>
                             </span>
-                            <span class="text-muted small">
-                                @LangName(p.SourceLanguage) → @LangName(p.TargetLanguage)@(p.Level is null ? "" : $" · {p.Level}")@(string.IsNullOrWhiteSpace(p.Theme) ? "" : $" · {p.Theme}")
+                            <span class="wr-row__body">
+                                <span class="wr-row__preview">@p.Preview</span>
+                                <span class="wr-row__meta">@Meta(p, at)</span>
                             </span>
-                        </div>
-                        <div class="mt-2">@p.Preview@(p.Preview.Length >= 120 ? "…" : "")</div>
-                        <div class="text-muted small mt-2">
-                            @p.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
-                            @if (p.Status == PracticeStatus.Completed)
+                            @if (open)
                             {
-                                <span>· @p.ErrorCount erro(s)</span>
+                                <span class="wr-row__go">Continuar <Icon Name="chevron-right" Size="16" /></span>
+                            }
+                            else
+                            {
+                                <span class="wr-row__errors @(p.ErrorCount == 0 ? "wr-row__errors--clean" : "")">
+                                    <span class="wr-row__errors-n">@p.ErrorCount</span>
+                                    <span class="wr-row__errors-l">@(p.ErrorCount == 1 ? "erro" : "erros")</span>
+                                </span>
+                            }
+                        </a>
+                        <div class="wr-row__actions">
+                            @if (deletingId == p.Id)
+                            {
+                                <span class="small text-muted">Excluir?</span>
+                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(p.Id)" disabled="@busy">Sim</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => deletingId = null" disabled="@busy">Não</button>
+                            }
+                            else
+                            {
+                                <button class="wr-row__del" @onclick="() => deletingId = p.Id"
+                                        title="Excluir prática" aria-label="Excluir prática">
+                                    <Icon Name="trash" Size="16" />
+                                </button>
                             }
                         </div>
-                    </a>
-                    <div class="ms-3 text-nowrap">
-                        @if (deletingId == p.Id)
-                        {
-                            <span class="small text-muted me-1">Excluir?</span>
-                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(p.Id)" disabled="@busy">Sim</button>
-                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => deletingId = null" disabled="@busy">Não</button>
-                        }
-                        else
-                        {
-                            <button class="btn btn-sm btn-outline-danger" @onclick="() => deletingId = p.Id">
-                                <Icon Name="trash" Size="14" /> Excluir
-                            </button>
-                        }
                     </div>
-                </div>
+                }
             </div>
-        }
-    </div>
+        </section>
+    }
+
+    @if (practices.Count < total)
+    {
+        <div class="wr-feed__more">
+            <button class="btn btn-outline-secondary" @onclick="LoadMore" disabled="@loadingMore">
+                @(loadingMore ? "Carregando…" : "Carregar mais")
+            </button>
+            <span class="text-muted small">@practices.Count de @total</span>
+        </div>
+    }
 }
 
 @code {
-    private IReadOnlyList<PracticeSummary>? practices;
+    private static readonly string[] Months =
+        ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+    private static readonly string[] MonthsShort =
+        ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+    private static readonly string[] Weekdays = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+
+    private readonly List<PracticeSummary> practices = new();
+    private int total;
     private bool loading = true;
+    private bool loadingMore;
     private bool busy;
     private int? deletingId;
     private string? error;
@@ -85,7 +122,10 @@ else
         error = null;
         try
         {
-            practices = await Api.ListPracticesAsync();
+            var page = await Api.ListPracticesAsync();
+            practices.Clear();
+            practices.AddRange(page.Items);
+            total = page.Total;
         }
         catch (Exception ex)
         {
@@ -97,15 +137,51 @@ else
         }
     }
 
+    /// <summary>
+    /// A próxima página começa depois das que já estão na tela. Pular pela contagem
+    /// local continua certo depois de uma exclusão, porque ela sai daqui e do banco
+    /// ao mesmo tempo.
+    /// </summary>
+    private async Task LoadMore()
+    {
+        loadingMore = true;
+        error = null;
+        try
+        {
+            var page = await Api.ListPracticesAsync(practices.Count);
+            practices.AddRange(page.Items);
+            total = page.Total;
+        }
+        catch (Exception ex)
+        {
+            error = Friendly(ex);
+        }
+        finally
+        {
+            loadingMore = false;
+        }
+    }
+
+    /// <summary>
+    /// Tira a linha da tela em vez de recarregar: recarregar voltaria pra primeira
+    /// página e jogaria fora o que o "Carregar mais" já trouxe.
+    /// </summary>
     private async Task ConfirmDelete(int id)
     {
         busy = true;
         error = null;
         try
         {
-            await Api.DeletePracticeAsync(id);
+            if (await Api.DeletePracticeAsync(id))
+            {
+                practices.RemoveAll(p => p.Id == id);
+                total--;
+            }
+            else
+            {
+                error = "Não deu pra excluir a prática.";
+            }
             deletingId = null;
-            await Load();
         }
         catch (Exception ex)
         {
@@ -117,31 +193,30 @@ else
         }
     }
 
-    private static string LangName(Language l) => l switch
+    private static string GroupLabel(PracticeSummary p)
     {
-        Language.Portuguese => "Português",
-        Language.English => "Inglês",
+        if (p.Status == PracticeStatus.InProgress) return "Em andamento";
+        var at = p.CreatedAt.ToLocalTime();
+        return $"{Months[at.Month - 1]} de {at.Year}";
+    }
+
+    private static string Meta(PracticeSummary p, DateTimeOffset at)
+    {
+        var parts = new List<string>
+        {
+            at.ToString("HH:mm"),
+            $"{LangCode(p.SourceLanguage)} → {LangCode(p.TargetLanguage)}",
+        };
+        if (p.Level is { } level) parts.Add(level.ToString());
+        if (!string.IsNullOrWhiteSpace(p.Theme)) parts.Add(p.Theme);
+        return string.Join(" · ", parts);
+    }
+
+    private static string LangCode(Language l) => l switch
+    {
+        Language.Portuguese => "PT",
+        Language.English => "EN",
         _ => l.ToString(),
-    };
-
-    private static string StatusLabel(PracticeStatus s) => s switch
-    {
-        PracticeStatus.InProgress => "Em andamento",
-        PracticeStatus.Completed => "Concluída",
-        _ => s.ToString(),
-    };
-
-    private static string StatusClass(PracticeStatus s) => s switch
-    {
-        PracticeStatus.InProgress => "wr-badge wr-badge--warning",
-        PracticeStatus.Completed => "wr-badge wr-badge--success",
-        _ => "wr-badge wr-badge--muted",
-    };
-
-    private static string StatusIcon(PracticeStatus s) => s switch
-    {
-        PracticeStatus.Completed => "check",
-        _ => "clock",
     };
 
     private static string Friendly(Exception ex) =>
