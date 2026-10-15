@@ -2,6 +2,7 @@
 @inject WriteRightApiClient Api
 @inject NavigationManager Nav
 @inject DueCardsState DueCards
+@implements IDisposable
 
 <PageTitle>WriteRight — Revisar vocabulário</PageTitle>
 
@@ -18,6 +19,18 @@
 @if (loading)
 {
     <p class="text-muted">Carregando…</p>
+}
+else if (Current is null && DueCards.Count > 0)
+{
+    @* A fila desta tela foi lida quando ela abriu, mas o selo do menu segue o
+       servidor: os cards de uma correção recente chegam segundos depois, e
+       descartar um card pode liberar o irmão dele pra hoje. Sem isto a tela diria
+       "nada para hoje" ao lado de um selo dizendo o contrário — e clicar no menu
+       não recarrega, porque é a mesma rota. *@
+    <div class="alert alert-info d-flex align-items-center gap-3 flex-wrap">
+        <strong>@(DueCards.Count == 1 ? "1 card pra revisar agora." : $"{DueCards.Count} cards pra revisar agora.")</strong>
+        <button class="btn btn-sm btn-primary ms-auto" @onclick="Load">Revisar</button>
+    </div>
 }
 else if (Current is null)
 {
@@ -325,7 +338,22 @@ else
         revealed is not null && !Accepted && HasTyped
         && AnswerMatch.Normalize(typed) == AnswerMatch.Normalize(revealed.YourAttempt);
 
-    protected override Task OnInitializedAsync() => Load();
+    protected override Task OnInitializedAsync()
+    {
+        DueCards.Changed += OnDueCardsChanged;
+        return Load();
+    }
+
+    public void Dispose() => DueCards.Changed -= OnDueCardsChanged;
+
+    /// <summary>
+    /// Só importa com a fila vazia, quando a tela mostra o fim da sessão. No meio
+    /// dela, o próprio Commit já publica o número e re-renderiza.
+    /// </summary>
+    private void OnDueCardsChanged() => InvokeAsync(() =>
+    {
+        if (Current is null) StateHasChanged();
+    });
 
     /// <summary>
     /// Foco no campo a cada card NOVO: a sessão é uma sequência de digitação, e ter
@@ -356,7 +384,7 @@ else
             // Só quando não há nada a fazer: aí a pergunta passa a ser "o deck está
             // vazio ou eu já terminei?", e ela precisa do total pra ser respondida.
             if (queue.Count == 0 && reviewed == 0)
-                deckSize = (await Api.GetDeckAsync()).Summary.Total;
+                deckSize = (await Api.GetDeckSummaryAsync()).Total;
         }
         catch (Exception ex)
         {

@@ -2,6 +2,7 @@
 @inject WriteRightApiClient Api
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject DueCardsState DueCards
 @implements IAsyncDisposable
 
 <PageTitle>WriteRight — Prática</PageTitle>
@@ -307,6 +308,10 @@ else
             else
             {
                 Show(updated); // vira a visão readonly com a correção
+
+                // Os cards desta correção nascem daqui a pouco, no servidor; o selo
+                // acompanha sozinho até eles chegarem, mesmo se você sair da página.
+                DueCards.Follow();
             }
         }
         catch (Exception ex)

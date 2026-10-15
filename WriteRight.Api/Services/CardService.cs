@@ -290,23 +290,8 @@ public sealed class CardService
     /// <summary>O deck inteiro: contadores + cards, do mais recente pro mais antigo.</summary>
     public async Task<DeckView> GetDeckAsync(CancellationToken ct = default)
     {
-        var now = DateTimeOffset.UtcNow;
         var cards = await _db.Cards.ToListAsync(ct);
-
-        var active = cards.Where(c => c.State != CardState.Discarded).ToList();
-        var summary = new DeckSummary(
-            Total: active.Count,
-            New: active.Count(c => c.State == CardState.New),
-            // Mesma fila da sessão, e não "todo card com DueAt vencido": os irmãos
-            // enterrados não são revisáveis agora, e contá-los aqui faria o deck
-            // anunciar um número que a sessão não entrega.
-            Due: Queue(active, now).Count,
-            Learning: active.Count(c => c.State == CardState.Learning),
-            Review: active.Count(c => c.State == CardState.Review),
-            Retired: active.Count(c => c.State == CardState.Retired),
-            Leeches: active.Count(c => CardScheduler.IsLeech(c.Lapses)),
-            PendingPractices: await _db.Exercises.CountAsync(p => p.CardsStatus == CardsStatus.Pending, ct),
-            FailedPractices: await _db.Exercises.CountAsync(p => p.CardsStatus == CardsStatus.Failed, ct));
+        var summary = await SummarizeAsync(cards, ct);
 
         var rows = cards
             .OrderByDescending(c => c.CreatedAt)
@@ -319,6 +304,32 @@ public sealed class CardService
             .ToList();
 
         return new DeckView(summary, rows);
+    }
+
+    /// <summary>
+    /// Só os contadores, sem os cards — o que o selo do menu precisa. Ele relê isto a
+    /// cada poucos segundos enquanto há cards sendo feitos, e trazer o deck inteiro em
+    /// cada leitura seria pagar pela lista toda pra usar dois números.
+    /// </summary>
+    public async Task<DeckSummary> GetSummaryAsync(CancellationToken ct = default) =>
+        await SummarizeAsync(await _db.Cards.ToListAsync(ct), ct);
+
+    private async Task<DeckSummary> SummarizeAsync(List<VocabCard> cards, CancellationToken ct)
+    {
+        var active = cards.Where(c => c.State != CardState.Discarded).ToList();
+        return new DeckSummary(
+            Total: active.Count,
+            New: active.Count(c => c.State == CardState.New),
+            // Mesma fila da sessão, e não "todo card com DueAt vencido": os irmãos
+            // enterrados não são revisáveis agora, e contá-los aqui faria o deck
+            // anunciar um número que a sessão não entrega.
+            Due: Queue(active, DateTimeOffset.UtcNow).Count,
+            Learning: active.Count(c => c.State == CardState.Learning),
+            Review: active.Count(c => c.State == CardState.Review),
+            Retired: active.Count(c => c.State == CardState.Retired),
+            Leeches: active.Count(c => CardScheduler.IsLeech(c.Lapses)),
+            PendingPractices: await _db.Exercises.CountAsync(p => p.CardsStatus == CardsStatus.Pending, ct),
+            FailedPractices: await _db.Exercises.CountAsync(p => p.CardsStatus == CardsStatus.Failed, ct));
     }
 
     private static CardSchedule Snapshot(VocabCard c) =>

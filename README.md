@@ -168,6 +168,7 @@ Then open **http://localhost:5193**. The SQLite database is created automaticall
 | `POST` | `/api/cards/{id}/check` | Grade the typed answer and reveal (schedules nothing) |
 | `POST` | `/api/cards/{id}/review` | Close the review: reschedule the card and log it |
 | `GET`  | `/api/cards` | The whole deck (counters + cards) |
+| `GET`  | `/api/cards/summary` | Just the counters — what the menu badge polls while cards are being made |
 | `DELETE` | `/api/cards/{id}` | Discard a bad card (marks, never deletes) |
 | `POST` | `/api/cards/retry` | Put practices whose cards failed back in the queue |
 | `GET`  | `/api/usage` | Token/cost report per operation, and the average cost of a practice (no AI call) |

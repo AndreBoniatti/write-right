@@ -219,6 +219,13 @@ cards.MapGet("/",
         Results.Ok(await service.GetDeckAsync(ct)))
    .WithName("GetDeck");
 
+// Só os contadores do deck, sem os cards — o selo do menu, que relê isto enquanto
+// há cards sendo feitos.
+cards.MapGet("/summary",
+    async (CardService service, CancellationToken ct) =>
+        Results.Ok(await service.GetSummaryAsync(ct)))
+   .WithName("GetDeckSummary");
+
 // Descarta um card ruim. Marca como descartado, não apaga — apagar faria o mesmo
 // card renascer no próximo erro igual.
 cards.MapDelete("/{id:int}",

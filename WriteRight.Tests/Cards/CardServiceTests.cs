@@ -548,6 +548,40 @@ public sealed class CardServiceTests : IDisposable
     }
 
     /// <summary>
+    /// O resumo sozinho (o que o selo relê enquanto os cards estão sendo feitos) é o
+    /// MESMO da tela do deck. Divergir faria o menu e o deck mostrarem números
+    /// diferentes pro mesmo estado.
+    /// </summary>
+    [Fact]
+    public async Task The_summary_alone_is_the_deck_summary()
+    {
+        await SeedAndMintAsync(
+            "Marina arrived at the train station earlier than expected, so she decided to have a coffee at the bar.",
+            (ErrorCategory.LiteralTranslation, "early of expected", "earlier than expected", "mais cedo do que o previsto"),
+            (ErrorCategory.WordChoice, "then she decided", "so she decided", "então decidiu"),
+            (ErrorCategory.Collocation, "drink a coffee", "have a coffee", "tomar um café"));
+
+        var service = Service(out var ctx);
+        await using (ctx)
+        {
+            foreach (var status in new[] { CardsStatus.Pending, CardsStatus.Failed })
+                ctx.Exercises.Add(new ExerciseAttempt
+                {
+                    Status = PracticeStatus.Completed,
+                    SourceLanguage = Language.Portuguese,
+                    TargetLanguage = Language.English,
+                    SourceText = "Um texto.",
+                    CardsStatus = status,
+                });
+            await ctx.SaveChangesAsync();
+
+            var summary = await service.GetSummaryAsync();
+            Assert.Equal((await service.GetDeckAsync()).Summary, summary);
+            Assert.Equal((3, 1, 1), (summary.Total, summary.PendingPractices, summary.FailedPractices));
+        }
+    }
+
+    /// <summary>
     /// O cenário de banco zerado: UMA prática, 3 cards. A regra de enterrar é por
     /// FRASE, não por prática — dois erros na mesma frase são irmãos, um erro numa
     /// outra frase do mesmo texto não é. Então a sessão 1 entrega 2 cards (um de

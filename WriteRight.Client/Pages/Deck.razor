@@ -1,6 +1,7 @@
 @page "/cards/deck"
 @inject WriteRightApiClient Api
 @inject DueCardsState DueCards
+@implements IDisposable
 
 <PageTitle>WriteRight — Meu deck</PageTitle>
 
@@ -56,11 +57,11 @@ else
         </div>
     }
     @* Independente do aviso de falha: uma prática pode ter falhado enquanto outras
-       ainda estão na fila. A tela não se atualiza sozinha — daí o "recarregue". *@
+       ainda estão na fila. Some sozinho — ver OnDueCardsChanged. *@
     @if (deck.Summary.PendingPractices > 0)
     {
         <p class="text-muted small mt-3 mb-0">
-            Preparando os cards de @deck.Summary.PendingPractices prática(s). Leva alguns segundos — recarregue a página pra ver.
+            Preparando os cards de @deck.Summary.PendingPractices prática(s) — eles aparecem aqui em alguns segundos.
         </p>
     }
 
@@ -154,7 +155,13 @@ else
     private int? discardingId;
     private string? error;
 
-    protected override Task OnInitializedAsync() => Load();
+    protected override Task OnInitializedAsync()
+    {
+        DueCards.Changed += OnDueCardsChanged;
+        return Load();
+    }
+
+    public void Dispose() => DueCards.Changed -= OnDueCardsChanged;
 
     private async Task Load()
     {
@@ -162,10 +169,7 @@ else
         error = null;
         try
         {
-            deck = await Api.GetDeckAsync();
-            // Summary.Due é a mesma fila da sessão (ver CardService.Queue), então
-            // serve de fonte pro selo sem uma segunda chamada.
-            DueCards.Set(deck.Summary.Due);
+            await Fetch();
         }
         catch (Exception ex)
         {
@@ -176,6 +180,37 @@ else
             loading = false;
         }
     }
+
+    private async Task Fetch()
+    {
+        deck = await Api.GetDeckAsync();
+        // Summary.Due é a mesma fila da sessão (ver CardService.Queue), então serve
+        // de fonte pro selo sem uma segunda chamada. Se ainda há cards sendo feitos,
+        // o estado passa a acompanhá-los — e avisa aqui quando cada prática sair da fila.
+        DueCards.Set(deck.Summary);
+    }
+
+    /// <summary>
+    /// Uma prática saiu da fila de pendentes (com cards, sem nenhum, ou falhando): o
+    /// deck se relê por baixo, sem o "Carregando…" do <see cref="Load"/>, que trocaria
+    /// a página inteira a cada aviso.
+    ///
+    /// A comparação com o que está na tela é o que impede o laço: o próprio
+    /// <see cref="Fetch"/> publica o resumo que acabou de receber, e ele bate. Durante
+    /// <c>busy</c> não relê — a ação em andamento termina num <see cref="Load"/>.
+    /// </summary>
+    private void OnDueCardsChanged() => InvokeAsync(async () =>
+    {
+        if (deck is null || loading || busy) return;
+        if (DueCards.PendingPractices == deck.Summary.PendingPractices) return;
+
+        // Falha aqui vira aviso, como no resto da página: quando a última prática sai
+        // da fila o acompanhamento já parou, então não vem outro aviso pra tentar de
+        // novo — engolir o erro deixaria "Preparando…" na tela pra sempre.
+        try { await Fetch(); }
+        catch (Exception ex) { error = Friendly(ex); }
+        StateHasChanged();
+    });
 
     private async Task ConfirmDiscard(int id)
     {

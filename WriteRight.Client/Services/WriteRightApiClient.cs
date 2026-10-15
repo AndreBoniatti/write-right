@@ -152,6 +152,10 @@ public sealed class WriteRightApiClient
     public async Task<DeckView> GetDeckAsync(CancellationToken ct = default) =>
         (await _http.GetFromJsonAsync<DeckView>("api/cards", Json, ct))!;
 
+    /// <summary>Só os contadores do deck, sem os cards — pra quem só precisa dos números.</summary>
+    public async Task<DeckSummary> GetDeckSummaryAsync(CancellationToken ct = default) =>
+        (await _http.GetFromJsonAsync<DeckSummary>("api/cards/summary", Json, ct))!;
+
     /// <summary>Descarta um card ruim. True se descartou.</summary>
     public async Task<bool> DiscardCardAsync(int id, CancellationToken ct = default) =>
         (await _http.DeleteAsync($"api/cards/{id}", ct)).IsSuccessStatusCode;

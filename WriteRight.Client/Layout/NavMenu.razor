@@ -42,7 +42,8 @@
     /// <summary>
     /// O menu é montado uma vez e sobrevive a toda a navegação, então ele OUVE o
     /// contador em vez de buscá-lo: quem muda o número avisa. A leitura inicial é a
-    /// única ida ao servidor daqui.
+    /// única ida ao servidor daqui — e, se ela achar cards ainda sendo feitos (você
+    /// recarregou logo depois de corrigir), o estado passa a acompanhá-los sozinho.
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
