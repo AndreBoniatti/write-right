@@ -19,12 +19,10 @@ public sealed record CategoryWeight(ErrorCategory Category, int Count, int Score
 /// </summary>
 /// <param name="Attempts">Quantas práticas concluídas entraram nesta visão.</param>
 /// <param name="TotalErrors">Total de erros (volume bruto) na visão.</param>
-/// <param name="TotalScore">Soma dos pesos por severidade na visão.</param>
 /// <param name="ByCategory">Categorias, da de maior peso (Score) pra menor.</param>
 public sealed record ProfileView(
     int Attempts,
     int TotalErrors,
-    int TotalScore,
     IReadOnlyList<CategoryWeight> ByCategory);
 
 /// <summary>

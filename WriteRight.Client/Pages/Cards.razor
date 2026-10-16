@@ -388,7 +388,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -431,7 +431,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -469,7 +469,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -502,7 +502,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -532,7 +532,4 @@ else
         < 730 => $"{Math.Round(days / 30)} meses",
         _ => $"{Math.Round(days / 365, 1)} anos",
     };
-
-    private static string Friendly(Exception ex) =>
-        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056)?";
 }

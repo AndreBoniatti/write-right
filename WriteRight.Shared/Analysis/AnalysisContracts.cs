@@ -103,17 +103,15 @@ public enum AnalysisJobStatus
 /// objeto — devolvido pelo <c>GET</c> — que diz em que pé está.
 /// </summary>
 /// <param name="FailureReason">Mensagem pro usuário quando <see cref="AnalysisJobStatus.Failed"/>.</param>
-/// <param name="StartedAt">Quando a execução em curso começou.</param>
 public sealed record AnalysisJob(
     AnalysisJobStatus Status,
-    string? FailureReason,
-    DateTimeOffset? StartedAt)
+    string? FailureReason)
 {
-    public static AnalysisJob Idle { get; } = new(AnalysisJobStatus.Idle, null, null);
+    public static AnalysisJob Idle { get; } = new(AnalysisJobStatus.Idle, null);
 
-    public static AnalysisJob Started(DateTimeOffset at) => new(AnalysisJobStatus.Running, null, at);
+    public static AnalysisJob Running { get; } = new(AnalysisJobStatus.Running, null);
 
-    public static AnalysisJob Failure(string reason) => new(AnalysisJobStatus.Failed, reason, null);
+    public static AnalysisJob Failure(string reason) => new(AnalysisJobStatus.Failed, reason);
 }
 
 /// <summary>

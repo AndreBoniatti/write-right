@@ -16,7 +16,7 @@
     <!-- SQLite in-memory nos testes do PracticeService: exercita os value-converters
          (enum-as-string) e o comportamento relacional de verdade, ao contrário do
          provider EF InMemory. Versão casada com a WriteRight.Api. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
   </ItemGroup>
 
   <ItemGroup>

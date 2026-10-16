@@ -1,0 +1,23 @@
+@* A gravidade de um erro, com a mesma cara em toda tela que lista erros: a correção,
+   a revisão do perfil e a evidência da análise. *@
+<span class="wr-badge @Modifier">@Label</span>
+
+@code {
+    [Parameter, EditorRequired] public ErrorSeverity Value { get; set; }
+
+    private string Label => Value switch
+    {
+        ErrorSeverity.BreaksMeaning => "Quebra o sentido",
+        ErrorSeverity.Understandable => "Compreensível",
+        ErrorSeverity.Polish => "Lapidação",
+        _ => Value.ToString(),
+    };
+
+    private string Modifier => Value switch
+    {
+        ErrorSeverity.BreaksMeaning => "wr-badge--danger",
+        ErrorSeverity.Understandable => "wr-badge--warning",
+        ErrorSeverity.Polish => "wr-badge--info",
+        _ => "wr-badge--muted",
+    };
+}

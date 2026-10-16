@@ -64,16 +64,35 @@ public class ClozeBuilderTests
     }
 
     /// <summary>
-    /// Só a ocorrência que o erro aponta vira lacuna. Se a expressão se repete, a
-    /// segunda fica à vista — e aí serve de pista legítima, não de segundo buraco.
+    /// A resposta repetida na mesma frase ficaria à vista ao lado da lacuna: o card se
+    /// responderia sozinho. Melhor não ter o card.
     /// </summary>
     [Fact]
-    public void Blanks_only_the_first_occurrence()
+    public void Refuses_a_sentence_that_still_shows_the_answer()
+    {
+        Assert.Null(ClozeBuilder.Build("I have a coffee when she has a coffee too.", "a coffee"));
+    }
+
+    /// <summary>
+    /// Repetida em OUTRA frase, a resposta não aparece no card — só a frase da primeira
+    /// ocorrência vira enunciado.
+    /// </summary>
+    [Fact]
+    public void A_repeat_in_another_sentence_stays_out_of_the_card()
     {
         var cloze = ClozeBuilder.Build(
-            "I have a coffee when she has a coffee too.", "a coffee");
+            "I ordered a coffee at the corner bakery. Later she ordered a coffee too.", "a coffee");
 
-        Assert.Equal("I have ___ when she has a coffee too.", cloze);
+        Assert.Equal("I ordered ___ at the corner bakery.", cloze);
+    }
+
+    /// <summary>A resposta dentro de outra palavra da frase não conta como repetição.</summary>
+    [Fact]
+    public void The_answer_inside_another_word_is_not_a_repeat()
+    {
+        var cloze = ClozeBuilder.Build("The law protects every lawyer in this city.", "law");
+
+        Assert.Equal("The ___ protects every lawyer in this city.", cloze);
     }
 
     [Theory]

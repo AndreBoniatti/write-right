@@ -25,7 +25,6 @@ public class AnalysisJobQueueTests
 
         Assert.True(queue.TryEnqueue());
         Assert.Equal(AnalysisJobStatus.Running, queue.Current.Status);
-        Assert.NotNull(queue.Current.StartedAt);
     }
 
     [Fact]

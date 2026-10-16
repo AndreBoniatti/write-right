@@ -30,10 +30,5 @@ public sealed record ExerciseGenerationRequest(
     IReadOnlyList<ErrorCategory>? FocusCategories = null,
     TextVariety? Variety = null);
 
-/// <summary>Texto gerado pro usuário traduzir, com o eco dos parâmetros usados.</summary>
-public sealed record GeneratedExercise(
-    Language SourceLanguage,
-    Language TargetLanguage,
-    string SourceText,
-    CefrLevel Level,
-    string? Theme);
+/// <summary>Texto gerado pro usuário traduzir.</summary>
+public sealed record GeneratedExercise(string SourceText);

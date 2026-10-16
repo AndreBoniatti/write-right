@@ -173,7 +173,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -208,7 +208,7 @@ else
         // da fila o acompanhamento já parou, então não vem outro aviso pra tentar de
         // novo — engolir o erro deixaria "Preparando…" na tela pra sempre.
         try { await Fetch(); }
-        catch (Exception ex) { error = Friendly(ex); }
+        catch (Exception ex) { error = Ui.ErrorMessage(ex); }
         StateHasChanged();
     });
 
@@ -224,7 +224,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -247,7 +247,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -273,7 +273,4 @@ else
         CardState.Retired => "wr-badge wr-badge--success",
         _ => "wr-badge wr-badge--muted",
     };
-
-    private static string Friendly(Exception ex) =>
-        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056)?";
 }

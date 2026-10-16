@@ -10,9 +10,7 @@ public sealed record CorrectionRequest(
     Language SourceLanguage,
     Language TargetLanguage,
     string SourceText,
-    string UserTranslation,
-    CefrLevel? Level = null,
-    string? Theme = null);
+    string UserTranslation);
 
 /// <summary>
 /// Resultado da correção — objeto que a IA devolve (structured output) e que

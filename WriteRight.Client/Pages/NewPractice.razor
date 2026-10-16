@@ -23,7 +23,7 @@
                     <select class="form-select" @bind="Source">
                         @foreach (var l in Enum.GetValues<Language>())
                         {
-                            <option value="@l">@LangName(l)</option>
+                            <option value="@l">@Ui.LanguageName(l)</option>
                         }
                     </select>
                 </div>
@@ -32,13 +32,18 @@
                     <select class="form-select" @bind="Target">
                         @foreach (var l in Enum.GetValues<Language>())
                         {
-                            <option value="@l">@LangName(l)</option>
+                            <option value="@l">@Ui.LanguageName(l)</option>
                         }
                     </select>
                 </div>
                 <div class="col-6">
                     <label class="form-label">Nº de palavras</label>
-                    <input type="number" class="form-control" @bind="wordCount" @bind:event="oninput" min="20" max="200" />
+                    <input type="number" class="form-control @(WordCountOk ? "" : "is-invalid")" @bind="wordCount" @bind:event="oninput"
+                           min="@PracticeLimits.MinWords" max="@PracticeLimits.MaxWords" />
+                    @if (!WordCountOk)
+                    {
+                        <div class="invalid-feedback">Entre @PracticeLimits.MinWords e @PracticeLimits.MaxWords palavras.</div>
+                    }
                 </div>
                 <div class="col-6">
                     <label class="form-label">Nível (CEFR)</label>
@@ -63,7 +68,7 @@
                 </div>
             </div>
             <div class="mt-auto pt-3">
-                <button class="btn btn-primary" @onclick="Create" disabled="@loading">
+                <button class="btn btn-primary" @onclick="Create" disabled="@(loading || !WordCountOk)">
                     @(loading ? "Gerando…" : "Gerar e começar")
                 </button>
                 <a class="btn btn-outline-secondary ms-2" href="">Cancelar</a>
@@ -75,9 +80,9 @@
         <div class="summary h-100">
             <div class="summary-eyebrow">O que você vai fazer</div>
             <p class="summary-lead">
-                Traduzir um texto em <strong>@LangName(source)</strong>
+                Traduzir um texto em <strong>@Ui.LanguageName(source)</strong>
                 (~@wordCount palavras, nível <strong>@CefrLevels.Display(level)</strong>)
-                para <strong>@LangName(target)</strong>.
+                para <strong>@Ui.LanguageName(target)</strong>.
             </p>
 
             @if (!string.IsNullOrWhiteSpace(theme))
@@ -136,6 +141,13 @@
     }
 
     private int wordCount = 60;
+
+    /// <summary>
+    /// A mesma régua do servidor. O <c>min</c>/<c>max</c> do campo não impede digitar
+    /// 2000 — sem isto o botão mandaria o pedido e voltaria um 400 sem explicação.
+    /// </summary>
+    private bool WordCountOk => wordCount is >= PracticeLimits.MinWords and <= PracticeLimits.MaxWords;
+
     private CefrLevel level = CefrLevel.B1;
     private string? theme;
     private bool focusOnWeaknesses = true;
@@ -158,18 +170,11 @@
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            // 500 aqui, com a API de pé, costuma ser a chave da Anthropic que falta.
+            error = ex is HttpRequestException { StatusCode: System.Net.HttpStatusCode.InternalServerError }
+                ? $"Não deu pra gerar o texto. {Ui.ErrorMessage(ex)} A chave da Anthropic foi configurada (user-secrets)?"
+                : $"Não deu pra gerar o texto. {Ui.ErrorMessage(ex)}";
             loading = false;
         }
     }
-
-    private static string LangName(Language l) => l switch
-    {
-        Language.Portuguese => "Português",
-        Language.English => "Inglês",
-        _ => l.ToString(),
-    };
-
-    private static string Friendly(Exception ex) =>
-        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056) e a chave foi setada?";
 }

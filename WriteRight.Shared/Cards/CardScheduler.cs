@@ -11,12 +11,7 @@ public sealed record CardSchedule(
     double Ease,
     int Reps,
     int Lapses,
-    DateTimeOffset DueAt)
-{
-    /// <summary>Estado de um card recém-cunhado: vencido agora, sem intervalo.</summary>
-    public static CardSchedule New(DateTimeOffset now) =>
-        new(CardState.New, 0, CardScheduler.StartingEase, 0, 0, now);
-}
+    DateTimeOffset DueAt);
 
 /// <summary>
 /// SM-2 enxuto: dado o estado atual e como foi a revisão, devolve o próximo estado.

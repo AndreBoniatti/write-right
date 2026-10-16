@@ -101,7 +101,7 @@ public class AnalysisPromptTests
     [Fact]
     public void Schema_requires_patterns_and_study_items()
     {
-        var schema = Schema(Request());
+        var schema = Schema();
 
         Assert.Equal("object", schema.GetProperty("type").GetString());
         Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
@@ -120,8 +120,8 @@ public class AnalysisPromptTests
     [Fact]
     public void Schema_avoids_array_cardinality_keywords_that_the_api_rejects()
     {
-        var patterns = Schema(Request()).GetProperty("properties").GetProperty("patterns");
-        var studyItems = Schema(Request()).GetProperty("properties").GetProperty("studyItems");
+        var patterns = Schema().GetProperty("properties").GetProperty("patterns");
+        var studyItems = Schema().GetProperty("properties").GetProperty("studyItems");
         var evidence = patterns.GetProperty("items").GetProperty("properties")
             .GetProperty("evidenceErrorIds");
 
@@ -139,7 +139,7 @@ public class AnalysisPromptTests
     {
         // Categoria é DERIVADA da evidência no servidor. Pedir ao modelo seria abrir
         // mais uma superfície pra ele errar sem ninguém conferir.
-        var item = Schema(Request()).GetProperty("properties").GetProperty("patterns")
+        var item = Schema().GetProperty("properties").GetProperty("patterns")
             .GetProperty("items");
 
         Assert.Equal(
@@ -151,7 +151,7 @@ public class AnalysisPromptTests
     [Fact]
     public void Study_item_kind_lists_every_StudyItemKind()
     {
-        var kind = Schema(Request()).GetProperty("properties").GetProperty("studyItems")
+        var kind = Schema().GetProperty("properties").GetProperty("studyItems")
             .GetProperty("items").GetProperty("properties").GetProperty("kind");
 
         Assert.Equal(
@@ -159,6 +159,6 @@ public class AnalysisPromptTests
             kind.GetProperty("enum").EnumerateArray().Select(e => e.GetString()!).OrderBy(x => x));
     }
 
-    private static JsonElement Schema(AnalysisRequest request) =>
-        JsonSerializer.SerializeToElement(AnalysisPrompt.BuildResultSchema(request));
+    private static JsonElement Schema() =>
+        JsonSerializer.SerializeToElement(AnalysisPrompt.BuildResultSchema());
 }

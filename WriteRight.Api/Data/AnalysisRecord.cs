@@ -19,7 +19,10 @@ public class AnalysisRecord
 
     public DateTimeOffset GeneratedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    /// <summary>Marca d'água: quantas práticas concluídas existiam quando isto foi gerado.</summary>
+    /// <summary>
+    /// Marca d'água: quantas práticas a janela cobriu — as mais recentes, até juntar o
+    /// orçamento de erros. Não é o total do histórico, que pode ser bem maior.
+    /// </summary>
     public int PracticesAnalyzed { get; set; }
 
     /// <summary>Quantos erros reais foram efetivamente enviados ao modelo.</summary>

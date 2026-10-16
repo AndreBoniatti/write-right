@@ -50,7 +50,7 @@ The fixed taxonomy is what makes this work: stable categories mean the profile s
 
 ## The taxonomy (the core asset)
 
-A **closed set of 19 categories** — deliberately fixed, because every new category fragments the historical data. Correction and severity are separate axes (severity: *breaks meaning* / *understandable* / *polish*), so you can study what actually blocks communication before the fine details.
+A **closed set of 19 categories** — deliberately fixed, because every new category fragments the historical data. Category and severity are separate axes (severity: *breaks meaning* / *understandable* / *polish*), so you can study what actually blocks communication before the fine details.
 
 | Group | Categories |
 |---|---|
@@ -95,7 +95,7 @@ A few decisions worth naming:
 
 - **What becomes a card is its own decision.** At first the correction's category decided it: anything filed under vocabulary became a card. Measured on my real deck — 24 practices, 76 cards labelled by hand *before* running anything — **32% of the cards were bad**: grammar filed as vocabulary, a perfectly valid answer punished ("unique aspects" for "unique characteristics"), a sentence fragment instead of an item. And the reverse: "wait *for*" was filed as a preposition and never became a card at all. A label built for the weakness profile was answering a question it was never asked. Now a separate model call looks at each error and decides — and "no card" is a valid answer, because a wrong card costs months of training and the credibility of every other card.
 - **The bigger model was the cheaper one.** Asking Sonnet 5 the right question still let 37% of the bad cards through. Opus 5.5 at high effort let 17% through and kept 93% of the good ones — and, against my estimate, cost *less* (≈900 output tokens per practice against ≈3,000) and answered six times faster. What made it work was letting a card carry **accepted alternatives** (lawyer / attorney): without them the stricter model refused anything that has a synonym and dropped 30% of the good cards.
-- **The model proposes; code checks.** The blank is still cut by string matching, so the answer must appear verbatim in the corrected text; the hint must appear verbatim in the source; at most three words; at most four alternatives; and no alternative may equal what you wrote — if it does, the model has just admitted you were right. Any mechanical doubt and **the card isn't minted**.
+- **The model proposes; code checks.** The blank is still cut by string matching, so the answer must appear verbatim in the corrected text; the hint must appear verbatim in the source; at most three words; at most four alternatives; neither the answer nor any alternative may already be in what you wrote — if one is, you knew the word and the mistake was somewhere around it; and once the blank is cut, the sentence can't still show the answer elsewhere. Any mechanical doubt and **the card isn't minted**.
 - **No hint, no card either.** The blank alone rarely has a unique answer — "at the ___ center" accepts anything — so a card without a hint would be wrong forever, counting lapses and corrupting the very statistics that say whether the scheduler works. The rule is enforced three times over: the gate rejects it, the field is non-nullable, and the column is `NOT NULL` with a `CHECK` against the empty string.
 - **The hint is language-neutral.** It's the phrase in the exercise's *source* language, not "the Portuguese" — EN→PT practices already exist, and source and target swap with the direction. A third language is in play elsewhere in the app (corrections are written in yours), which is exactly why a field named after a language rather than a role eventually names the wrong one.
 - **You type the answer.** Self-rating measures the *feeling* of knowing, which is a poor estimate of memory. Typing gives an objective right/wrong, and easy/hard only refines the interval afterwards — the buttons don't even appear on a miss. A near miss (exactly one word wrong, and that word within one edit — two if it's long) is adjudicated by you, not the server.
@@ -104,7 +104,7 @@ A few decisions worth naming:
 - **The scheduler is boring on purpose.** Plain SM-2. The value of this module is in the card content, not the arithmetic; writing FSRS would be effort spent on the part that's already solved.
 - **Minting runs after the correction, and the queue is the database.** The correction writes a *cards pending* status in its own transaction and returns; a background worker drains the pending practices on startup and whenever a correction lands. The status is the point: nobody asks for cards, so a job lost on restart would go unnoticed forever. Three attempts, then the worker gives up and the deck page says so — retrying forever would mean paying forever for an error that repeats.
 - **Discarding lives where you notice.** Every revealed card has a discard button, because that's the moment you see the answer and realise the card is wrong. It used to exist only on the deck page, and across 95 cards it was used zero times.
-- **At most one card per source sentence per session.** A sentence that collected three errors mints three cards, and each one's front spells out the other two's answers. On my real deck that was **39 of 75 cards** — over half a session answering itself. The siblings aren't dropped; they surface once the one ahead leaves the queue. Only real data exposed this: every synthetic test I'd written used one error per sentence.
+- **At most one card per source sentence per day.** A sentence that collected three errors mints three cards, and each one's front spells out the other two's answers. On my real deck that was **39 of 75 cards** — over half a session answering itself. The siblings aren't dropped; once one of them is reviewed the sentence rests until the next day, and they take turns. Only real data exposed this: every synthetic test I'd written used one error per sentence.
 
 ## Tech stack
 
@@ -164,7 +164,7 @@ Then open **http://localhost:5193**. The SQLite database is created automaticall
 | `GET`  | `/api/profile` | The aggregated weakness profile |
 | `GET`  | `/api/profile/errors?category=` | Your real errors in one category (review panel — no AI call) |
 | `GET`  | `/api/analysis` | The latest weakness analysis + whether a new one is worth generating |
-| `POST` | `/api/analysis` | Generate and persist a new analysis |
+| `POST` | `/api/analysis` | Queue a new analysis — `202` right away (`409` if the history is too small); it runs in the background and is followed on `GET /api/analysis` |
 | `GET`  | `/api/cards/due` | The review queue — **without** the answers |
 | `POST` | `/api/cards/{id}/check` | Grade the typed answer and reveal (schedules nothing) |
 | `POST` | `/api/cards/{id}/review` | Close the review: reschedule the card and log it |
@@ -189,13 +189,15 @@ Under the `Llm` section (user-secrets or `appsettings`):
 
 The card step adds about US$ 0.025 per practice, counted as part of the practice's cost in `/api/usage`. A practice without errors makes no call.
 
+**CORS.** The API answers only the client's origin — `ClientOrigins` in `appsettings.json`, `http://localhost:5193` by default. Allowing any origin would let any site open in the same browser create and correct practices while the API runs, spending your credit.
+
 **Pricing.** The API returns token counts, never a monetary cost, so turning tokens into dollars is always the client's job. The rates live in `appsettings.json` and **only** there — there is no built-in table in code, because a price that exists in two places just raises the question of which one is winning:
 
 ```json
 "Llm": {
   "Pricing": {
     "claude-haiku-4-5": { "InputPerMTok": 1.00, "OutputPerMTok": 5.00 },
-    "claude-sonnet-5":  { "InputPerMTok": 3.00, "OutputPerMTok": 15.00 }
+    "claude-sonnet-5":  { "InputPerMTok": 2.00, "OutputPerMTok": 10.00 }
   }
 }
 ```
@@ -216,9 +218,9 @@ The suite covers the parts with real logic and real regression risk:
 - **Structured-output schema** — the JSON schema lists every category and severity, so it can't drift from the taxonomy.
 - **Wire contract** — the JSON Claude returns deserializes into the right enums, using the exact same serializer options as production; every category round-trips as a string (the contract that keeps the DB, API and client aligned).
 - **Adaptive generation** — the prompt injects focus categories when there are weaknesses, and doesn't when there aren't.
-- **Persistence + aggregation** — correcting stores the attempt and its errors, and the profile aggregates by category ordered by frequency, tested against a **real in-memory SQLite** database (so the enum-as-string value converters run for real).
+- **Persistence + aggregation** — correcting stores the attempt and its errors, and the profile aggregates by category ordered by severity-weighted score, tested against a **real in-memory SQLite** database (so the enum-as-string value converters run for real).
 - **Evidence grounding** — the analysis drops any pattern that cites error ids it was never sent or that falls under the evidence floor, and persists nothing when none survive. The window sizing (by error volume, not practice count) and the snapshotting of evidence — an analysis stays intact even after the practice it cited is deleted — are covered too.
-- **The deck** — mostly the failure paths, because they're the ones that quietly corrupt data: every rule of the gate (each one named after a real bad card), a correction that queues its cards in the same transaction, a failed card call that records its cost and stays pending, a recurring error that reschedules instead of duplicating (and writes no review row), a discarded card that's never resurrected, a card that outlives the practice that created it, and siblings from one sentence that never share a session. Plus the interval arithmetic, where a wrong sign breaks nothing visible — it just makes reviews arrive at the wrong time for months.
+- **The deck** — mostly the failure paths, because they're the ones that quietly corrupt data: every rule of the gate (each one named after a real bad card), a correction that queues its cards in the same transaction, a failed card call that records its cost and stays pending, a recurring error that reschedules instead of duplicating (and writes no review row), a discarded card that's never resurrected, a card that outlives the practice that created it, and siblings from one sentence that never share a day. Plus the interval arithmetic, where a wrong sign breaks nothing visible — it just makes reviews arrive at the wrong time for months.
 - **The day streak** — days are counted on your clock, not UTC, and the day turns at 4am: a practice finished at 00:30 belongs to the evening it started in, or a late session would break the streak on a day you practiced.
 - **Soft delete** — a deleted practice leaves the list, the detail, the profile and the next analysis's window, but still counts for the streak and for the average cost (its spend stays in the total, so dropping it from the divisor would inflate the average); a physical delete is refused by the schema.
 

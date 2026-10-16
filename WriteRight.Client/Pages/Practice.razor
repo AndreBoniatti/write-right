@@ -39,7 +39,7 @@ else
     </h1>
 
     <div class="card p-3 mb-3">
-        <h6 class="text-muted">Texto (@LangName(practice.SourceLanguage) → @LangName(practice.TargetLanguage))</h6>
+        <h6 class="text-muted">Texto (@Ui.LanguageName(practice.SourceLanguage) → @Ui.LanguageName(practice.TargetLanguage))</h6>
         <p class="lead mb-0">@practice.SourceText</p>
     </div>
 
@@ -165,7 +165,7 @@ else
                                 <div class="wr-mark-pop__error">
                                     <div class="d-flex flex-wrap align-items-center gap-2">
                                         <strong>@ErrorCatalog.Info(e.Category).LabelPt</strong>
-                                        <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                                        <SeverityBadge Value="e.Severity" />
                                     </div>
                                     <div>
                                         <s class="text-danger">@e.Original</s>
@@ -195,15 +195,18 @@ else
         {
             <div class="wr-summary mb-3">
                 <span class="wr-summary__total">@practice.Errors.Count @(practice.Errors.Count == 1 ? "erro" : "erros")</span>
-                @foreach (var group in ByCategory(practice.Errors))
+                @* Os erros juntos por categoria, na régua do perfil (CategoryRanking).
+                   Espalhados na ordem do texto, três erros da mesma categoria parecem três
+                   deslizes avulsos; juntos, com a contagem, viram o padrão que são. *@
+                @foreach (var weight in CategoryRanking.Rank(practice.Errors.Select(e => (e.Category, e.Severity))))
                 {
-                    var category = group.Key;
+                    var category = weight.Category;
                     <button type="button" class="wr-chip" aria-pressed="@(filter == category ? "true" : "false")"
                             title="Destacar os trechos de @ErrorCatalog.Info(category).LabelPt"
                             @onclick="() => ToggleFilter(category)">
-                        <span class="wr-chip__dot wr-chip__dot--@TopSeverity(group)" aria-hidden="true"></span>
+                        <span class="wr-chip__dot wr-chip__dot--@TopSeverity(category)" aria-hidden="true"></span>
                         @ErrorCatalog.Info(category).LabelPt
-                        <span class="wr-chip__count">×@group.Count()</span>
+                        <span class="wr-chip__count">×@weight.Count</span>
                     </button>
                 }
                 <button type="button" class="wr-route" title="Abre a primeira e segue com ← →" @onclick="StartRoute">
@@ -224,7 +227,7 @@ else
                 <div class="card p-3 mb-2" style="max-width: 720px;">
                     <div class="d-flex gap-2 flex-wrap">
                         <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(e.Category).LabelPt</span>
-                        <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                        <SeverityBadge Value="e.Severity" />
                     </div>
                     <div class="mt-2">
                         <s class="text-danger">@e.Original</s>
@@ -286,7 +289,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -304,7 +307,9 @@ else
             var updated = await Api.CorrectPracticeAsync(Id, translation);
             if (updated is null)
             {
-                error = "Não deu pra corrigir (a prática pode já estar concluída).";
+                // Típico de uma correção que terminou no servidor depois de o navegador
+                // desistir de esperar: ela está salva, só não chegou aqui.
+                error = "Esta prática já foi corrigida — recarregue a página pra ver a correção.";
             }
             else
             {
@@ -319,9 +324,16 @@ else
                 _ = Streak.RefreshAsync();
             }
         }
+        catch (TaskCanceledException)
+        {
+            // O navegador desistiu de esperar, mas o servidor não: a correção termina e é
+            // salva mesmo assim (ver UsageService.AfterBilling). Tentar de novo pagaria outra.
+            error = "A correção está demorando mais que o normal e continua no servidor. Recarregue a página em instantes.";
+        }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            // A prática segue em andamento no servidor e o texto segue no campo.
+            error = $"A correção falhou. {Ui.ErrorMessage(ex)} Sua tradução continua aqui — dá pra tentar de novo.";
         }
         finally
         {
@@ -344,7 +356,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -541,50 +553,12 @@ else
     }
 
     /// <summary>A cor do ponto no resumo: a gravidade mais alta da categoria.</summary>
-    private static string TopSeverity(IEnumerable<WritingError> group) =>
-        group.MaxBy(e => SeverityWeight.Of(e.Severity))!.Severity switch
+    private string TopSeverity(ErrorCategory category) =>
+        practice!.Errors.Where(e => e.Category == category)
+            .MaxBy(e => SeverityWeight.Of(e.Severity))!.Severity switch
         {
             ErrorSeverity.BreaksMeaning => "danger",
             ErrorSeverity.Understandable => "warning",
             _ => "info",
         };
-
-    /// <summary>
-    /// Agrupa os erros por categoria, do grupo de maior peso pro menor. Espalhados na
-    /// ordem do texto, três erros da mesma categoria parecem três deslizes avulsos;
-    /// juntos num resumo com a contagem, viram o padrão que são — é a tela deixando o
-    /// diagnóstico à vista em vez de pedir que o usuário o monte de cabeça.
-    /// A régua é o <see cref="SeverityWeight"/>, o mesmo que ordena o perfil.
-    /// </summary>
-    private static IEnumerable<IGrouping<ErrorCategory, WritingError>> ByCategory(
-        IReadOnlyList<WritingError> errors) =>
-        errors.GroupBy(e => e.Category)
-              .OrderByDescending(g => g.Sum(e => SeverityWeight.Of(e.Severity)))
-              .ThenByDescending(g => g.Count());
-
-    private static string LangName(Language l) => l switch
-    {
-        Language.Portuguese => "Português",
-        Language.English => "Inglês",
-        _ => l.ToString(),
-    };
-
-    private static string SeverityLabel(ErrorSeverity s) => s switch
-    {
-        ErrorSeverity.BreaksMeaning => "Quebra o sentido",
-        ErrorSeverity.Understandable => "Compreensível",
-        ErrorSeverity.Polish => "Lapidação",
-        _ => s.ToString(),
-    };
-
-    private static string SeverityClass(ErrorSeverity s) => s switch
-    {
-        ErrorSeverity.BreaksMeaning => "wr-badge wr-badge--danger",
-        ErrorSeverity.Understandable => "wr-badge wr-badge--warning",
-        ErrorSeverity.Polish => "wr-badge wr-badge--info",
-        _ => "wr-badge wr-badge--muted",
-    };
-
-    private static string Friendly(Exception ex) =>
-        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056)?";
 }

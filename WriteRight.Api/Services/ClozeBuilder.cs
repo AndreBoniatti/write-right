@@ -42,11 +42,17 @@ internal static partial class ClozeBuilder
         var (start, end) = SentenceBounds(correctedText, index, correction.Length);
         var sentence = correctedText[start..end];
 
-        // Só a ocorrência que o erro aponta vira lacuna. Se a mesma expressão
-        // reaparece na frase, a segunda fica visível — e serve de pista legítima.
+        // A lacuna é a PRIMEIRA ocorrência do texto inteiro — o construtor não sabe em
+        // que frase o erro estava. Repetida em outra frase, não atrapalha: aquela frase
+        // não entra no card.
         var offset = index - start;
         var cloze = string.Concat(
             sentence[..offset], Cloze.Blank, sentence[(offset + correction.Length)..]).Trim();
+
+        // Repetida na MESMA frase, a resposta ficaria impressa ao lado da lacuna — "I
+        // have ___ when she has a coffee too." O card se responderia sozinho, que é
+        // exatamente o defeito que faz os irmãos de uma frase não dividirem o dia.
+        if (WholeWordIndexOf(cloze, correction) >= 0) return null;
 
         return HasContext(cloze) ? cloze : null;
     }

@@ -12,7 +12,7 @@ public class CardSchedulerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 12, 12, 0, 0, TimeSpan.Zero);
 
-    private static CardSchedule Fresh() => CardSchedule.New(Now);
+    private static CardSchedule Fresh() => new(CardState.New, 0, CardScheduler.StartingEase, 0, 0, Now);
 
     private static CardSchedule Graduated(double interval = 10, double ease = CardScheduler.StartingEase,
         int reps = 3, int lapses = 0) =>

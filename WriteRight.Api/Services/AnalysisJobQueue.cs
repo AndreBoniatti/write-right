@@ -48,7 +48,7 @@ public sealed class AnalysisJobQueue
         lock (_gate)
         {
             if (_current.Status == AnalysisJobStatus.Running) return false;
-            _current = AnalysisJob.Started(DateTimeOffset.UtcNow);
+            _current = AnalysisJob.Running;
         }
 
         if (_channel.Writer.TryWrite(0)) return true;

@@ -11,8 +11,6 @@ using WriteRight.Shared.Taxonomy;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Serviços ────────────────────────────────────────────────
-builder.Services.AddOpenApi();
-
 // Enums viajam como STRING no JSON (bate com o banco e com o structured output).
 builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -49,10 +47,14 @@ builder.Services.AddHostedService<AnalysisWorker>();
 builder.Services.AddSingleton<CardJobSignal>();
 builder.Services.AddHostedService<CardWorker>();
 
-// CORS pro front (Blazor WASM roda em outra origem).
+// CORS pro front (Blazor WASM roda em outra origem). Só a origem do cliente, nunca
+// "qualquer uma": com AllowAnyOrigin, qualquer site aberto no navegador enquanto a API
+// roda podia criar e corrigir práticas — gastando o crédito da Anthropic.
 const string clientCors = "WriteRightClient";
+var clientOrigins = builder.Configuration.GetSection("ClientOrigins").Get<string[]>()
+    ?? ["http://localhost:5193"];
 builder.Services.AddCors(o => o.AddPolicy(clientCors, p =>
-    p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod())); // dev liberal; restringir origem em prod.
+    p.WithOrigins(clientOrigins).AllowAnyHeader().AllowAnyMethod()));
 
 var app = builder.Build();
 
@@ -63,12 +65,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ── Pipeline ────────────────────────────────────────────────
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
-app.UseHttpsRedirection();
+// Sem redirecionamento pra HTTPS, de propósito: API e cliente rodam os dois em HTTP
+// (ver README), e um 307 pra https quebraria o preflight de CORS do cliente.
 app.UseCors(clientCors);
 
 // ── Endpoints ───────────────────────────────────────────────
@@ -88,29 +86,25 @@ practices.MapPost("/",
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-    })
-   .WithName("CreatePractice");
+    });
 
 // Lista as práticas pra tela inicial (resumos), uma página por vez a partir de ?skip=.
 practices.MapGet("/",
     async (int? skip, PracticeService service, CancellationToken ct) =>
-        Results.Ok(await service.ListPracticesAsync(skip ?? 0, ct: ct)))
-   .WithName("ListPractices");
+        Results.Ok(await service.ListPracticesAsync(skip ?? 0, ct: ct)));
 
 // Quando cada prática concluída foi concluída — a série de dias da barra de cima
 // sai daqui, calculada no cliente, que é quem sabe o fuso.
 practices.MapGet("/completions",
     async (PracticeService service, CancellationToken ct) =>
-        Results.Ok(await service.ListCompletionTimesAsync(ct)))
-   .WithName("ListPracticeCompletions");
+        Results.Ok(await service.ListCompletionTimesAsync(ct)));
 
 // Detalhe de uma prática (retomar ou ler).
 practices.MapGet("/{id:int}",
     async (int id, PracticeService service, CancellationToken ct) =>
         await service.GetPracticeAsync(id, ct) is { } detail
             ? Results.Ok(detail)
-            : Results.NotFound())
-   .WithName("GetPractice");
+            : Results.NotFound());
 
 // Salva o rascunho da tradução ("Salvar e sair"), sem corrigir.
 practices.MapPut("/{id:int}/translation",
@@ -120,48 +114,49 @@ practices.MapPut("/{id:int}/translation",
             PracticeOutcome.Ok => Results.NoContent(),
             PracticeOutcome.ReadOnly => Results.Conflict(),
             _ => Results.NotFound(),
-        })
-   .WithName("SaveDraft");
+        });
 
 // Corrige a prática e a conclui (readonly). Devolve o detalhe já corrigido.
 practices.MapPost("/{id:int}/correct",
     async (int id, PracticeTranslationRequest request, PracticeService service, CancellationToken ct) =>
     {
-        var (outcome, detail) = await service.CorrectPracticeAsync(id, request.UserTranslation, ct);
-        return outcome switch
+        try
         {
-            PracticeOutcome.Ok => Results.Ok(detail),
-            PracticeOutcome.ReadOnly => Results.Conflict(),
-            _ => Results.NotFound(),
-        };
-    })
-   .WithName("CorrectPractice");
+            var (outcome, detail) = await service.CorrectPracticeAsync(id, request.UserTranslation, ct);
+            return outcome switch
+            {
+                PracticeOutcome.Ok => Results.Ok(detail),
+                PracticeOutcome.ReadOnly => Results.Conflict(),
+                _ => Results.NotFound(),
+            };
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    });
 
 // Exclui uma prática (com confirmação no cliente). Exclusão lógica — ver DeletePracticeAsync.
 practices.MapDelete("/{id:int}",
     async (int id, PracticeService service, CancellationToken ct) =>
         (await service.DeletePracticeAsync(id, ct)) == PracticeOutcome.Ok
             ? Results.NoContent()
-            : Results.NotFound())
-   .WithName("DeletePractice");
+            : Results.NotFound());
 
 // Perfil de fraquezas (agregação dos erros das práticas concluídas).
 app.MapGet("/api/profile",
     async (PracticeService service, CancellationToken ct) =>
-        Results.Ok(await service.GetProfileAsync(ct)))
-   .WithName("GetProfile");
+        Results.Ok(await service.GetProfileAsync(ct)));
 
 // Erros reais de uma categoria (tela de revisão do perfil). Releitura, sem IA.
 app.MapGet("/api/profile/errors",
     async (ErrorCategory category, PracticeService service, CancellationToken ct) =>
-        Results.Ok(await service.GetCategoryErrorsAsync(category, ct)))
-   .WithName("GetCategoryErrors");
+        Results.Ok(await service.GetCategoryErrorsAsync(category, ct)));
 
 // Análise de fraquezas: a última gerada + se vale gerar outra.
 app.MapGet("/api/analysis",
     async (AnalysisService service, CancellationToken ct) =>
-        Results.Ok(await service.GetStateAsync(ct)))
-   .WithName("GetAnalysisState");
+        Results.Ok(await service.GetStateAsync(ct)));
 
 // Enfileira uma análise nova. Devolve 202 na hora — a chamada à IA leva minutos e
 // não cabe no ciclo de uma requisição HTTP (o cliente acompanha por GET /api/analysis).
@@ -176,8 +171,7 @@ app.MapPost("/api/analysis",
         // quem pediu, "sua análise está sendo gerada" é verdade nos dois casos.
         jobs.TryEnqueue();
         return Results.Accepted();
-    })
-   .WithName("GenerateAnalysis");
+    });
 
 // Deck de vocabulário: cards cunhados dos erros reais, com repetição espaçada.
 // Nenhum endpoint aqui chama a IA — quem desenha os cards é o CardWorker, depois
@@ -188,8 +182,7 @@ var cards = app.MapGroup("/api/cards");
 // ela só chega no /check, depois de digitar.
 cards.MapGet("/due",
     async (CardService service, CancellationToken ct) =>
-        Results.Ok(await service.GetDueAsync(ct)))
-   .WithName("GetDueCards");
+        Results.Ok(await service.GetDueAsync(ct)));
 
 // Confere a resposta digitada e revela. NÃO agenda: quem agenda é o POST /review,
 // depois que o usuário classifica (ou adjudica um "quase").
@@ -203,8 +196,7 @@ cards.MapPost("/{id:int}/check",
             CardOutcome.Inactive => Results.Conflict(),
             _ => Results.NotFound(),
         };
-    })
-   .WithName("CheckCard");
+    });
 
 // Fecha a revisão: reprograma o card e grava a linha do log.
 cards.MapPost("/{id:int}/review",
@@ -217,21 +209,18 @@ cards.MapPost("/{id:int}/review",
             CardOutcome.Inactive => Results.Conflict(),
             _ => Results.NotFound(),
         };
-    })
-   .WithName("ReviewCard");
+    });
 
 // O deck inteiro (contadores + cards) — tela de leitura, aqui a resposta aparece.
 cards.MapGet("/",
     async (CardService service, CancellationToken ct) =>
-        Results.Ok(await service.GetDeckAsync(ct)))
-   .WithName("GetDeck");
+        Results.Ok(await service.GetDeckAsync(ct)));
 
 // Só os contadores do deck, sem os cards — o selo do menu, que relê isto enquanto
 // há cards sendo feitos.
 cards.MapGet("/summary",
     async (CardService service, CancellationToken ct) =>
-        Results.Ok(await service.GetSummaryAsync(ct)))
-   .WithName("GetDeckSummary");
+        Results.Ok(await service.GetSummaryAsync(ct)));
 
 // Descarta um card ruim. Marca como descartado, não apaga — apagar faria o mesmo
 // card renascer no próximo erro igual.
@@ -239,8 +228,7 @@ cards.MapDelete("/{id:int}",
     async (int id, CardService service, CancellationToken ct) =>
         (await service.DiscardAsync(id, ct)) == CardOutcome.Ok
             ? Results.NoContent()
-            : Results.NotFound())
-   .WithName("DiscardCard");
+            : Results.NotFound());
 
 // Devolve pra fila as práticas cujos cards falharam. É o único caminho de volta —
 // falha não se repete sozinha, porque cada tentativa é uma chamada paga.
@@ -249,14 +237,12 @@ cards.MapPost("/retry",
     {
         if (await minting.RetryFailedAsync(ct) > 0) signal.Notify();
         return Results.Accepted();
-    })
-   .WithName("RetryFailedCards");
+    });
 
 // Consumo da IA: quanto custou, por operação, e a média por prática/análise.
 // Releitura pura do registrado — não chama a IA.
 app.MapGet("/api/usage",
     async (UsageService service, CancellationToken ct) =>
-        Results.Ok(await service.GetReportAsync(ct)))
-   .WithName("GetUsageReport");
+        Results.Ok(await service.GetReportAsync(ct)));
 
 app.Run();

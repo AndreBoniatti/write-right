@@ -39,7 +39,7 @@ public sealed class PracticeServiceTests : IDisposable
         new(Language.Portuguese, Language.English, 60, CefrLevel.B1, Theme: "cotidiano", FocusOnWeaknesses: focusOnWeaknesses);
 
     private static GeneratedExercise SampleExercise(string? sourceText = null) =>
-        new(Language.Portuguese, Language.English, sourceText ?? "Um texto gerado.", CefrLevel.B1, Theme: "cotidiano");
+        new(sourceText ?? "Um texto gerado.");
 
     private static CorrectionResult CorrectionWith(params ErrorCategory[] categories)
     {
@@ -162,6 +162,40 @@ public sealed class PracticeServiceTests : IDisposable
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => Service(new StubLlmProvider(SampleExercise())).CreatePracticeAsync(request));
+    }
+
+    /// <summary>
+    /// O min/max do campo não impede digitar 2000. A recusa vem ANTES da chamada:
+    /// muito acima do teto, a geração estoura o limite de saída e volta cortada — paga
+    /// e inútil. Nem chamada, nem gasto registrado.
+    /// </summary>
+    [Theory]
+    [InlineData(PracticeLimits.MinWords - 1)]
+    [InlineData(PracticeLimits.MaxWords + 1)]
+    [InlineData(2000)]
+    public async Task CreatePracticeAsync_rejects_a_word_count_out_of_range_before_the_call(int words)
+    {
+        var stub = new StubLlmProvider(SampleExercise());
+        var request = new CreatePracticeRequest(Language.Portuguese, Language.English, words, CefrLevel.B1);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(stub).CreatePracticeAsync(request));
+
+        Assert.Null(stub.LastGenerationRequest);
+        await using var ctx = _db.NewContext();
+        Assert.Empty(ctx.Exercises);
+        Assert.Empty(ctx.LlmCalls);
+    }
+
+    [Theory]
+    [InlineData(PracticeLimits.MinWords)]
+    [InlineData(PracticeLimits.MaxWords)]
+    public async Task CreatePracticeAsync_accepts_the_word_count_limits_themselves(int words)
+    {
+        var request = new CreatePracticeRequest(Language.Portuguese, Language.English, words, CefrLevel.B1);
+
+        var detail = await Service(new StubLlmProvider(SampleExercise())).CreatePracticeAsync(request);
+
+        Assert.Equal(PracticeStatus.InProgress, detail.Status);
     }
 
     [Fact]
@@ -287,6 +321,26 @@ public sealed class PracticeServiceTests : IDisposable
         var (outcome, detail) = await Service(new StubLlmProvider()).CorrectPracticeAsync(999, "x");
         Assert.Equal(PracticeOutcome.NotFound, outcome);
         Assert.Null(detail);
+    }
+
+    /// <summary>
+    /// Corrigir nada ainda seria uma chamada cobrada. A recusa vem antes dela, e a
+    /// prática continua em andamento — dá pra escrever e corrigir depois.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("   \n\t ")]
+    public async Task CorrectPracticeAsync_rejects_a_blank_translation_before_the_call(string blank)
+    {
+        var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
+        var created = await Service(stub).CreatePracticeAsync(CreateRequest());
+
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(stub).CorrectPracticeAsync(created.Id, blank));
+
+        Assert.Null(stub.LastCorrectionRequest);
+        var reloaded = await Service(stub).GetPracticeAsync(created.Id);
+        Assert.Equal(PracticeStatus.InProgress, reloaded!.Status);
+        Assert.Empty(reloaded.Errors);
     }
 
     // ── Ler / listar ─────────────────────────────────────────────────────────
@@ -489,7 +543,6 @@ public sealed class PracticeServiceTests : IDisposable
 
         Assert.Equal(0, profile.Lifetime.Attempts);
         Assert.Equal(0, profile.Lifetime.TotalErrors);
-        Assert.Equal(0, profile.Lifetime.TotalScore);
         Assert.Empty(profile.Lifetime.ByCategory);
         Assert.Equal(0, profile.Recent.Attempts);
         Assert.Empty(profile.Recent.ByCategory);
@@ -539,7 +592,6 @@ public sealed class PracticeServiceTests : IDisposable
             c => { Assert.Equal(ErrorCategory.WordChoice, c.Category); Assert.Equal(3, c.Count); Assert.Equal(6, c.Score); },
             c => { Assert.Equal(ErrorCategory.VerbTense, c.Category); Assert.Equal(2, c.Count); Assert.Equal(4, c.Score); },
             c => { Assert.Equal(ErrorCategory.Spelling, c.Category); Assert.Equal(1, c.Count); Assert.Equal(2, c.Score); });
-        Assert.Equal(12, profile.Lifetime.TotalScore);
     }
 
     [Fact]
@@ -558,7 +610,6 @@ public sealed class PracticeServiceTests : IDisposable
             c => { Assert.Equal(ErrorCategory.Preposition, c.Category); Assert.Equal(1, c.Count); Assert.Equal(3, c.Score); },
             c => { Assert.Equal(ErrorCategory.Spelling, c.Category); Assert.Equal(2, c.Count); Assert.Equal(2, c.Score); });
         Assert.Equal(3, profile.Lifetime.TotalErrors);
-        Assert.Equal(5, profile.Lifetime.TotalScore);
     }
 
     [Fact]

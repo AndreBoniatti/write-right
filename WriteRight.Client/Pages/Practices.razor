@@ -129,7 +129,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -154,7 +154,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -185,7 +185,7 @@ else
         }
         catch (Exception ex)
         {
-            error = Friendly(ex);
+            error = Ui.ErrorMessage(ex);
         }
         finally
         {
@@ -218,7 +218,4 @@ else
         Language.English => "EN",
         _ => l.ToString(),
     };
-
-    private static string Friendly(Exception ex) =>
-        $"Ops, algo deu errado: {ex.Message} — a API está rodando (porta 5056)?";
 }

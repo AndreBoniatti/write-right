@@ -77,14 +77,18 @@ public sealed class WriteRightApiClient
         return resp.IsSuccessStatusCode;
     }
 
-    /// <summary>Corrige a prática e a conclui. Devolve o detalhe corrigido, ou null se falhou.</summary>
+    /// <summary>
+    /// Corrige a prática e a conclui. Devolve o detalhe corrigido, ou null se ela já
+    /// estava concluída (409). Qualquer outra falha sobe como exceção, com o status —
+    /// a correção que falhou no servidor não pode ser confundida com a que já existia.
+    /// </summary>
     public async Task<PracticeDetail?> CorrectPracticeAsync(int id, string userTranslation, CancellationToken ct = default)
     {
         var resp = await _http.PostAsJsonAsync(
             $"api/practices/{id}/correct", new PracticeTranslationRequest(userTranslation), Json, ct);
-        return resp.IsSuccessStatusCode
-            ? await resp.Content.ReadFromJsonAsync<PracticeDetail>(Json, ct)
-            : null;
+        if (resp.StatusCode == HttpStatusCode.Conflict) return null;
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<PracticeDetail>(Json, ct);
     }
 
     /// <summary>Exclui uma prática. True se excluiu.</summary>

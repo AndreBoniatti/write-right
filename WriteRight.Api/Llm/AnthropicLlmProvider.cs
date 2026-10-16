@@ -63,6 +63,26 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     /// </summary>
     private static readonly Effort CardEffort = Effort.High;
 
+    /// <summary>
+    /// Teto de saída (pensamento + JSON) da correção, da análise e dos cards. O teto em
+    /// si não custa nada — cobra-se o que é gerado, não o que é permitido —, então ele
+    /// fica com folga larga sobre o maior uso medido (2026-10-15: correção ~5 mil tokens;
+    /// análise ~4,9 mil com 70 erros, e a janela dela vai até 180).
+    ///
+    /// Não passa de 16 mil porque as chamadas são sem streaming, e esse é o teto que o
+    /// SDK recomenda pra resposta caber no timeout HTTP. Timeout é o pior desfecho
+    /// possível: a chamada é cobrada e a resposta, junto com o registro do uso, se perde.
+    /// Precisar de mais é sinal pra trocar pra streaming, não pra subir este número.
+    /// </summary>
+    private const int MaxOutputTokens = 16_000;
+
+    /// <summary>
+    /// A geração não pensa (Haiku 4.5, sem effort) e o texto tem no máximo
+    /// <c>PracticeLimits.MaxWords</c> palavras — algumas centenas de tokens. O teto baixo
+    /// aqui é trava, não aperto: um modelo que desandasse a escrever pararia logo.
+    /// </summary>
+    private const int GenerationMaxTokens = 2_000;
+
     private readonly LlmOptions _options;
 
     public AnthropicLlmProvider(IOptions<LlmOptions> options)
@@ -78,7 +98,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         var response = await client.Messages.Create(new MessageCreateParams
         {
             Model = _options.GenerationModel,
-            MaxTokens = 2000,
+            MaxTokens = GenerationMaxTokens,
             System = GenerationPrompt.BuildSystemPrompt(),
             Messages = [new() { Role = Role.User, Content = GenerationPrompt.BuildUserMessage(request) }],
             OutputConfig = new OutputConfig
@@ -93,8 +113,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         {
             var text = JsonSerializer.Deserialize<GeneratedText>(json, LlmJson.Options)?.Text
                 ?? throw new InvalidOperationException("Falha ao desserializar o texto gerado.");
-            return new GeneratedExercise(
-                request.SourceLanguage, request.TargetLanguage, text.Trim(), request.Level, request.Theme);
+            return new GeneratedExercise(text.Trim());
         });
 
         return new LlmResult<GeneratedExercise>(exercise, usage);
@@ -108,7 +127,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         var response = await client.Messages.Create(new MessageCreateParams
         {
             Model = _options.CorrectionModel,
-            MaxTokens = 16000,
+            MaxTokens = MaxOutputTokens,
             System = CorrectionPrompt.BuildSystemPrompt(),
             Messages = [new() { Role = Role.User, Content = CorrectionPrompt.BuildUserMessage(request) }],
             OutputConfig = new OutputConfig
@@ -135,12 +154,12 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         var response = await client.Messages.Create(new MessageCreateParams
         {
             Model = _options.AnalysisModel,
-            MaxTokens = 8000,
+            MaxTokens = MaxOutputTokens,
             System = AnalysisPrompt.BuildSystemPrompt(request),
             Messages = [new() { Role = Role.User, Content = AnalysisPrompt.BuildUserMessage(request) }],
             OutputConfig = new OutputConfig
             {
-                Format = new JsonOutputFormat { Schema = AnalysisPrompt.BuildResultSchema(request) },
+                Format = new JsonOutputFormat { Schema = AnalysisPrompt.BuildResultSchema() },
                 Effort = ReasoningEffort,
             },
         });
@@ -162,7 +181,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         var response = await client.Messages.Create(new MessageCreateParams
         {
             Model = _options.CardModel,
-            MaxTokens = 16000,
+            MaxTokens = MaxOutputTokens,
             System = CardPrompt.BuildSystemPrompt(),
             Messages = [new() { Role = Role.User, Content = CardPrompt.BuildUserMessage(request) }],
             OutputConfig = new OutputConfig
@@ -198,7 +217,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         catch (Exception ex)
         {
             throw new LlmCallFailedException(
-                usage, $"Falha ao interpretar {what} (a chamada já foi cobrada).", ex);
+                usage, $"Falha ao interpretar {what} (a chamada já foi cobrada; StopReason: {response.StopReason}).", ex);
         }
     }
 

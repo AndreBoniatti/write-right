@@ -74,7 +74,7 @@
         }
         catch (Exception ex)
         {
-            error = $"Não deu pra carregar a análise: {ex.Message}. (A API está rodando?)";
+            error = $"Não deu pra carregar a análise. {Ui.ErrorMessage(ex)}";
         }
         finally
         {
@@ -87,6 +87,10 @@
         if (state?.Job.Status == AnalysisJobStatus.Running)
         {
             generating = true;
+
+            // O Blazor só redesenha no FIM do OnInitializedAsync, que aqui dura o job
+            // inteiro: sem isto a tela ficava em "Carregando…" até a primeira leitura.
+            StateHasChanged();
             await FollowJobAsync();
         }
         else if (state?.Job.Status == AnalysisJobStatus.Failed)
@@ -210,7 +214,7 @@
                             @foreach (var e in p.Evidence)
                             {
                                 <div class="review-item">
-                                    <span class="@SeverityClass(e.Severity)">@SeverityLabel(e.Severity)</span>
+                                    <SeverityBadge Value="e.Severity" />
                                     <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(e.Category).LabelPt</span>
                                     <div class="review-diff">
                                         <s class="text-danger">@e.Original</s>
@@ -288,7 +292,7 @@
 
             if (status == GenerateAnalysisStatus.Failed)
             {
-                notice = "Falhou ao pedir a análise. (A API está rodando?)";
+                notice = "A API recusou o pedido de análise. Tente de novo.";
                 generating = false;
                 return;
             }
@@ -301,7 +305,9 @@
         }
         catch (Exception ex)
         {
-            notice = $"Falhou ao gerar a análise: {ex.Message}";
+            // Só o PEDIDO cai aqui: falha no acompanhamento é tratada lá dentro, e
+            // dizer "falhou" com o job rodando no servidor seria mentira.
+            notice = $"Falhou ao pedir a análise. {Ui.ErrorMessage(ex)}";
             generating = false;
         }
     }
@@ -321,7 +327,13 @@
         {
             await Task.Delay(PollInterval, cts.Token);
 
-            var fresh = await Api.GetAnalysisStateAsync(cts.Token);
+            // Uma leitura que falha (rede piscando, API reiniciando) não encerra nada: o
+            // job, se existir, segue no servidor. Sem isto a exceção escapava — e, vinda
+            // do OnInitializedAsync, virava a barra vermelha de erro do Blazor.
+            AnalysisState fresh;
+            try { fresh = await Api.GetAnalysisStateAsync(cts.Token); }
+            catch (Exception) when (!cts.IsCancellationRequested) { continue; }
+
             var previousId = state?.Latest?.Id;
             state = fresh;
 
@@ -340,6 +352,12 @@
             else if (fresh.Latest?.Id != previousId)
             {
                 openEvidence.Clear(); // análise nova = painéis fechados de novo
+            }
+            else
+            {
+                // Parado sem falha e sem análise nova: o job se perdeu. A fila é em
+                // memória, então isso é a API reiniciando no meio da geração.
+                notice = "A geração foi interrompida (a API reiniciou?) e nada foi salvo. Peça de novo.";
             }
 
             return;
@@ -361,22 +379,5 @@
     {
         StudyItemKind.Rule => "wr-badge wr-badge--success",
         _ => "wr-badge wr-badge--info",
-    };
-
-    // Mesma linguagem visual da correção e do perfil.
-    private static string SeverityLabel(ErrorSeverity s) => s switch
-    {
-        ErrorSeverity.BreaksMeaning => "Quebra o sentido",
-        ErrorSeverity.Understandable => "Compreensível",
-        ErrorSeverity.Polish => "Lapidação",
-        _ => s.ToString(),
-    };
-
-    private static string SeverityClass(ErrorSeverity s) => s switch
-    {
-        ErrorSeverity.BreaksMeaning => "wr-badge wr-badge--danger",
-        ErrorSeverity.Understandable => "wr-badge wr-badge--warning",
-        ErrorSeverity.Polish => "wr-badge wr-badge--info",
-        _ => "wr-badge wr-badge--muted",
     };
 }

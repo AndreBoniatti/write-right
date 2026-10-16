@@ -124,7 +124,7 @@ internal static class AnalysisPrompt
     /// servidor confere no <c>AnalysisService</c>. A conferência é o que vale — o
     /// schema nunca soube se um id era real, então a trava sempre foi do servidor.
     /// </summary>
-    public static Dictionary<string, JsonElement> BuildResultSchema(AnalysisRequest request)
+    public static Dictionary<string, JsonElement> BuildResultSchema()
     {
         var patternItem = new
         {

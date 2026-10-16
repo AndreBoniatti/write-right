@@ -61,8 +61,11 @@ public sealed class PracticeService
     public async Task<PracticeDetail> CreatePracticeAsync(CreatePracticeRequest request, CancellationToken ct = default)
     {
         if (request.SourceLanguage == request.TargetLanguage)
+            throw new ArgumentException("Origem e alvo devem ser idiomas diferentes.");
+
+        if (request.WordCount is < PracticeLimits.MinWords or > PracticeLimits.MaxWords)
             throw new ArgumentException(
-                "Origem e alvo devem ser idiomas diferentes.", nameof(request));
+                $"O texto deve ter entre {PracticeLimits.MinWords} e {PracticeLimits.MaxWords} palavras.");
 
         IReadOnlyList<ErrorCategory>? focus = null;
         if (request.FocusOnWeaknesses)
@@ -206,10 +209,14 @@ public sealed class PracticeService
     /// Corrige a prática: chama a IA, persiste os erros na MESMA tentativa e a marca
     /// como <see cref="PracticeStatus.Completed"/> (readonly). Idempotência barata:
     /// uma prática já concluída volta <see cref="PracticeOutcome.ReadOnly"/>.
+    /// Tradução em branco é recusada antes de tudo: corrigir nada ainda seria cobrado.
     /// </summary>
     public async Task<(PracticeOutcome Outcome, PracticeDetail? Detail)> CorrectPracticeAsync(
         int id, string userTranslation, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(userTranslation))
+            throw new ArgumentException("A tradução está em branco.");
+
         var practice = await _db.Exercises
             .Include(p => p.Errors)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
@@ -223,7 +230,7 @@ public sealed class PracticeService
             result = await _llm.CorrectAsync(
                 new CorrectionRequest(
                     practice.SourceLanguage, practice.TargetLanguage,
-                    practice.SourceText, userTranslation, practice.Level, practice.Theme),
+                    practice.SourceText, userTranslation),
                 ct);
         }
         catch (LlmCallFailedException ex)
@@ -361,19 +368,8 @@ public sealed class PracticeService
     }
 
     /// <summary>Monta uma visão do perfil: agrupa por categoria, pondera por severidade e ordena por peso.</summary>
-    private static ProfileView BuildView(IReadOnlyList<ErrorRow> errors, int attempts)
-    {
-        var byCategory = errors
-            .GroupBy(e => e.Category)
-            .Select(g => new CategoryWeight(g.Key, g.Count(), g.Sum(e => SeverityWeight.Of(e.Severity))))
-            .OrderByDescending(c => c.Score)
-            .ThenByDescending(c => c.Count)
-            .ThenBy(c => c.Category) // desempate estável (ordenação determinística)
-            .ToList();
-
-        return new ProfileView(
-            attempts, byCategory.Sum(c => c.Count), byCategory.Sum(c => c.Score), byCategory);
-    }
+    private static ProfileView BuildView(IReadOnlyList<ErrorRow> errors, int attempts) =>
+        new(attempts, errors.Count, CategoryRanking.Rank(errors.Select(e => (e.Category, e.Severity))));
 
     /// <summary>Linha de erro materializada do banco, pra agregar em memória.</summary>
     private sealed record ErrorRow(ErrorCategory Category, ErrorSeverity Severity, int AttemptId);

@@ -223,11 +223,7 @@ public sealed class AnalysisService
 
         var inWindow = errors.Where(e => windowIds.Contains(e.PracticeId)).ToList();
 
-        var top = inWindow
-            .GroupBy(e => e.Category)
-            .Select(g => (Category: g.Key, Score: g.Sum(e => SeverityWeight.Of(e.Severity))))
-            .OrderByDescending(c => c.Score)
-            .ThenBy(c => c.Category) // desempate estável
+        var top = CategoryRanking.Rank(inWindow.Select(e => (e.Category, e.Severity)))
             .Take(TopCategories)
             .Select(c => c.Category)
             .ToHashSet();
@@ -244,13 +240,7 @@ public sealed class AnalysisService
 
     /// <summary>Agregado do histórico inteiro — o mapa do todo, barato de mandar.</summary>
     private static IReadOnlyList<CategoryWeight> LifetimeByCategory(IReadOnlyList<ErrorRecord> errors) =>
-        errors
-            .GroupBy(e => e.Category)
-            .Select(g => new CategoryWeight(g.Key, g.Count(), g.Sum(e => SeverityWeight.Of(e.Severity))))
-            .OrderByDescending(c => c.Score)
-            .ThenByDescending(c => c.Count)
-            .ThenBy(c => c.Category)
-            .ToList();
+        CategoryRanking.Rank(errors.Select(e => (e.Category, e.Severity)));
 
     // ── Conferência de evidência ─────────────────────────────────────────────
 
@@ -350,12 +340,14 @@ public sealed class AnalysisService
         return (practices, errors);
     }
 
-    /// <summary>A análise mais recente. Ordena em memória (DateTimeOffset no SQLite, de novo).</summary>
+    /// <summary>
+    /// A análise mais recente. Pelo Id, não pelo <c>GeneratedAt</c>, pelo mesmo motivo
+    /// do <see cref="PracticeService.ListPracticesAsync"/>: o SQLite não ordena
+    /// DateTimeOffset, e o Id cresce junto com a data. Assim só UMA análise sai do
+    /// banco — esta leitura roda a cada poucos segundos enquanto a tela acompanha.
+    /// </summary>
     private async Task<AnalysisRecord?> LoadLatestAsync(CancellationToken ct) =>
-        (await _db.Analyses.ToListAsync(ct))
-        .OrderByDescending(a => a.GeneratedAt)
-        .ThenByDescending(a => a.Id)
-        .FirstOrDefault();
+        await _db.Analyses.OrderByDescending(a => a.Id).FirstOrDefaultAsync(ct);
 
     private static WeaknessAnalysis ToContract(AnalysisRecord record) => new(
         record.Id,
