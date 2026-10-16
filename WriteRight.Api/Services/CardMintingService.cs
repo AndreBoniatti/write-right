@@ -40,7 +40,8 @@ public sealed class CardMintingService
 
     /// <summary>
     /// Cunha os cards de uma prática pendente. Sem efeito se ela não estiver mais
-    /// pendente (apagada, ou já processada por outra passada).
+    /// pendente (excluída — o filtro global a esconde —, ou já processada por outra
+    /// passada). Prática excluída não gasta uma chamada pra virar card.
     ///
     /// Falha da IA SOBE como exceção — quem decide tentar de novo ou desistir é o
     /// worker. O gasto, esse, é gravado antes de subir: dinheiro gasto é fato

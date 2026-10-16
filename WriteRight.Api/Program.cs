@@ -137,7 +137,7 @@ practices.MapPost("/{id:int}/correct",
     })
    .WithName("CorrectPractice");
 
-// Exclui uma prática (com confirmação no cliente).
+// Exclui uma prática (com confirmação no cliente). Exclusão lógica — ver DeletePracticeAsync.
 practices.MapDelete("/{id:int}",
     async (int id, PracticeService service, CancellationToken ct) =>
         (await service.DeletePracticeAsync(id, ct)) == PracticeOutcome.Ok

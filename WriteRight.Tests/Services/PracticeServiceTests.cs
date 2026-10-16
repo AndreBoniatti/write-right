@@ -388,7 +388,7 @@ public sealed class PracticeServiceTests : IDisposable
     // ── Excluir ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task DeletePracticeAsync_removes_practice_and_its_errors()
+    public async Task DeletePracticeAsync_hides_the_practice_but_keeps_the_row_and_its_errors()
     {
         var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(
             ErrorCategory.Article, ErrorCategory.Spelling));
@@ -397,15 +397,88 @@ public sealed class PracticeServiceTests : IDisposable
 
         Assert.Equal(PracticeOutcome.Ok, await Service(stub).DeletePracticeAsync(created.Id));
 
+        // Some de tudo que a tela lê...
+        Assert.Null(await Service(stub).GetPracticeAsync(created.Id));
+        var page = await Service(stub).ListPracticesAsync();
+        Assert.Empty(page.Items);
+        Assert.Equal(0, page.Total);
+
+        // ...mas não do banco: exclusão lógica.
         await using var ctx = _db.NewContext();
-        Assert.Equal(0, ctx.Exercises.Count());
-        Assert.Equal(0, ctx.Errors.Count()); // cascade
+        var row = Assert.Single(ctx.Exercises.IgnoreQueryFilters());
+        Assert.NotNull(row.DeletedAt);
+        Assert.Equal(2, ctx.Errors.IgnoreQueryFilters().Count());
+    }
+
+    /// <summary>
+    /// Excluiu porque o texto não servia: os erros dele não podem continuar pesando
+    /// no perfil — que é o que direciona a próxima geração.
+    /// </summary>
+    [Fact]
+    public async Task A_deleted_practice_leaves_the_profile_and_the_category_review()
+    {
+        var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
+        var kept = await Service(stub).CreatePracticeAsync(CreateRequest());
+        await Service(stub).CorrectPracticeAsync(kept.Id, "x");
+        var deleted = await Service(stub).CreatePracticeAsync(CreateRequest());
+        await Service(stub).CorrectPracticeAsync(deleted.Id, "x");
+
+        await Service(stub).DeletePracticeAsync(deleted.Id);
+
+        var profile = await Service(stub).GetProfileAsync();
+        Assert.Equal(1, profile.Lifetime.Attempts);
+        Assert.Equal(1, profile.Lifetime.TotalErrors);
+        var review = await Service(stub).GetCategoryErrorsAsync(ErrorCategory.Article);
+        Assert.Equal(kept.Id, Assert.Single(review).PracticeId);
     }
 
     [Fact]
     public async Task DeletePracticeAsync_on_missing_returns_NotFound() =>
         Assert.Equal(PracticeOutcome.NotFound,
             await Service(new StubLlmProvider()).DeletePracticeAsync(999));
+
+    [Fact]
+    public async Task Deleting_twice_returns_NotFound()
+    {
+        var stub = new StubLlmProvider(SampleExercise());
+        var created = await Service(stub).CreatePracticeAsync(CreateRequest());
+        await Service(stub).DeletePracticeAsync(created.Id);
+
+        Assert.Equal(PracticeOutcome.NotFound, await Service(stub).DeletePracticeAsync(created.Id));
+    }
+
+    /// <summary>
+    /// Excluir é arrumar a lista, não desfazer o dia em que você praticou: apagar a
+    /// única prática de cinco dias atrás não pode quebrar a série.
+    /// </summary>
+    [Fact]
+    public async Task ListCompletionTimesAsync_still_counts_a_deleted_practice()
+    {
+        var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
+        var created = await Service(stub).CreatePracticeAsync(CreateRequest());
+        var corrected = (await Service(stub).CorrectPracticeAsync(created.Id, "x")).Detail!;
+
+        await Service(stub).DeletePracticeAsync(created.Id);
+
+        Assert.Equal(corrected.CompletedAt, Assert.Single(await Service(stub).ListCompletionTimesAsync()));
+    }
+
+    /// <summary>
+    /// A regra "nada se apaga de verdade" é do schema, não da disciplina de quem
+    /// escreve o serviço: um DELETE físico numa prática com erros é recusado.
+    /// </summary>
+    [Fact]
+    public async Task A_physical_delete_of_a_practice_is_refused_by_the_schema()
+    {
+        var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
+        var created = await Service(stub).CreatePracticeAsync(CreateRequest());
+        await Service(stub).CorrectPracticeAsync(created.Id, "x");
+
+        await using var ctx = _db.NewContext();
+        ctx.Exercises.Remove(await ctx.Exercises.SingleAsync());
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => ctx.SaveChangesAsync());
+    }
 
     // ── Perfil ───────────────────────────────────────────────────────────────
 
@@ -635,9 +708,9 @@ public sealed class PracticeServiceTests : IDisposable
     [Fact]
     public async Task DeletePracticeAsync_keeps_the_usage_record()
     {
-        // Referência fraca de propósito: o gasto aconteceu e é irreversível.
-        // Excluir a prática não pode apagar o registro de que você pagou por ela —
-        // senão a fatura e o histórico de custo divergem.
+        // O gasto aconteceu e é irreversível. Excluir a prática não pode apagar o
+        // registro de que você pagou por ela — senão a fatura e o histórico de custo
+        // divergem. E o registro continua apontando pra ela (FK), não pro vazio.
         var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
         var detail = await Service(stub).CreatePracticeAsync(CreateRequest());
         await Service(stub).CorrectPracticeAsync(detail.Id, "my translation");
@@ -646,8 +719,7 @@ public sealed class PracticeServiceTests : IDisposable
 
         Assert.Equal(PracticeOutcome.Ok, outcome);
         await using var ctx = _db.NewContext();
-        Assert.Equal(0, ctx.Exercises.Count());
-        Assert.Equal(2, ctx.LlmCalls.Count()); // o custo sobrevive à exclusão
+        Assert.Equal(2, ctx.LlmCalls.Count(c => c.PracticeId == detail.Id)); // o custo sobrevive à exclusão
     }
 
     [Fact]

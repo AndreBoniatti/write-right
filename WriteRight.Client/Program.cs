@@ -26,8 +26,8 @@ builder.Services.AddScoped<WriteRightApiClient>();
 // o mostra. Scoped = uma instância por app no WASM, que é o que se quer aqui.
 builder.Services.AddScoped<DueCardsState>();
 
-// Série de dias da barra de cima — mesmo arranjo: quem conclui ou exclui uma
-// prática avisa, a barra mostra.
+// Série de dias da barra de cima — mesmo arranjo: quem conclui uma prática avisa,
+// a barra mostra.
 builder.Services.AddScoped<StreakState>();
 
 await builder.Build().RunAsync();

@@ -99,7 +99,7 @@ A few decisions worth naming:
 - **No hint, no card either.** The blank alone rarely has a unique answer — "at the ___ center" accepts anything — so a card without a hint would be wrong forever, counting lapses and corrupting the very statistics that say whether the scheduler works. The rule is enforced three times over: the gate rejects it, the field is non-nullable, and the column is `NOT NULL` with a `CHECK` against the empty string.
 - **The hint is language-neutral.** It's the phrase in the exercise's *source* language, not "the Portuguese" — EN→PT practices already exist, and source and target swap with the direction. A third language is in play elsewhere in the app (corrections are written in yours), which is exactly why a field named after a language rather than a role eventually names the wrong one.
 - **You type the answer.** Self-rating measures the *feeling* of knowing, which is a poor estimate of memory. Typing gives an objective right/wrong, and easy/hard only refines the interval afterwards — the buttons don't even appear on a miss. A near miss (exactly one word wrong, and that word within one edit — two if it's long) is adjudicated by you, not the server.
-- **Cards copy their content** — no id, no foreign key, nothing pointing back. Practices can be deleted, and cascade would take months of review history with them. Same snapshot decision as the analysis evidence, taken to its conclusion: a reference that may dangle is worse than no reference at all.
+- **Cards copy their content** — no id, no foreign key, nothing pointing back. It started as protection: deleting a practice used to cascade, and would have taken months of review history with it. Deletion is soft now, but the copy is still right for a different reason — a card isn't a mirror of the error that created it. A recurring failure rewrites its content with the latest one, and the blank, hint and alternatives are designed, not copied from the correction. An origin id would point at an error that's no longer the card's.
 - **Failing the same item again while writing reschedules the existing card** rather than minting a second one — real-world failure is stronger evidence than any button. It deliberately writes no review row: the log answers "coming back after N days, what's the hit rate?", and a failure with no interval attached would corrupt exactly that.
 - **The scheduler is boring on purpose.** Plain SM-2. The value of this module is in the card content, not the arithmetic; writing FSRS would be effort spent on the part that's already solved.
 - **Minting runs after the correction, and the queue is the database.** The correction writes a *cards pending* status in its own transaction and returns; a background worker drains the pending practices on startup and whenever a correction lands. The status is the point: nobody asks for cards, so a job lost on restart would go unnoticed forever. Three attempts, then the worker gives up and the deck page says so — retrying forever would mean paying forever for an error that repeats.
@@ -110,7 +110,7 @@ A few decisions worth naming:
 
 - **Backend:** ASP.NET Core minimal API (.NET 10, C#)
 - **Frontend:** Blazor WebAssembly (standalone SPA)
-- **Data:** EF Core + SQLite (enums persisted as strings; migratable to Postgres later)
+- **Data:** EF Core + SQLite (enums persisted as strings; migratable to Postgres later). Nothing the user did is physically deleted: practices are soft-deleted behind a global query filter, and foreign keys are `RESTRICT`, so a stray physical delete fails instead of cascading
 - **AI:** Claude via the official Anthropic C# SDK, using **structured output**
 - **Tests:** xUnit
 
@@ -160,7 +160,7 @@ Then open **http://localhost:5193**. The SQLite database is created automaticall
 | `GET` | `/api/practices/{id}` | Full practice detail (resume or read) |
 | `PUT` | `/api/practices/{id}/translation` | Save a draft translation without correcting |
 | `POST` | `/api/practices/{id}/correct` | Correct the translation, store the errors, complete the practice |
-| `DELETE` | `/api/practices/{id}` | Delete a practice and its errors |
+| `DELETE` | `/api/practices/{id}` | Soft-delete a practice: it leaves the list, the profile and future analyses (a saved analysis keeps its evidence), but still counts for the day streak and the cost report |
 | `GET`  | `/api/profile` | The aggregated weakness profile |
 | `GET`  | `/api/profile/errors?category=` | Your real errors in one category (review panel — no AI call) |
 | `GET`  | `/api/analysis` | The latest weakness analysis + whether a new one is worth generating |
@@ -220,6 +220,7 @@ The suite covers the parts with real logic and real regression risk:
 - **Evidence grounding** — the analysis drops any pattern that cites error ids it was never sent or that falls under the evidence floor, and persists nothing when none survive. The window sizing (by error volume, not practice count) and the snapshotting of evidence — an analysis stays intact even after the practice it cited is deleted — are covered too.
 - **The deck** — mostly the failure paths, because they're the ones that quietly corrupt data: every rule of the gate (each one named after a real bad card), a correction that queues its cards in the same transaction, a failed card call that records its cost and stays pending, a recurring error that reschedules instead of duplicating (and writes no review row), a discarded card that's never resurrected, a card that outlives the practice that created it, and siblings from one sentence that never share a session. Plus the interval arithmetic, where a wrong sign breaks nothing visible — it just makes reviews arrive at the wrong time for months.
 - **The day streak** — days are counted on your clock, not UTC, and the day turns at 4am: a practice finished at 00:30 belongs to the evening it started in, or a late session would break the streak on a day you practiced.
+- **Soft delete** — a deleted practice leaves the list, the detail, the profile and the next analysis's window, but still counts for the streak and for the average cost (its spend stays in the total, so dropping it from the divisor would inflate the average); a physical delete is refused by the schema.
 
 **Conscious gap:** the real HTTP call to Anthropic isn't tested — it costs money and is flaky. The model sits behind an interface and is swapped for a fake in tests, so everything *around* the call is covered. New logic ships with tests, and the suite runs on every change.
 

@@ -16,10 +16,11 @@ namespace WriteRight.Api.Data;
 ///  • Cota, depois, é <c>SUM(custo) WHERE usuário E período</c>: uma tabela, uma
 ///    query, independente da operação.
 ///
-/// <see cref="PracticeId"/> e <see cref="AnalysisId"/> são referências FRACAS
-/// (int simples, sem FK e sem cascade), pelo mesmo motivo que a evidência da
-/// análise é snapshot: o gasto aconteceu e é irreversível — excluir a prática não
-/// pode apagar o registro de que você pagou por ela.
+/// <see cref="PracticeId"/> e <see cref="AnalysisId"/> são FKs opcionais com
+/// Restrict: o gasto aconteceu e é irreversível, e nenhuma exclusão pode apagar o
+/// registro de que você pagou. Já foram referências fracas (int sem FK) enquanto a
+/// exclusão de prática era física; com a exclusão lógica, a prática nunca some, e a
+/// FK passa a garantir que não existe gasto apontando pra uma prática inexistente.
 /// </summary>
 public class LlmCall
 {
@@ -44,7 +45,7 @@ public class LlmCall
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    /// <summary>Prática que originou a chamada (geração/correção). Referência fraca — ver resumo da classe.</summary>
+    /// <summary>Prática que originou a chamada. Null na geração que falhou antes de criar a prática.</summary>
     public int? PracticeId { get; set; }
 
     /// <summary>Análise que a chamada produziu. Null também quando a análise não teve lastro e nada foi persistido.</summary>

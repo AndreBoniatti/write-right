@@ -167,9 +167,15 @@ public sealed class PracticeService
     /// Quando cada prática concluída foi concluída — a matéria-prima da série de dias.
     /// Instantes crus, não dias: o dia depende do fuso de quem está vendo, e quem sabe
     /// o fuso é o cliente (ver <see cref="PracticeStreak"/>).
+    ///
+    /// Inclui as excluídas: excluir é arrumar a lista, não desfazer o dia em que você
+    /// praticou. Sem isso, apagar a única prática de cinco dias atrás quebrava a série.
+    /// Só a prática de tradução conta — revisar cards não acende a chama, de propósito:
+    /// o incentivo é fazer uma prática de verdade.
     /// </summary>
     public async Task<IReadOnlyList<DateTimeOffset>> ListCompletionTimesAsync(CancellationToken ct = default) =>
         await _db.Exercises
+            .IgnoreQueryFilters([WriteRightDbContext.SoftDeleteFilter])
             .Where(p => p.Status == PracticeStatus.Completed && p.CompletedAt != null)
             .Select(p => p.CompletedAt!.Value)
             .ToListAsync(ct);
@@ -262,13 +268,19 @@ public sealed class PracticeService
         return (PracticeOutcome.Ok, ToDetail(practice));
     }
 
-    /// <summary>Exclui uma prática (e seus erros, por cascade). Permitido em qualquer status.</summary>
+    /// <summary>
+    /// Exclui uma prática, em qualquer status. Exclusão LÓGICA: carimba
+    /// <see cref="ExerciseAttempt.DeletedAt"/> e o filtro global a tira — com os erros
+    /// junto — da lista, do detalhe, do perfil e das próximas análises. A linha fica
+    /// porque carrega fatos que excluir não desfaz: o dia em que você praticou e o que
+    /// custou. Excluir de novo devolve NotFound: pro filtro, ela já não existe.
+    /// </summary>
     public async Task<PracticeOutcome> DeletePracticeAsync(int id, CancellationToken ct = default)
     {
         var practice = await _db.Exercises.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (practice is null) return PracticeOutcome.NotFound;
 
-        _db.Exercises.Remove(practice);
+        practice.DeletedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
         return PracticeOutcome.Ok;
     }

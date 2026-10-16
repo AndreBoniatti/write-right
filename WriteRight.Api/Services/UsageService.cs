@@ -76,7 +76,10 @@ public sealed class UsageService
     {
         var calls = await _db.LlmCalls.ToListAsync(ct);
 
+        // Inclui as excluídas: o gasto delas continua somado abaixo (o registro de
+        // consumo não some), então tirá-las só do divisor inflaria a média.
         var completedPractices = await _db.Exercises
+            .IgnoreQueryFilters([WriteRightDbContext.SoftDeleteFilter])
             .CountAsync(p => p.Status == PracticeStatus.Completed, ct);
 
         var byOperation = calls

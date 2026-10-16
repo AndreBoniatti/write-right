@@ -176,8 +176,9 @@ public sealed class CardServiceTests : IDisposable
     }
 
     /// <summary>
-    /// O card COPIA o conteúdo em vez de referenciar o erro. Sem isso, apagar uma
-    /// prática (que tem DELETE em cascata) mataria cards em revisão há meses.
+    /// O card COPIA o conteúdo em vez de referenciar o erro: excluir a prática de
+    /// origem — que esconde a prática e os erros dela — não pode tirar do deck um
+    /// card em revisão há meses.
     /// </summary>
     [Fact]
     public async Task A_card_survives_the_deletion_of_the_practice_that_created_it()
@@ -188,7 +189,7 @@ public sealed class CardServiceTests : IDisposable
 
         await using (var ctx = _db.NewContext())
         {
-            ctx.Exercises.RemoveRange(ctx.Exercises);
+            foreach (var practice in ctx.Exercises) practice.DeletedAt = DateTimeOffset.UtcNow;
             await ctx.SaveChangesAsync();
         }
 

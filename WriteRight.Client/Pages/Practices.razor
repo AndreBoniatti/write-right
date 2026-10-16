@@ -1,6 +1,5 @@
 @page "/"
 @inject WriteRightApiClient Api
-@inject StreakState Streak
 
 <PageTitle>WriteRight — Minhas práticas</PageTitle>
 
@@ -175,10 +174,6 @@ else
         {
             if (await Api.DeletePracticeAsync(id))
             {
-                // Uma prática concluída é um dia da série: sem ela, o dia pode sumir.
-                if (practices.Find(p => p.Id == id)?.Status == PracticeStatus.Completed)
-                    _ = Streak.RefreshAsync();
-
                 practices.RemoveAll(p => p.Id == id);
                 total--;
             }

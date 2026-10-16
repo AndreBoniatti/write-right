@@ -383,10 +383,11 @@ public sealed class AnalysisServiceTests : IDisposable
         var stub = Stub(new DraftPattern("p", "d", ids.Take(3).ToList()));
         await Service(stub).GenerateAsync();
 
-        // Apaga TODAS as práticas: a evidência é snapshot, não ponteiro.
+        // Exclui TODAS as práticas — o que esconde os erros delas de toda consulta. A
+        // evidência é snapshot, não ponteiro: a análise não depende deles pra se ler.
         await using (var ctx = _db.NewContext())
         {
-            ctx.Exercises.RemoveRange(ctx.Exercises);
+            foreach (var practice in ctx.Exercises) practice.DeletedAt = DateTimeOffset.UtcNow;
             await ctx.SaveChangesAsync();
         }
 
@@ -394,6 +395,47 @@ public sealed class AnalysisServiceTests : IDisposable
 
         Assert.Equal(3, state.Latest!.Patterns[0].Evidence.Count);
         Assert.StartsWith("errado", state.Latest.Patterns[0].Evidence[0].Original);
+    }
+
+    /// <summary>
+    /// Excluiu porque o texto não servia: os erros dele não podem virar evidência de
+    /// um padrão novo, nem ajudar a passar o piso de dados.
+    /// </summary>
+    [Fact]
+    public async Task A_deleted_practice_leaves_the_window_of_the_next_analysis()
+    {
+        var kept = await SeedAboveFloorAsync();
+        var deleted = await SeedAsync(DateTimeOffset.UtcNow, Errors(4));
+        await using (var ctx = _db.NewContext())
+        {
+            foreach (var practice in ctx.Exercises.Where(p => p.Errors.Any(e => deleted.Contains(e.Id))))
+                practice.DeletedAt = DateTimeOffset.UtcNow;
+            await ctx.SaveChangesAsync();
+        }
+
+        var stub = Stub(new DraftPattern("p", "d", kept.Take(3).ToList()));
+        var analysis = (await Service(stub).GenerateAsync()).Analysis;
+
+        Assert.Equal(AnalysisService.MinPractices, analysis!.PracticesAnalyzed);
+        var sent = stub.LastAnalysisRequest!.Errors.Select(e => e.Id).ToList();
+        Assert.Equal(kept.Count, sent.Count);
+        Assert.DoesNotContain(sent, deleted.Contains);
+    }
+
+    [Fact]
+    public async Task Deleted_practices_do_not_count_toward_the_data_floor()
+    {
+        await SeedAboveFloorAsync();
+        await using (var ctx = _db.NewContext())
+        {
+            ctx.Exercises.First().DeletedAt = DateTimeOffset.UtcNow;
+            await ctx.SaveChangesAsync();
+        }
+
+        var state = await Service(new StubLlmProvider()).GetStateAsync();
+
+        Assert.Equal(AnalysisService.MinPractices - 1, state.CompletedPractices);
+        Assert.Equal(AnalysisGate.NotEnoughData, state.Gate);
     }
 
     // ── Gate de regeração ────────────────────────────────────────────────────

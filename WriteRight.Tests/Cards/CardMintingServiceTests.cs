@@ -161,14 +161,27 @@ public sealed class CardMintingServiceTests : IDisposable
         Assert.Equal(0, stub.CardCalls);
     }
 
-    /// <summary>Prática apagada enquanto esperava: nada a fazer, e nada pra quebrar.</summary>
+    /// <summary>
+    /// Prática excluída enquanto esperava os cards: continua pendente no banco (a
+    /// exclusão é lógica), mas não vale uma chamada paga — nem sai da fila do worker
+    /// como se tivesse sido processada.
+    /// </summary>
     [Fact]
     public async Task Does_nothing_for_a_deleted_practice()
     {
+        var id = await SeedAsync(CardsStatus.Pending, TwoErrors);
+        await using (var del = _db.NewContext())
+        {
+            (await del.Exercises.SingleAsync(p => p.Id == id)).DeletedAt = DateTimeOffset.UtcNow;
+            await del.SaveChangesAsync();
+        }
         var stub = new StubLlmProvider { CardDesign = Design() };
 
-        Assert.Equal(0, await Service(stub, out var ctx).MintAsync(999));
+        var service = Service(stub, out var ctx);
+        Assert.Empty(await service.PendingAsync());
+        Assert.Equal(0, await service.MintAsync(id));
         await ctx.DisposeAsync();
+
         Assert.Equal(0, stub.CardCalls);
     }
 

@@ -39,17 +39,25 @@ public sealed class UsageServiceTests : IDisposable
     }
 
     /// <summary>Uma prática concluída (só pra entrar no denominador da média).</summary>
-    private async Task<int> SeedCompletedPracticeAsync()
+    private Task<int> SeedCompletedPracticeAsync(bool deleted = false) =>
+        SeedPracticeAsync(PracticeStatus.Completed, deleted);
+
+    /// <summary>
+    /// Uma prática de verdade no banco — o consumo aponta pra ela por FK, então até a
+    /// abandonada precisa existir.
+    /// </summary>
+    private async Task<int> SeedPracticeAsync(PracticeStatus status, bool deleted = false)
     {
         await using var ctx = _db.NewContext();
         var practice = new ExerciseAttempt
         {
             SourceLanguage = Language.Portuguese,
             TargetLanguage = Language.English,
-            Status = PracticeStatus.Completed,
+            Status = status,
             SourceText = "seed",
             UserTranslation = "seed",
-            CompletedAt = DateTimeOffset.UtcNow,
+            CompletedAt = status == PracticeStatus.Completed ? DateTimeOffset.UtcNow : null,
+            DeletedAt = deleted ? DateTimeOffset.UtcNow : null,
         };
         ctx.Exercises.Add(practice);
         await ctx.SaveChangesAsync();
@@ -128,12 +136,32 @@ public sealed class UsageServiceTests : IDisposable
         var completed = await SeedCompletedPracticeAsync();
         await SeedCallAsync(LlmOperation.Generation, 0.004m, practiceId: completed);
         await SeedCallAsync(LlmOperation.Correction, 0.026m, practiceId: completed);
-        await SeedCallAsync(LlmOperation.Generation, 0.004m, practiceId: 999); // abandonada
+        var abandoned = await SeedPracticeAsync(PracticeStatus.InProgress);
+        await SeedCallAsync(LlmOperation.Generation, 0.004m, practiceId: abandoned);
 
         var report = await Service().GetReportAsync();
 
         Assert.Equal(1, report.CompletedPractices);
         Assert.Equal(0.034m, report.AvgCostPerPracticeUsd);
+    }
+
+    /// <summary>
+    /// O gasto de uma prática excluída continua somado (o registro não some), então
+    /// ela tem que continuar no divisor — senão excluir uma prática encareceria todas
+    /// as outras na média.
+    /// </summary>
+    [Fact]
+    public async Task AvgCostPerPractice_still_counts_a_deleted_practice()
+    {
+        var kept = await SeedCompletedPracticeAsync();
+        var deleted = await SeedCompletedPracticeAsync(deleted: true);
+        await SeedCallAsync(LlmOperation.Correction, 0.030m, practiceId: kept);
+        await SeedCallAsync(LlmOperation.Correction, 0.030m, practiceId: deleted);
+
+        var report = await Service().GetReportAsync();
+
+        Assert.Equal(2, report.CompletedPractices);
+        Assert.Equal(0.030m, report.AvgCostPerPracticeUsd);
     }
 
     [Fact]

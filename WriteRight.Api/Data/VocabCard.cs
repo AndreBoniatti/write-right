@@ -13,12 +13,12 @@ namespace WriteRight.Api.Data;
 /// prática os erros de vocabulário quase nunca se repetem sozinhos. Só um deck
 /// explícito força a repetição.
 ///
-/// <b>O conteúdo é COPIADO, não referenciado.</b> Existe DELETE de prática com
-/// cascade; se o card apontasse pro erro de origem, apagar uma prática mataria
-/// cards em revisão há meses. Mesma decisão (e mesmo motivo) do snapshot de
-/// evidências da análise — e o motivo de não haver nem sequer um id de origem
-/// aqui: ele apontaria pra uma linha que pode não existir, o que é pior que não
-/// ter referência nenhuma.
+/// <b>O conteúdo é COPIADO, não referenciado.</b> A decisão nasceu quando excluir
+/// uma prática apagava a linha em cascata — apontar pro erro de origem mataria cards
+/// em revisão há meses. Hoje a exclusão é lógica, mas a cópia continua certa por
+/// outro motivo: o card não é um espelho do erro. A reincidência reescreve o
+/// conteúdo inteiro com o fracasso mais recente, e lacuna, dica e alternativas são
+/// desenho próprio. Um id de origem apontaria pra um erro que já não é o do card.
 /// </summary>
 public class VocabCard
 {

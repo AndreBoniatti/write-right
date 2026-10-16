@@ -5,8 +5,9 @@ namespace WriteRight.Client.Services;
 /// <summary>
 /// Os instantes de conclusão das práticas, de onde sai a série de dias da barra de
 /// cima. Existe pelo mesmo motivo do <see cref="DueCardsState"/>: a barra vive no
-/// layout, montada uma vez, e quem conclui ou exclui uma prática está em outra tela.
-/// Sem aviso, a chama continuaria apagada depois de você praticar.
+/// layout, montada uma vez, e quem conclui uma prática está em outra tela. Sem aviso,
+/// a chama continuaria apagada depois de você praticar. Excluir não avisa: prática
+/// excluída continua contando o dia em que foi feita.
 ///
 /// Guarda os instantes, não a série pronta: a série depende do agora — o dia vira
 /// às 4h, inclusive com o app aberto — então é recalculada a cada leitura de

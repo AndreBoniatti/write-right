@@ -100,6 +100,9 @@ namespace WriteRight.Api.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Level")
                         .HasColumnType("TEXT");
 
@@ -212,7 +215,11 @@ namespace WriteRight.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AnalysisId");
+
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("PracticeId");
 
                     b.ToTable("LlmCalls");
                 });
@@ -295,7 +302,7 @@ namespace WriteRight.Api.Migrations
                     b.HasOne("WriteRight.Api.Data.VocabCard", "VocabCard")
                         .WithMany("Reviews")
                         .HasForeignKey("VocabCardId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("VocabCard");
@@ -306,10 +313,23 @@ namespace WriteRight.Api.Migrations
                     b.HasOne("WriteRight.Api.Data.ExerciseAttempt", "ExerciseAttempt")
                         .WithMany("Errors")
                         .HasForeignKey("ExerciseAttemptId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("ExerciseAttempt");
+                });
+
+            modelBuilder.Entity("WriteRight.Api.Data.LlmCall", b =>
+                {
+                    b.HasOne("WriteRight.Api.Data.AnalysisRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AnalysisId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("WriteRight.Api.Data.ExerciseAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("PracticeId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("WriteRight.Api.Data.ExerciseAttempt", b =>
