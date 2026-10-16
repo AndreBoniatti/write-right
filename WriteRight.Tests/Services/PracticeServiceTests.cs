@@ -372,6 +372,19 @@ public sealed class PracticeServiceTests : IDisposable
         Assert.Equal(new string('a', 160) + "…", item.Preview); // cortado, e diz que foi
     }
 
+    [Fact]
+    public async Task ListCompletionTimesAsync_returns_only_completed_practices()
+    {
+        var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
+        var completed = await Service(stub).CreatePracticeAsync(CreateRequest());
+        var corrected = (await Service(stub).CorrectPracticeAsync(completed.Id, "x")).Detail!;
+        await Service(stub).CreatePracticeAsync(CreateRequest()); // fica em andamento
+
+        var times = await Service(stub).ListCompletionTimesAsync();
+
+        Assert.Equal(corrected.CompletedAt, Assert.Single(times));
+    }
+
     // ── Excluir ──────────────────────────────────────────────────────────────
 
     [Fact]

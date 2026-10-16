@@ -97,6 +97,13 @@ practices.MapGet("/",
         Results.Ok(await service.ListPracticesAsync(skip ?? 0, ct: ct)))
    .WithName("ListPractices");
 
+// Quando cada prática concluída foi concluída — a série de dias da barra de cima
+// sai daqui, calculada no cliente, que é quem sabe o fuso.
+practices.MapGet("/completions",
+    async (PracticeService service, CancellationToken ct) =>
+        Results.Ok(await service.ListCompletionTimesAsync(ct)))
+   .WithName("ListPracticeCompletions");
+
 // Detalhe de uma prática (retomar ou ler).
 practices.MapGet("/{id:int}",
     async (int id, PracticeService service, CancellationToken ct) =>

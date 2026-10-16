@@ -48,6 +48,10 @@ public sealed class WriteRightApiClient
     public async Task<PracticePage> ListPracticesAsync(int skip = 0, CancellationToken ct = default) =>
         (await _http.GetFromJsonAsync<PracticePage>($"api/practices?skip={skip}", Json, ct))!;
 
+    /// <summary>Quando cada prática concluída foi concluída — de onde sai a série de dias.</summary>
+    public async Task<IReadOnlyList<DateTimeOffset>> ListCompletionTimesAsync(CancellationToken ct = default) =>
+        await _http.GetFromJsonAsync<List<DateTimeOffset>>("api/practices/completions", Json, ct) ?? new();
+
     /// <summary>Detalhe de uma prática (retomar ou ler). Null se não existe (404).</summary>
     public async Task<PracticeDetail?> GetPracticeAsync(int id, CancellationToken ct = default)
     {

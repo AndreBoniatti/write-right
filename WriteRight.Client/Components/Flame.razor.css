@@ -1,0 +1,51 @@
+.flame {
+    display: block;
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+/* Acesa: praticou hoje. Mexe devagar, como chama de verdade, e tem um brilho leve
+   atrás — é o único estado que comemora alguma coisa. */
+.flame--lit {
+    filter: drop-shadow(0 0 6px var(--wr-flame-halo));
+}
+
+.flame--lit .flame__outer,
+.flame--lit .flame__core {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+}
+
+.flame--lit .flame__outer { animation: wr-flicker 1.9s ease-in-out infinite; }
+.flame--lit .flame__core { animation: wr-flicker-core 1.3s ease-in-out infinite; }
+
+/* Só o contorno: a série vale, mas o dia de hoje ainda não foi aceso. */
+.flame--unlit .flame__outer {
+    fill: none;
+    stroke: var(--wr-primary);
+    stroke-width: 3.5;
+    stroke-linejoin: round;
+}
+
+.flame--unlit .flame__core { fill: none; }
+
+/* Cinza: não há série. */
+.flame--off .flame__outer { fill: var(--wr-flame-off); }
+.flame--off .flame__core { fill: var(--wr-flame-off-core); }
+
+@keyframes wr-flicker {
+    0%, 100% { transform: scale(1, 1) skewX(0deg); }
+    30% { transform: scale(0.97, 1.04) skewX(-2deg); }
+    60% { transform: scale(1.02, 0.97) skewX(1.5deg); }
+}
+
+@keyframes wr-flicker-core {
+    0%, 100% { transform: scale(1, 1); }
+    40% { transform: scale(0.93, 1.08); }
+    70% { transform: scale(1.05, 0.94); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .flame--lit .flame__outer,
+    .flame--lit .flame__core { animation: none; }
+}

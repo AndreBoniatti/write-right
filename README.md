@@ -156,6 +156,7 @@ Then open **http://localhost:5193**. The SQLite database is created automaticall
 |---|---|---|
 | `POST` | `/api/practices` | Create a practice (generates the text, stores it as in-progress) |
 | `GET` | `/api/practices?skip=` | List practices for the home screen, a page at a time (in-progress first, then newest) |
+| `GET` | `/api/practices/completions` | When each completed practice was finished — the day streak is computed from it on the client, which knows your time zone |
 | `GET` | `/api/practices/{id}` | Full practice detail (resume or read) |
 | `PUT` | `/api/practices/{id}/translation` | Save a draft translation without correcting |
 | `POST` | `/api/practices/{id}/correct` | Correct the translation, store the errors, complete the practice |
@@ -218,6 +219,7 @@ The suite covers the parts with real logic and real regression risk:
 - **Persistence + aggregation** — correcting stores the attempt and its errors, and the profile aggregates by category ordered by frequency, tested against a **real in-memory SQLite** database (so the enum-as-string value converters run for real).
 - **Evidence grounding** — the analysis drops any pattern that cites error ids it was never sent or that falls under the evidence floor, and persists nothing when none survive. The window sizing (by error volume, not practice count) and the snapshotting of evidence — an analysis stays intact even after the practice it cited is deleted — are covered too.
 - **The deck** — mostly the failure paths, because they're the ones that quietly corrupt data: every rule of the gate (each one named after a real bad card), a correction that queues its cards in the same transaction, a failed card call that records its cost and stays pending, a recurring error that reschedules instead of duplicating (and writes no review row), a discarded card that's never resurrected, a card that outlives the practice that created it, and siblings from one sentence that never share a session. Plus the interval arithmetic, where a wrong sign breaks nothing visible — it just makes reviews arrive at the wrong time for months.
+- **The day streak** — days are counted on your clock, not UTC, and the day turns at 4am: a practice finished at 00:30 belongs to the evening it started in, or a late session would break the streak on a day you practiced.
 
 **Conscious gap:** the real HTTP call to Anthropic isn't tested — it costs money and is flaky. The model sits behind an interface and is swapped for a fake in tests, so everything *around* the call is covered. New logic ships with tests, and the suite runs on every change.
 

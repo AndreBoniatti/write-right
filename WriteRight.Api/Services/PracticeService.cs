@@ -163,6 +163,17 @@ public sealed class PracticeService
         return new PracticePage(items, total);
     }
 
+    /// <summary>
+    /// Quando cada prática concluída foi concluída — a matéria-prima da série de dias.
+    /// Instantes crus, não dias: o dia depende do fuso de quem está vendo, e quem sabe
+    /// o fuso é o cliente (ver <see cref="PracticeStreak"/>).
+    /// </summary>
+    public async Task<IReadOnlyList<DateTimeOffset>> ListCompletionTimesAsync(CancellationToken ct = default) =>
+        await _db.Exercises
+            .Where(p => p.Status == PracticeStatus.Completed && p.CompletedAt != null)
+            .Select(p => p.CompletedAt!.Value)
+            .ToListAsync(ct);
+
     /// <summary>Detalhe completo de uma prática (retomar ou ler). Null se não existe.</summary>
     public async Task<PracticeDetail?> GetPracticeAsync(int id, CancellationToken ct = default)
     {

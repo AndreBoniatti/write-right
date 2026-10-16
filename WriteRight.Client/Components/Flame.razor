@@ -1,0 +1,36 @@
+@* A chama da série de dias. Desenho próprio: uma ponta principal e uma lateral —
+   com ponta única ela lia como gota d'água. As cores vêm das variáveis do tema
+   (--wr-flame-*), então acompanha claro/escuro sem nada aqui saber disso. *@
+<svg class="flame @StateClass" width="@Size" height="@Size" viewBox="0 0 64 64" aria-hidden="true">
+    <defs>
+        <linearGradient id="@outerId" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" style="stop-color: var(--wr-flame-top)" />
+            <stop offset="1" style="stop-color: var(--wr-flame-bottom)" />
+        </linearGradient>
+        <linearGradient id="@coreId" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" style="stop-color: var(--wr-flame-core-top)" />
+            <stop offset="1" style="stop-color: var(--wr-flame-core-bottom)" />
+        </linearGradient>
+    </defs>
+    <path class="flame__outer" fill="url(#@outerId)"
+          d="M31 2C33 11 41 16 46 23C50.5 29.5 53 36.5 52 44.5C50.5 55 42.5 62 32 62C21.5 62 12.5 55 12.5 44C12.5 36 16 30.5 20.5 25.5C20.5 30.5 22.5 34 26 36C24 26 25.5 13 31 2Z" />
+    <path class="flame__core" fill="url(#@coreId)"
+          d="M33 33C36 39.5 41.5 43.5 41.5 50.5C41.5 56.5 37.5 60 32 60C26.5 60 22.5 56.5 22.5 51C22.5 46.5 25 43.5 28 41.5C28.5 45 30 47 32 47.5C30.5 42.5 31 37.5 33 33Z" />
+</svg>
+
+@code {
+    [Parameter] public StreakStatus Status { get; set; }
+    [Parameter] public int Size { get; set; } = 24;
+
+    // Um id por instância: a barra e o popover desenham a chama ao mesmo tempo, e
+    // com o mesmo id a segunda pintaria com o gradiente da primeira.
+    private readonly string outerId = $"wr-flame-o-{Guid.NewGuid():N}";
+    private readonly string coreId = $"wr-flame-c-{Guid.NewGuid():N}";
+
+    private string StateClass => Status switch
+    {
+        StreakStatus.Lit => "flame--lit",
+        StreakStatus.AtRisk => "flame--unlit",
+        _ => "flame--off",
+    };
+}

@@ -42,6 +42,15 @@
     --wr-info: #0e8fd6;
     --wr-info-soft: rgba(14, 143, 214, 0.12);
 
+    /* Chama da série de dias (acesa, apagada, e o halo atrás dela) */
+    --wr-flame-top: #b7a9ff;
+    --wr-flame-bottom: #5b4bf0;
+    --wr-flame-core-top: #ffffff;
+    --wr-flame-core-bottom: #cfc6ff;
+    --wr-flame-off: #b9bdcc;
+    --wr-flame-off-core: #e3e5ee;
+    --wr-flame-halo: rgba(106, 92, 255, 0.12);
+
     /* Forma */
     --wr-radius: 14px;
     --wr-radius-sm: 9px;
@@ -74,6 +83,14 @@
     --wr-danger-soft: rgba(255, 107, 111, 0.15);
     --wr-info: #38bdf8;
     --wr-info-soft: rgba(56, 189, 248, 0.15);
+
+    --wr-flame-top: #c9bfff;
+    --wr-flame-bottom: #6d5cff;
+    --wr-flame-core-top: #ffffff;
+    --wr-flame-core-bottom: #d9d2ff;
+    --wr-flame-off: #4a5068;
+    --wr-flame-off-core: #6b7290;
+    --wr-flame-halo: rgba(139, 123, 255, 0.14);
 
     --wr-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.4);
     --wr-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);

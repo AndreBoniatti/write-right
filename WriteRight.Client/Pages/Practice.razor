@@ -3,6 +3,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject DueCardsState DueCards
+@inject StreakState Streak
 @implements IAsyncDisposable
 
 <PageTitle>WriteRight — Prática</PageTitle>
@@ -312,6 +313,10 @@ else
                 // Os cards desta correção nascem daqui a pouco, no servidor; o selo
                 // acompanha sozinho até eles chegarem, mesmo se você sair da página.
                 DueCards.Follow();
+
+                // Concluir é o que conta pra série: a chama da barra acende agora,
+                // não no próximo boot. Não espera — a correção já está na tela.
+                _ = Streak.RefreshAsync();
             }
         }
         catch (Exception ex)

@@ -1,0 +1,99 @@
+@implements IDisposable
+@inject StreakState Streak
+
+@* A série de dias na barra de cima: a chama e o número sempre à vista, o detalhe
+   num clique. Na barra e não na lista porque aparece em todas as telas sem ocupar
+   espaço de nenhuma. Antes da primeira leitura não desenha nada — um "0 dias"
+   cinza piscando no boot diria que a série acabou. *@
+@if (Streak.View is { } view)
+{
+    <div class="streak" @onkeydown="OnKeyDown">
+        <button type="button" class="streak__btn @(view.Status == StreakStatus.Off ? "streak__btn--off" : "")"
+                @onclick="() => open = !open"
+                aria-expanded="@(open ? "true" : "false")" aria-label="@($"Série de {Days(view.Current)}")">
+            <Flame Status="view.Status" Size="24" />
+            <span>@Days(view.Current)</span>
+        </button>
+
+        @if (open)
+        {
+            @* Clique fora fecha: a camada invisível cobre a página por baixo do popover. *@
+            <div class="streak__backdrop" @onclick="() => open = false"></div>
+
+            <div class="streak__pop" role="dialog" aria-label="Sua série de dias">
+                <div class="streak__halo"><Flame Status="view.Status" Size="76" /></div>
+
+                <p class="streak__title">
+                    @(view.Status == StreakStatus.Off ? "Comece uma nova série" : $"Série de {Days(view.Current)}")
+                </p>
+
+                <div class="streak__days">
+                    @foreach (var d in view.RecentDays)
+                    {
+                        var state = d.Practiced ? "is-done" : d.Date == view.Today ? "is-today" : "";
+                        <span class="streak__day @state" title="@d.Date.ToString("dd/MM")">
+                            <small>@Initial(d.Date)</small>
+                            <i>
+                                @if (d.Practiced)
+                                {
+                                    <Icon Name="check" Size="14" />
+                                }
+                            </i>
+                        </span>
+                    }
+                </div>
+
+                <p class="streak__msg">@Message(view)</p>
+
+                @if (view.Status != StreakStatus.Lit)
+                {
+                    <a class="btn btn-primary btn-sm" href="practice/new" @onclick="() => open = false">Praticar agora</a>
+                }
+
+                @if (view.Record > 0)
+                {
+                    <p class="streak__record">Seu recorde: <strong>@Days(view.Record)</strong></p>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private bool open;
+
+    /// <summary>
+    /// A barra é montada uma vez, então ela ouve o estado em vez de buscá-lo — quem
+    /// conclui ou exclui uma prática avisa. Esta é a única leitura feita daqui.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        Streak.Changed += OnStreakChanged;
+        await Streak.RefreshAsync();
+    }
+
+    /// <summary>O aviso pode vir de fora do contexto do Blazor (ver NavMenu).</summary>
+    private void OnStreakChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Streak.Changed -= OnStreakChanged;
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") open = false;
+    }
+
+    private static string Days(int n) => n == 1 ? "1 dia" : $"{n} dias";
+
+    private static string Message(StreakView view) => view.Status switch
+    {
+        StreakStatus.Lit => "Prática de hoje feita. Volte amanhã pra manter a série.",
+        StreakStatus.AtRisk =>
+            $"Você ainda não praticou hoje. Pratique até as {PracticeStreak.DayStartsAt.Hours}h pra manter a série.",
+        _ when view.LastRunLength is { } length =>
+            $"Sua última série foi de {Days(length)}, até {view.LastRunEnd:dd/MM}.",
+        _ => "Pratique hoje pra começar a sua primeira série.",
+    };
+
+    /// <summary>Inicial do dia da semana, de domingo a sábado — como nos calendários daqui.</summary>
+    private static string Initial(DateOnly d) => "DSTQQSS"[(int)d.DayOfWeek].ToString();
+}
