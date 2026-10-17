@@ -15,7 +15,7 @@ namespace WriteRight.Api.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("WriteRight.Api.Data.AnalysisRecord", b =>
                 {
@@ -195,6 +195,9 @@ namespace WriteRight.Api.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("InputTokens")
                         .HasColumnType("INTEGER");

@@ -3,7 +3,7 @@ using WriteRight.Shared.Usage;
 namespace WriteRight.Api.Data;
 
 /// <summary>
-/// Entidade de persistência: UMA chamada à IA e o que ela consumiu.
+/// Entidade de persistência: UMA chamada à IA, o que ela consumiu e quanto demorou.
 ///
 /// É tabela própria, e não colunas em <see cref="ExerciseAttempt"/>, por três
 /// motivos concretos:
@@ -42,6 +42,12 @@ public class LlmCall
     /// de preços; os tokens continuam válidos e o custo dá pra recalcular depois.
     /// </summary>
     public decimal? CostUsd { get; set; }
+
+    /// <summary>
+    /// Quanto a chamada levou, do envio à resposta. É o tempo da IA, não o da tela —
+    /// banco, rede e render ficam de fora, e somem perto dele.
+    /// </summary>
+    public long DurationMs { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 

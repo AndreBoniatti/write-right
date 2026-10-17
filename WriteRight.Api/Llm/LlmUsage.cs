@@ -8,16 +8,20 @@ namespace WriteRight.Api.Llm;
 /// Token é o fato bruto e imutável; custo é derivado (preço muda). Por isso o que
 /// se guarda é isto, e o custo vai junto só como retrato do momento — ver
 /// <see cref="LlmPricing"/>.
+///
+/// <see cref="Duration"/> é a exceção: a API não reporta, é cronometrado do nosso lado.
+/// Tem default só pra quem não liga pra ele (os testes de preço); o provider sempre passa.
 /// </summary>
 public sealed record LlmUsage(
     string Model,
     long InputTokens,
     long OutputTokens,
     long CacheWriteTokens,
-    long CacheReadTokens)
+    long CacheReadTokens,
+    TimeSpan Duration = default)
 {
     /// <summary>Fallback pra resposta sem bloco de uso — nunca deveria acontecer, mas não vale derrubar a prática por isso.</summary>
-    public static LlmUsage Unknown(string model) => new(model, 0, 0, 0, 0);
+    public static LlmUsage Unknown(string model, TimeSpan duration) => new(model, 0, 0, 0, 0, duration);
 }
 
 /// <summary>

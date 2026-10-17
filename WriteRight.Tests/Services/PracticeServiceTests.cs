@@ -738,6 +738,7 @@ public sealed class PracticeServiceTests : IDisposable
         Assert.Equal(StubLlmProvider.DefaultUsage.InputTokens, call.InputTokens);
         Assert.Equal(StubLlmProvider.DefaultUsage.OutputTokens, call.OutputTokens);
         Assert.True(call.CostUsd > 0);
+        Assert.Equal(12_345, call.DurationMs);
     }
 
     [Fact]
@@ -837,6 +838,7 @@ public sealed class PracticeServiceTests : IDisposable
         var failed = ctx.LlmCalls.Single(c => c.Operation == LlmOperation.Correction);
         Assert.Equal(detail.Id, failed.PracticeId);
         Assert.True(failed.CostUsd > 0);
+        Assert.Equal(12_345, failed.DurationMs); // a espera também aconteceu
     }
 
     public void Dispose() => _db.Dispose();

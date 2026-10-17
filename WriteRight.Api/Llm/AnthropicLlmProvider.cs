@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Anthropic;
 using Anthropic.Models.Messages;
@@ -95,6 +96,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     {
         var client = CreateClient();
 
+        var clock = Stopwatch.StartNew();
         var response = await client.Messages.Create(new MessageCreateParams
         {
             Model = _options.GenerationModel,
@@ -107,7 +109,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
             },
         });
 
-        var usage = UsageOf(response, _options.GenerationModel);
+        var usage = UsageOf(response, _options.GenerationModel, clock.Elapsed);
 
         var exercise = Interpret(response, usage, "a geração", json =>
         {
@@ -124,6 +126,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     {
         var client = CreateClient();
 
+        var clock = Stopwatch.StartNew();
         var response = await client.Messages.Create(new MessageCreateParams
         {
             Model = _options.CorrectionModel,
@@ -137,7 +140,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
             },
         });
 
-        var usage = UsageOf(response, _options.CorrectionModel);
+        var usage = UsageOf(response, _options.CorrectionModel, clock.Elapsed);
 
         var correction = Interpret(response, usage, "a correção", json =>
             JsonSerializer.Deserialize<CorrectionResult>(json, LlmJson.Options)
@@ -151,6 +154,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     {
         var client = CreateClient();
 
+        var clock = Stopwatch.StartNew();
         var response = await client.Messages.Create(new MessageCreateParams
         {
             Model = _options.AnalysisModel,
@@ -164,7 +168,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
             },
         });
 
-        var usage = UsageOf(response, _options.AnalysisModel);
+        var usage = UsageOf(response, _options.AnalysisModel, clock.Elapsed);
 
         var draft = Interpret(response, usage, "a análise", json =>
             JsonSerializer.Deserialize<AnalysisDraft>(json, LlmJson.Options)
@@ -178,6 +182,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     {
         var client = CreateClient();
 
+        var clock = Stopwatch.StartNew();
         var response = await client.Messages.Create(new MessageCreateParams
         {
             Model = _options.CardModel,
@@ -191,7 +196,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
             },
         });
 
-        var usage = UsageOf(response, _options.CardModel);
+        var usage = UsageOf(response, _options.CardModel, clock.Elapsed);
 
         var design = Interpret(response, usage, "o desenho dos cards", json =>
             JsonSerializer.Deserialize<CardDesign>(json, LlmJson.Options)
@@ -226,8 +231,12 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     /// de fato cobrou), não da config — se um alias resolver pra outro snapshot, o
     /// registro reflete a cobrança real. <paramref name="requested"/> é só o
     /// fallback caso a resposta venha sem esse campo.
+    ///
+    /// <paramref name="elapsed"/> é cronometrado em volta do <c>Messages.Create</c>, então
+    /// inclui as novas tentativas que o SDK faz sozinho (<c>MaxRetries</c>) — é o tempo
+    /// que quem clicou esperou, não só o da última tentativa.
     /// </summary>
-    private static LlmUsage UsageOf(Message response, string requested)
+    private static LlmUsage UsageOf(Message response, string requested, TimeSpan elapsed)
     {
         // response.Model é ApiEnum<string, Model>; a atribuição explícita resolve a
         // conversão implícita (num ternário ela fica ambígua e não compila).
@@ -235,14 +244,15 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         if (string.IsNullOrWhiteSpace(model)) model = requested;
 
         var usage = response.Usage;
-        if (usage is null) return LlmUsage.Unknown(model);
+        if (usage is null) return LlmUsage.Unknown(model, elapsed);
 
         return new LlmUsage(
             model,
             usage.InputTokens,
             usage.OutputTokens,
             usage.CacheCreationInputTokens ?? 0,
-            usage.CacheReadInputTokens ?? 0);
+            usage.CacheReadInputTokens ?? 0,
+            elapsed);
     }
 
     /// <summary>Extrai o JSON do primeiro bloco de texto (structured output).</summary>

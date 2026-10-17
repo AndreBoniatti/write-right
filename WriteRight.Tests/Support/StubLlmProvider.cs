@@ -20,9 +20,10 @@ public sealed class StubLlmProvider : ILlmProvider
     /// <summary>
     /// Consumo padrão de toda chamada. Modelo real e COM preço em tabela, de
     /// propósito: assim o custo calculado é &gt; 0 e o teste distingue "registrado"
-    /// de "não registrado".
+    /// de "não registrado". A duração também é &gt; 0, pelo mesmo motivo.
     /// </summary>
-    public static readonly LlmUsage DefaultUsage = new("claude-sonnet-5", 1_000, 500, 0, 0);
+    public static readonly LlmUsage DefaultUsage =
+        new("claude-sonnet-5", 1_000, 500, 0, 0, TimeSpan.FromMilliseconds(12_345));
 
     private readonly GeneratedExercise? _exercise;
     private readonly CorrectionResult? _correction;

@@ -61,6 +61,7 @@ public sealed class UsageService
             CacheWriteTokens = usage.CacheWriteTokens,
             CacheReadTokens = usage.CacheReadTokens,
             CostUsd = _pricing.CostOf(usage),
+            DurationMs = (long)usage.Duration.TotalMilliseconds,
             CreatedAt = DateTimeOffset.UtcNow,
             PracticeId = practiceId,
             AnalysisId = analysisId,
