@@ -278,7 +278,7 @@ else
     private ErrorCategory? filter;
     private int? open;     // índice do segmento cujo balão está aberto
     private bool pinned;   // aberto por clique (fica) ou por hover (some ao sair)
-    private int? placed;   // balão que o JS já posicionou
+    private (int Index, bool Pinned)? placed;   // balão que o JS já posicionou
 
     private bool loading = true;
     private bool busy;         // qualquer ação em andamento
@@ -404,9 +404,11 @@ else
 
         // Blazor não mede layout: o JS põe o balão sob a última linha do trecho, e,
         // fixado, leva o foco pra ele (leitor de tela e Enter seguem o balão).
-        if (open is int o && placed != o)
+        // Fixar um balão do hover mede de novo: ele ganha a barra de navegação e
+        // pode não caber mais no lado em que estava.
+        if (open is int o && placed != (o, pinned))
         {
-            placed = o;
+            placed = (o, pinned);
             await JS.InvokeVoidAsync("writerightMarks.place", MarkId(o), PopoverId, pinned);
         }
     }

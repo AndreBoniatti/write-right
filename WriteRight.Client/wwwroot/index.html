@@ -36,25 +36,39 @@
 
     <!-- Balão das correções (Practice.razor): sob a última linha do trecho marcado,
          sem passar da largura do texto. O balão nasce invisível; aparece já no lugar.
-         Fixado (clique ou setas), o foco vai pro trecho e a tela rola até ele. -->
+         Fixado (clique ou setas), o foco vai pro trecho e a tela rola até ele.
+         O balão nunca sai da tela: passando do fim da página, ele a esticava, e a
+         rolagem caía numa faixa vazia sem a sidebar. Não cabendo embaixo, abre em
+         cima; não cabendo em nenhum dos dois, fica no lado maior e rola por dentro. -->
     <script>
         window.writerightMarks = {
             place: function (markId, popId, focusMark) {
                 var mark = document.getElementById(markId);
                 var pop = document.getElementById(popId);
                 if (!mark || !pop || !pop.offsetParent) return;
-                var box = pop.offsetParent.getBoundingClientRect();
-                var lines = mark.getClientRects();
-                var last = lines[lines.length - 1];
-                var left = Math.max(0, Math.min(last.left - box.left, box.width - pop.offsetWidth));
-                pop.style.left = left + 'px';
-                pop.style.top = (last.bottom - box.top + 6) + 'px';
-                pop.style.visibility = 'visible';
+                // O trecho entra na tela antes de medir: o espaço livre conta a partir dele.
                 if (focusMark) {
                     mark.focus({ preventScroll: true });
                     mark.scrollIntoView({ block: 'nearest' });
-                    pop.scrollIntoView({ block: 'nearest' });
                 }
+                var gap = 6, edge = 8;
+                var box = pop.offsetParent.getBoundingClientRect();
+                var lines = mark.getClientRects();
+                var first = lines[0], last = lines[lines.length - 1];
+                // A barra do topo é sticky e fica por cima do balão.
+                var bar = document.querySelector('.top-row');
+                var ceiling = Math.max(0, bar ? bar.getBoundingClientRect().bottom : 0);
+                var below = window.innerHeight - last.bottom - gap - edge;
+                var above = first.top - ceiling - gap - edge;
+                pop.style.maxHeight = 'none';
+                var up = pop.offsetHeight > below && above > below;
+                var line = up ? first : last;
+                pop.style.maxHeight = Math.max(120, up ? above : below) + 'px';
+                pop.style.left = Math.max(0, Math.min(line.left - box.left, box.width - pop.offsetWidth)) + 'px';
+                // Em cima, preso pela base: se o balão crescer, cresce pra longe do trecho.
+                pop.style.top = up ? 'auto' : (last.bottom - box.top + gap) + 'px';
+                pop.style.bottom = up ? (box.bottom - first.top + gap) + 'px' : 'auto';
+                pop.style.visibility = 'visible';
             },
 
             // Esc, ← → e clique fora valem na página toda, não só com o foco no card.

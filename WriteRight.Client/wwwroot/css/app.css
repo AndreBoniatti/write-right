@@ -111,6 +111,14 @@ body {
     text-rendering: optimizeLegibility;
 }
 
+/* A barra do topo é sticky da largura de tablet pra cima (MainLayout): rolar até
+   um elemento (as setas do balão de correção) não pode deixá-lo embaixo dela. */
+@media (min-width: 641px) {
+    html {
+        scroll-padding-top: 3.75rem;
+    }
+}
+
 h1, h2, h3, h4, h5, h6 {
     color: var(--wr-text);
     font-weight: 650;

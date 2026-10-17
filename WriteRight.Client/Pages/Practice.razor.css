@@ -126,9 +126,18 @@
     padding: 0 0 4px;
     font-size: 0.88rem;
     line-height: 1.5;
+    /* O JS limita a altura ao espaço da tela; o que passar rola aqui dentro. */
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
 }
 
+/* Fica no topo ao rolar o balão: as setas e o "1 de 4" não somem. */
 .wr-mark-pop__nav {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--wr-surface);
     display: flex;
     align-items: center;
     justify-content: space-between;
