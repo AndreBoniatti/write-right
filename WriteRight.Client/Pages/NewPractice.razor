@@ -69,6 +69,7 @@
             </div>
             <div class="mt-auto pt-3">
                 <button class="btn btn-primary" @onclick="Create" disabled="@(loading || !WordCountOk)">
+                    @if (loading) { <span class="wr-spinner" aria-hidden="true"></span> }
                     @(loading ? "Gerando…" : "Gerar e começar")
                 </button>
                 <a class="btn btn-outline-secondary ms-2" href="">Cancelar</a>

@@ -45,16 +45,25 @@ else
 
     @if (practice.Status == PracticeStatus.InProgress)
     {
+        @* Travado enquanto uma ação usa o texto: o que fosse digitado agora se perderia,
+           porque o servidor corrige (ou salva) o que foi enviado no clique. *@
         <textarea class="form-control mb-3" rows="6" @bind="translation" @bind:event="oninput"
-                  placeholder="Escreva sua tradução aqui…"></textarea>
+                  readonly="@busy" placeholder="Escreva sua tradução aqui…"></textarea>
 
         <button class="btn btn-primary" @onclick="Correct"
                 disabled="@(busy || string.IsNullOrWhiteSpace(translation))">
+            @if (correcting) { <span class="wr-spinner" aria-hidden="true"></span> }
             @(correcting ? "Corrigindo…" : "Corrigir")
         </button>
         <button class="btn btn-outline-secondary ms-2" @onclick="SaveAndExit" disabled="@busy">
             @(saving ? "Salvando…" : "Salvar e sair")
         </button>
+        @if (correcting)
+        {
+            <p class="text-muted small mt-2 mb-0" role="status">
+                Lendo sua tradução e marcando os erros. Isso leva alguns segundos.
+            </p>
+        }
     }
     else if (markup is not null)
     {

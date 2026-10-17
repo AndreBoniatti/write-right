@@ -217,6 +217,12 @@ a:hover { color: var(--wr-primary-strong); }
 }
 .form-control::placeholder { color: var(--wr-text-muted); opacity: 0.7; }
 
+/* Travado enquanto uma ação usa o valor (ex.: a correção em andamento). */
+.form-control[readonly] {
+    background-color: var(--wr-surface-2);
+    color: var(--wr-text-muted);
+}
+
 .form-label {
     color: var(--wr-text-muted);
     font-size: 0.82rem;
@@ -452,6 +458,34 @@ s { opacity: 0.85; }
 @keyframes wr-pulse {
     0%, 100% { transform: scale(1); opacity: 1; }
     50% { transform: scale(1.06); opacity: 0.85; }
+}
+
+/* ── Espera ────────────────────────────────────────────────
+   Girando = algo que você disparou ainda está rodando. Vai dentro do botão que
+   disparou (o .btn já é flex com gap, como com os ícones) ou antes de uma linha
+   de status. Herda a cor do texto, então serve em qualquer fundo e tema. */
+.wr-spinner {
+    display: inline-block;
+    flex: none;
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: wr-spin 0.75s linear infinite;
+}
+
+@keyframes wr-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Quem pediu menos movimento vê o anel parado, pulsando devagar — ainda diz "rodando". */
+@media (prefers-reduced-motion: reduce) {
+    .wr-spinner { animation: wr-fade 1.6s ease-in-out infinite; }
+}
+
+@keyframes wr-fade {
+    50% { opacity: 0.35; }
 }
 
 code { color: #c02d76; }
