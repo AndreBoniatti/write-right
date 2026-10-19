@@ -1,0 +1,303 @@
+@using System.Globalization
+@* A evolução: erros a cada 10 palavras, uma coluna por prática (empilhada por
+   gravidade, a mais grave na base) e a média móvel por cima.
+
+   As colunas são HTML/CSS pra escalar com a largura sem JS; só a linha é SVG,
+   esticado (preserveAspectRatio="none") com traço que não escala. O que vai pra
+   style passa por Ui.Pct e os points do SVG pela InvariantCulture: no navegador em
+   pt-BR, um "12,5%" quebra o CSS sem erro nenhum. *@
+
+@if (points.Count > 0)
+{
+    <section class="card evo-card" aria-labelledby="evo-title">
+        <h2 class="evo-title" id="evo-title">Sua evolução</h2>
+        <p class="evo-sub">
+            Erros a cada @ErrorRate.PerWords palavras, uma coluna por prática, da mais antiga à mais
+            recente@(capped ? $" (as últimas {MaxColumns})" : "").
+        </p>
+
+        <div class="kpi">
+            <span class="kpi-value">@Num(headline)</span>
+            <span class="kpi-label">@HeadlineLabel</span>
+            @if (delta is not null)
+            {
+                <span class="delta delta--@delta.Value.Kind">@delta.Value.Text</span>
+            }
+        </div>
+
+        <div class="evo @(active is null ? "" : "evo--hover")" tabindex="0" role="img"
+             aria-label="@($"Erros a cada {ErrorRate.PerWords} palavras por prática. Use as setas pra percorrer as práticas.")"
+             @onkeydown="OnKey" @onmouseleave="Clear" @onblur="Clear">
+            <div class="evo-plot">
+                @foreach (var tick in ticks)
+                {
+                    if (tick > 0)
+                    {
+                        <span class="evo-grid" style="bottom:@Ui.Pct((double)tick / yMax)"></span>
+                    }
+                    <span class="evo-tick" style="bottom:@Ui.Pct((double)tick / yMax)">@tick</span>
+                }
+                <span class="evo-base"></span>
+
+                <div class="evo-cols">
+                    @for (var i = 0; i < points.Count; i++)
+                    {
+                        var index = i;
+                        <div class="evo-slot @(active == index ? "evo-slot--on" : "")" @onmouseenter="() => active = index">
+                            <div class="evo-col" style="height:@Ui.Pct((rates[i] ?? 0) / yMax)">
+                                @foreach (var (severity, count) in points[i].Errors.MostSevereFirst())
+                                {
+                                    if (count > 0)
+                                    {
+                                        <span class="@Ui.SeverityFill(severity)" style="flex:@count 1 0"></span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <svg class="evo-line" viewBox="@($"0 0 {points.Count} {yMax}")" preserveAspectRatio="none" aria-hidden="true">
+                    <polyline class="evo-line__halo" points="@linePoints" vector-effect="non-scaling-stroke" />
+                    <polyline class="evo-line__stroke" points="@linePoints" vector-effect="non-scaling-stroke" />
+                </svg>
+                @if (rolling[^1] is double last)
+                {
+                    <span class="evo-end" style="left:@Ui.Pct((points.Count - 0.5) / points.Count);bottom:@Ui.Pct(last / yMax)"></span>
+                    <span class="evo-end-label" style="bottom:@Ui.Pct(last / yMax)">@Num(last)</span>
+                }
+
+                @if (active is int a)
+                {
+                    var p = points[a];
+                    var left = Ui.Pct((a + 0.5) / points.Count);
+                    <span class="evo-cross" style="left:@left"></span>
+                    <div class="evo-tip @(a > points.Count / 2 ? "evo-tip--left" : "")" style="--x:@left">
+                        <div class="evo-tip__value">@Summary(p)</div>
+                        <div class="evo-tip__sub">@TipSubtitle(a)</div>
+                        @foreach (var (severity, count) in p.Errors.MostSevereFirst())
+                        {
+                            <div class="evo-tip__row">
+                                <i class="evo-tip__key @Ui.SeverityFill(severity)"></i>
+                                <b>@count</b> @Ui.SeverityPhrase(severity, count)
+                            </div>
+                        }
+                        @if (rolling[a] is double avg)
+                        {
+                            <div class="evo-tip__row">
+                                <i class="evo-tip__key evo-tip__key--avg"></i>
+                                <b>@Num(avg)</b> média das últimas @AverageWindowAt(a)
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="evo-x" aria-hidden="true">
+                @foreach (var (index, label) in monthLabels)
+                {
+                    <span style="left:@Ui.Pct((double)index / points.Count)">@label</span>
+                }
+            </div>
+        </div>
+
+        @* role="img" esconde os filhos do leitor de tela: o que as setas mostram no
+           tooltip é anunciado daqui. *@
+        <p class="visually-hidden" aria-live="polite">@announcement</p>
+
+        <div class="evo-legend">
+            <SeverityLegend AverageLabel="@(hasAverage ? $"Média das últimas {Math.Min(ErrorRate.Window, Timeline.Count)}" : null)" />
+        </div>
+    </section>
+}
+
+@code {
+    /// <summary>A linha do tempo inteira, da prática mais antiga pra mais nova.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<PracticePoint> Timeline { get; set; } = [];
+
+    /// <summary>Colunas no gráfico. Mais que isso e elas viram fio; a média ainda usa o histórico todo.</summary>
+    private const int MaxColumns = 60;
+
+    /// <summary>Intervalos no eixo Y, no máximo: mais que isso e os rótulos se encavalam em 180px.</summary>
+    private const int MaxTickIntervals = 6;
+
+    /// <summary>
+    /// Variação, pra cima ou pra baixo, que ainda conta como "igual": a taxa por
+    /// prática oscila muito, e um "▲ 2%" em vermelho alarmaria por ruído.
+    /// </summary>
+    private const int NoChangeBand = 5;
+
+    private static readonly string[] Months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+    /// <summary>A linha do tempo da última conta — o pai re-renderiza e repassa a mesma.</summary>
+    private IReadOnlyList<PracticePoint>? computedFor;
+
+    private IReadOnlyList<PracticePoint> points = [];
+    private IReadOnlyList<double?> rates = [];
+    private IReadOnlyList<double?> rolling = [];
+
+    /// <summary>Quantas práticas antigas ficaram de fora das colunas.</summary>
+    private int offset;
+    private bool capped;
+    private bool hasAverage;
+    private int yMax;
+    private IReadOnlyList<int> ticks = [];
+    private string linePoints = "";
+    private double headline;
+    private (string Kind, string Text)? delta;
+    private IReadOnlyList<(int Index, string Label)> monthLabels = [];
+
+    /// <summary>A prática sob o ponteiro (ou o foco do teclado); null = nenhuma.</summary>
+    private int? active;
+
+    /// <summary>
+    /// O que o leitor de tela anuncia. Só as setas mudam: se o mouse também mudasse,
+    /// passar o ponteiro pelas colunas virava uma fila de dezenas de anúncios.
+    /// </summary>
+    private string announcement = "";
+
+    protected override void OnParametersSet()
+    {
+        // Cada clique nas categorias re-renderiza o perfil, e o Blazor repassa a mesma
+        // lista; sem isto, cada clique refazia a média, a escala e os rótulos.
+        if (ReferenceEquals(Timeline, computedFor)) return;
+        computedFor = Timeline;
+
+        offset = Math.Max(0, Timeline.Count - MaxColumns);
+        capped = offset > 0;
+        points = Timeline.Skip(offset).ToList();
+        rates = points.Select(p => ErrorRate.Of([p])).ToList();
+        rolling = ErrorRate.Rolling(Timeline).Skip(offset).ToList();
+        active = active < points.Count ? active : null;
+        if (points.Count == 0) return;
+
+        // Escala: a média entra no topo. Num gráfico cortado, as primeiras médias ainda
+        // carregam práticas de fora da janela e podem passar de todas as colunas.
+        var top = rates.Concat(rolling).Max(v => v ?? 0);
+        var raw = Math.Max(5, (int)Math.Ceiling(top));
+        var step = NiceStep(raw);
+        yMax = (int)Math.Ceiling((double)raw / step) * step;
+        ticks = Enumerable.Range(0, yMax / step + 1).Select(t => t * step).ToList();
+
+        linePoints = string.Join(" ", rolling
+            .Select((v, i) => (v, i))
+            .Where(x => x.v is not null)
+            .Select(x => string.Create(CultureInfo.InvariantCulture, $"{x.i + 0.5:0.###},{yMax - x.v!.Value:0.###}")));
+        hasAverage = rolling.Any(v => v is not null);
+
+        headline = ErrorRate.Of(Timeline.TakeLast(ErrorRate.Window)) ?? 0;
+        delta = Delta(ErrorRate.FirstVersusLast(Timeline));
+        monthLabels = MonthLabels();
+    }
+
+    /// <summary>
+    /// Passo 1, 2, 5, 10, 20, 50… — o menor que cabe em <see cref="MaxTickIntervals"/>.
+    /// Uma tradução de 1 palavra com 10 erros dá taxa 100; com passo fixo seriam 21 rótulos.
+    /// </summary>
+    private static int NiceStep(int top)
+    {
+        for (var magnitude = 1; ; magnitude *= 10)
+            foreach (var m in new[] { 1, 2, 5 })
+                if (top <= m * magnitude * MaxTickIntervals) return m * magnitude;
+    }
+
+    private string HeadlineLabel =>
+        Timeline.Count > ErrorRate.Window ? $"erros a cada {ErrorRate.PerWords} palavras nas suas últimas {ErrorRate.Window} práticas"
+        : Timeline.Count == 1 ? $"erros a cada {ErrorRate.PerWords} palavras na sua primeira prática"
+        : $"erros a cada {ErrorRate.PerWords} palavras nas suas {Timeline.Count} práticas";
+
+    /// <summary>
+    /// Subir é ruim (mais erros por palavra): ▲ vermelho, ▼ verde, e a faixa de "igual"
+    /// no meio. O "eram" diz o que é o número: sem ele, "(2,0)" solto não se explicava.
+    /// </summary>
+    private static (string Kind, string Text)? Delta(RateComparison? c)
+    {
+        if (c is null) return null;
+        var before = $"(eram {Num(c.First)})";
+
+        // Começo sem erro nenhum não tem porcentagem (divisão por zero), mas a piora
+        // a partir dele é justamente o que não pode sumir da tela.
+        if (c.First == 0)
+            return c.Last == 0
+                ? ("same", $"≈ igual às {ErrorRate.Window} primeiras {before}")
+                : ("bad", $"▲ a mais que nas {ErrorRate.Window} primeiras {before}");
+
+        var pct = (int)Math.Round((c.Last / c.First - 1) * 100);
+        return pct >= NoChangeBand ? ("bad", $"▲ {pct}% a mais que nas {ErrorRate.Window} primeiras {before}")
+            : pct <= -NoChangeBand ? ("good", $"▼ {-pct}% a menos que nas {ErrorRate.Window} primeiras {before}")
+            : ("same", $"≈ igual às {ErrorRate.Window} primeiras {before}");
+    }
+
+    /// <summary>
+    /// O mês na primeira prática de cada mês. Vem de trás pra frente, pulando o rótulo
+    /// que colaria no seguinte: o mês atual sempre aparece, quem cede é o anterior. O
+    /// ano aparece quando muda de um rótulo pro seguinte ("dez", "jan/27") e no primeiro,
+    /// se ele não for deste ano — senão um histórico todo antigo parecia recente.
+    /// </summary>
+    private IReadOnlyList<(int, string)> MonthLabels()
+    {
+        var minGap = Math.Max(1, (int)Math.Ceiling(points.Count * 0.06));
+        var picked = new List<(int Index, DateTimeOffset At)>();
+        var next = int.MaxValue;
+        for (var i = points.Count - 1; i >= 0; i--)
+        {
+            var at = points[i].CompletedAt.ToLocalTime();
+            var before = i > 0 ? points[i - 1].CompletedAt.ToLocalTime() : (DateTimeOffset?)null;
+            if (before is { } b && b.Year == at.Year && b.Month == at.Month) continue;
+            if (next - i < minGap) continue;
+            picked.Insert(0, (i, at));
+            next = i;
+        }
+        var thisYear = DateTimeOffset.Now.Year;
+        return picked
+            .Select((m, k) => (m.Index, m.At.Year != (k == 0 ? thisYear : picked[k - 1].At.Year)
+                ? $"{Months[m.At.Month - 1]}/{m.At.Year % 100:00}"
+                : Months[m.At.Month - 1]))
+            .ToList();
+    }
+
+    /// <summary>Quantas práticas a média daquela coluna cobre: menos de 10 no começo do histórico.</summary>
+    private int AverageWindowAt(int index) => Math.Min(ErrorRate.Window, offset + index + 1);
+
+    private static string Summary(PracticePoint p) =>
+        $"{Plural(p.Errors.Total, "erro", "erros")} em {Plural(p.Words, "palavra", "palavras")}";
+
+    /// <summary>"10 out" no ano corrente; "10 out 2025" fora dele, pra não confundir com o deste ano.</summary>
+    private static string DateLabel(PracticePoint p)
+    {
+        var at = p.CompletedAt.ToLocalTime();
+        var year = at.Year == DateTimeOffset.Now.Year ? "" : $" {at.Year}";
+        return $"{at.Day} {Months[at.Month - 1]}{year}";
+    }
+
+    private string TipSubtitle(int index)
+    {
+        var p = points[index];
+        var level = p.Level is null ? "" : $" · nível {p.Level}";
+        var rate = rates[index] is double r ? $" · {Num(r)} a cada {ErrorRate.PerWords}" : "";
+        return $"{DateLabel(p)}{level}{rate}";
+    }
+
+    private string Describe(int index) =>
+        $"{DateLabel(points[index])}: {Summary(points[index])}"
+        + (rates[index] is double r ? $", {Num(r)} a cada {ErrorRate.PerWords} palavras." : ".");
+
+    private void OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") { Clear(); return; }
+        var step = e.Key switch { "ArrowRight" => 1, "ArrowLeft" => -1, _ => 0 };
+        if (step == 0) return;
+        active = active is int a ? Math.Clamp(a + step, 0, points.Count - 1) : points.Count - 1;
+        announcement = Describe(active.Value);
+    }
+
+    private void Clear()
+    {
+        active = null;
+        announcement = "";
+    }
+
+    private static string Plural(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
+
+    /// <summary>Uma casa, com vírgula. Na mão: a cultura pt-BR nem sempre vem no pacote de ICU do WASM.</summary>
+    private static string Num(double v) => v.ToString("0.0", CultureInfo.InvariantCulture).Replace('.', ',');
+}

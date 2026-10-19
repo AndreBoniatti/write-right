@@ -1,4 +1,6 @@
+using System.Globalization;
 using WriteRight.Shared;
+using WriteRight.Shared.Taxonomy;
 
 namespace WriteRight.Client;
 
@@ -14,6 +16,41 @@ public static class Ui
         Language.English => "Inglês",
         _ => language.ToString(),
     };
+
+    /// <summary>O nome da gravidade — o mesmo no selo, na legenda e no tooltip dos gráficos.</summary>
+    public static string SeverityLabel(ErrorSeverity severity) => severity switch
+    {
+        ErrorSeverity.BreaksMeaning => "Quebra o sentido",
+        ErrorSeverity.Understandable => "Compreensível",
+        ErrorSeverity.Polish => "Lapidação",
+        _ => severity.ToString(),
+    };
+
+    /// <summary>Classe da cor da gravidade nos gráficos (a rampa <c>--wr-sev-*</c> do app.css).</summary>
+    public static string SeverityFill(ErrorSeverity severity) => severity switch
+    {
+        ErrorSeverity.BreaksMeaning => "wr-sev--breaks",
+        ErrorSeverity.Understandable => "wr-sev--understandable",
+        _ => "wr-sev--polish",
+    };
+
+    /// <summary>
+    /// A gravidade como frase depois de uma contagem: "3 <i>quebram o sentido</i>",
+    /// "1 <i>compreensível</i>", "2 <i>de lapidação</i>".
+    /// </summary>
+    public static string SeverityPhrase(ErrorSeverity severity, int count) => severity switch
+    {
+        ErrorSeverity.BreaksMeaning => count == 1 ? "quebra o sentido" : "quebram o sentido",
+        ErrorSeverity.Understandable => count == 1 ? "compreensível" : "compreensíveis",
+        _ => "de lapidação",
+    };
+
+    /// <summary>
+    /// Uma fração (0–1) como porcentagem pra <c>style</c>, sempre com ponto decimal: no
+    /// navegador em pt-BR, um "12,5%" quebra o CSS sem erro nenhum.
+    /// </summary>
+    public static string Pct(double fraction) =>
+        string.Create(CultureInfo.InvariantCulture, $"{Math.Clamp(fraction, 0, 1) * 100:0.###}%");
 
     /// <summary>
     /// A falha em palavras, separando os dois casos que pedem ações diferentes: a API

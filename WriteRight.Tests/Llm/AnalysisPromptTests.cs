@@ -19,7 +19,7 @@ public class AnalysisPromptTests
                 i * 10, ErrorCategory.Preposition, ErrorSeverity.Understandable,
                 $"in Monday{i}", $"on Monday{i}", $"'on' com dias da semana ({i})"))
             .ToList(),
-        new[] { new CategoryWeight(ErrorCategory.Preposition, 7, 14) },
+        new[] { new CategoryWeight(ErrorCategory.Preposition, 7, 14, new SeverityCounts(0, 7, 0)) },
         PracticesAnalyzed: 6,
         LifetimePractices: 11,
         MaxPatterns: 5,

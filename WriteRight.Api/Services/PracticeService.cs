@@ -37,8 +37,14 @@ public sealed class PracticeService
     private const int PreviewLength = 160;
     private const int FocusCategoryCount = 3;
 
-    /// <summary>Tamanho do recorte "recente" do perfil: as N práticas concluídas mais novas.</summary>
-    private const int RecentWindow = 5;
+    /// <summary>
+    /// Tamanho do recorte "recente" do perfil: as N práticas concluídas mais novas.
+    /// Eram 5, mas 5 práticas davam ~18 erros espalhados por 10 categorias, quase todas
+    /// com 1 ou 2 — uma ordem que era ruído apresentado como padrão. É a mesma janela
+    /// do gráfico de evolução: a tela diz "últimas 10" nos dois lugares, e duas
+    /// constantes acabariam dizendo números diferentes.
+    /// </summary>
+    public const int RecentWindow = ErrorRate.Window;
 
     private readonly ILlmProvider _llm;
     private readonly WriteRightDbContext _db;
@@ -71,10 +77,12 @@ public sealed class PracticeService
         if (request.FocusOnWeaknesses)
         {
             // Mira o top-N vitalício — já ordenado por PESO (gravidade × frequência),
-            // não por contagem crua. Logo a geração ataca o que mais atrapalha.
-            var profile = await GetProfileAsync(ct);
-            if (profile.Lifetime.ByCategory.Count > 0)
-                focus = profile.Lifetime.ByCategory.Take(FocusCategoryCount).Select(c => c.Category).ToList();
+            // não por contagem crua. Logo a geração ataca o que mais atrapalha. Só o
+            // ranking: o perfil inteiro leria todas as traduções pra montar o gráfico.
+            var ranking = CategoryRanking.Rank(
+                (await CompletedErrorsAsync(ct)).Select(e => (e.Category, e.Severity)));
+            if (ranking.Count > 0)
+                focus = ranking.Take(FocusCategoryCount).Select(c => c.Category).ToList();
         }
 
         // Sorteia a FORMA do texto (tempo verbal, registro, ponto de vista, assunto).
@@ -297,32 +305,30 @@ public sealed class PracticeService
     /// Compreensível ×2, Lapidação ×1) — o que atrapalha pesa mais que a lapidação.
     /// Devolve duas visões: <c>Lifetime</c> (todo o histórico, insumo do gerador
     /// adaptativo) e <c>Recent</c> (as últimas <see cref="RecentWindow"/> práticas
-    /// concluídas, onde o usuário vaza agora). Só práticas CONCLUÍDAS entram (as em
-    /// andamento ainda não têm erros, por construção).
+    /// concluídas, onde o usuário vaza agora), mais a linha do tempo por prática do
+    /// gráfico de evolução. Só práticas CONCLUÍDAS entram (as em andamento ainda não
+    /// têm erros, por construção).
     /// </summary>
     public async Task<ErrorProfile> GetProfileAsync(CancellationToken ct = default)
     {
         // Agrega em memória (dados pessoais, volume baixo) — evita depender da
         // tradução de GroupBy sobre enum-as-string e de ORDER BY sobre
-        // DateTimeOffset no SQLite (mesmo motivo de ListPracticesAsync).
-        var completed = await _db.Exercises
-            .Where(p => p.Status == PracticeStatus.Completed)
-            .Select(p => new { p.Id, p.CompletedAt })
-            .ToListAsync(ct);
-        var completedIds = completed.Select(a => a.Id).ToHashSet();
-
-        // Todo erro pertence a uma prática concluída (só a correção grava erros); o
-        // filtro por completedIds é rede de segurança, não corte esperado.
-        var errors = (await _db.Errors
-            .Select(e => new { e.Category, e.Severity, e.ExerciseAttemptId })
-            .ToListAsync(ct))
-            .Where(e => completedIds.Contains(e.ExerciseAttemptId))
-            .Select(e => new ErrorRow(e.Category, e.Severity, e.ExerciseAttemptId))
+        // DateTimeOffset no SQLite (mesmo motivo de ListPracticesAsync). A tradução
+        // vem inteira só pra contar as palavras; o texto não sai daqui.
+        var completed = (await _db.Exercises
+                .Where(p => p.Status == PracticeStatus.Completed && p.CompletedAt != null)
+                .Select(p => new { p.Id, p.CompletedAt, p.Level, p.UserTranslation })
+                .ToListAsync(ct))
+            .OrderBy(p => p.CompletedAt)
             .ToList();
 
+        // Só os erros das práticas lidas acima: uma correção que termine entre as duas
+        // leituras entraria no total de erros sem entrar nas práticas nem na linha do tempo.
+        var completedIds = completed.Select(p => p.Id).ToHashSet();
+        var errors = (await CompletedErrorsAsync(ct)).Where(e => completedIds.Contains(e.AttemptId)).ToList();
+
         var recentIds = completed
-            .OrderByDescending(a => a.CompletedAt)
-            .Take(RecentWindow)
+            .TakeLast(RecentWindow)
             .Select(a => a.Id)
             .ToHashSet();
 
@@ -330,7 +336,15 @@ public sealed class PracticeService
         var recent = BuildView(
             errors.Where(e => recentIds.Contains(e.AttemptId)).ToList(), recentIds.Count);
 
-        return new ErrorProfile(lifetime, recent);
+        var severitiesByAttempt = errors.ToLookup(e => e.AttemptId, e => e.Severity);
+        var timeline = completed
+            .Select(p => new PracticePoint(
+                p.Id, p.CompletedAt!.Value, p.Level,
+                ErrorRate.Words(p.UserTranslation),
+                SeverityCounts.Of(severitiesByAttempt[p.Id])))
+            .ToList();
+
+        return new ErrorProfile(lifetime, recent, timeline);
     }
 
     /// <summary>
@@ -366,6 +380,19 @@ public sealed class PracticeService
                 r.Original, r.Correction, r.Explanation))
             .ToList();
     }
+
+    /// <summary>
+    /// Os erros das práticas concluídas — a base do ranking da geração e do perfil.
+    /// Todo erro já pertence a uma prática concluída (só a correção grava erros); o
+    /// filtro é rede de segurança, não corte esperado.
+    /// </summary>
+    private async Task<List<ErrorRow>> CompletedErrorsAsync(CancellationToken ct) =>
+        (await _db.Errors
+            .Where(e => e.ExerciseAttempt!.Status == PracticeStatus.Completed && e.ExerciseAttempt.CompletedAt != null)
+            .Select(e => new { e.Category, e.Severity, e.ExerciseAttemptId })
+            .ToListAsync(ct))
+        .Select(e => new ErrorRow(e.Category, e.Severity, e.ExerciseAttemptId))
+        .ToList();
 
     /// <summary>Monta uma visão do perfil: agrupa por categoria, pondera por severidade e ordena por peso.</summary>
     private static ProfileView BuildView(IReadOnlyList<ErrorRow> errors, int attempts) =>

@@ -1,0 +1,264 @@
+.evo-card {
+    padding: 1rem 1.15rem 1.05rem;
+}
+
+.evo-title {
+    font-size: 1.02rem;
+    font-weight: 650;
+    margin: 0;
+}
+
+.evo-sub {
+    margin: 0.2rem 0 0;
+    font-size: 0.82rem;
+    color: var(--wr-text-muted);
+}
+
+/* ── Manchete: a taxa recente e como ela se compara ao começo ── */
+.kpi {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.6rem;
+    margin-top: 0.85rem;
+}
+
+.kpi-value {
+    font-size: 1.9rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.kpi-label {
+    font-size: 0.86rem;
+    color: var(--wr-text-muted);
+}
+
+.delta {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+}
+
+.delta--bad  { background: var(--wr-danger-soft);  color: var(--wr-danger); }
+.delta--good { background: var(--wr-success-soft); color: var(--wr-success); }
+.delta--same { background: var(--wr-surface-2);    color: var(--wr-text-muted); }
+
+/* ── Gráfico ─────────────────────────────────────────────── */
+.evo {
+    margin-top: 0.9rem;
+    border-radius: var(--wr-radius-sm);
+    outline: none;
+}
+
+.evo:focus-visible {
+    box-shadow: 0 0 0 2px var(--wr-primary-soft), 0 0 0 1px var(--wr-primary);
+}
+
+/* margens: à esquerda os ticks, à direita o rótulo do fim da média */
+.evo-plot {
+    position: relative;
+    height: 180px;
+    margin: 0 2.4rem 0 1.6rem;
+}
+
+.evo-grid,
+.evo-base {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+}
+
+.evo-grid { background: var(--wr-chart-grid); }
+.evo-base { bottom: 0; background: var(--wr-border); }
+
+.evo-tick {
+    position: absolute;
+    right: calc(100% + 0.5rem);
+    transform: translateY(50%);
+    font-size: 11px;
+    line-height: 1;
+    color: var(--wr-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.evo-cols {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+}
+
+/* a fatia inteira é a área de toque, não só a coluna pintada */
+.evo-slot {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+/* mais grave na base (column-reverse); 2px de vão entre gravidades; topo arredondado */
+.evo-col {
+    width: min(24px, calc(100% - 2px));
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+    border-radius: 3px 3px 0 0;
+    overflow: hidden;
+    transition: opacity 0.12s ease;
+}
+
+.evo-col > span {
+    display: block;
+    min-height: 0;
+}
+
+.evo--hover .evo-col { opacity: 0.45; }
+.evo--hover .evo-slot--on .evo-col { opacity: 1; }
+
+.evo-line {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+/* o halo da cor da superfície descola a linha das colunas que ela cruza */
+.evo-line__halo,
+.evo-line__stroke {
+    fill: none;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.evo-line__halo { stroke: var(--wr-surface); stroke-width: 6; }
+.evo-line__stroke { stroke: var(--wr-primary); stroke-width: 2; }
+
+.evo-end {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--wr-primary);
+    box-shadow: 0 0 0 2px var(--wr-surface);
+    transform: translate(-50%, 50%);
+    pointer-events: none;
+}
+
+.evo-end-label {
+    position: absolute;
+    left: calc(100% + 0.45rem);
+    transform: translateY(50%);
+    font-size: 0.75rem;
+    font-weight: 650;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.evo-cross {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--wr-text-muted);
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+/* ── Tooltip: ao lado da coluna, virando pra esquerda na metade direita ── */
+.evo-tip {
+    position: absolute;
+    top: 0;
+    left: var(--x);
+    z-index: 2;
+    transform: translateX(10px);
+    min-width: 11rem;
+    padding: 0.55rem 0.7rem;
+    background: var(--wr-surface);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius-sm);
+    box-shadow: var(--wr-shadow);
+    font-size: 0.8rem;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.evo-tip--left { transform: translateX(calc(-100% - 10px)); }
+
+.evo-tip__value {
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.evo-tip__sub {
+    color: var(--wr-text-muted);
+    margin-bottom: 0.35rem;
+}
+
+.evo-tip__row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.evo-tip__row b {
+    min-width: 1.6rem;
+    font-weight: 650;
+}
+
+/* traço, não caixa: no tooltip a cor só identifica */
+.evo-tip__key {
+    width: 12px;
+    height: 3px;
+    border-radius: 2px;
+    flex: 0 0 auto;
+}
+
+.evo-tip__key--avg {
+    height: 2px;
+    background: var(--wr-primary);
+}
+
+.evo-x {
+    position: relative;
+    height: 1.2rem;
+    margin: 0.35rem 2.4rem 0 1.6rem;
+    font-size: 11px;
+    color: var(--wr-text-muted);
+}
+
+.evo-x span {
+    position: absolute;
+    top: 0;
+}
+
+.evo-legend {
+    margin-top: 0.5rem;
+}
+
+/* No celular não cabe ao lado: largura fixa, acima do gráfico, presa às bordas dele. */
+@media (max-width: 600px) {
+    .evo-tip,
+    .evo-tip--left {
+        top: auto;
+        bottom: calc(100% + 0.5rem);
+        width: 13rem;
+        min-width: 0;
+        left: clamp(0px, calc(var(--x) - 6.5rem), calc(100% - 13rem));
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .evo-col { transition: none; }
+}

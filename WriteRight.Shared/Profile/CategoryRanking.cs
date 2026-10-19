@@ -19,7 +19,9 @@ public static class CategoryRanking
         IEnumerable<(ErrorCategory Category, ErrorSeverity Severity)> errors) =>
         errors
             .GroupBy(e => e.Category)
-            .Select(g => new CategoryWeight(g.Key, g.Count(), g.Sum(e => SeverityWeight.Of(e.Severity))))
+            .Select(g => new CategoryWeight(
+                g.Key, g.Count(), g.Sum(e => SeverityWeight.Of(e.Severity)),
+                SeverityCounts.Of(g.Select(e => e.Severity))))
             .OrderByDescending(c => c.Score)
             .ThenByDescending(c => c.Count)
             .ThenBy(c => c.Category)

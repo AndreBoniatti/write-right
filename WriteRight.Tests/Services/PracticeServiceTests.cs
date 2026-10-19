@@ -6,6 +6,7 @@ using WriteRight.Shared;
 using WriteRight.Shared.Corrections;
 using WriteRight.Shared.Exercises;
 using WriteRight.Shared.Practices;
+using WriteRight.Shared.Profile;
 using WriteRight.Shared.Taxonomy;
 using WriteRight.Shared.Usage;
 using WriteRight.Tests.Support;
@@ -58,17 +59,21 @@ public sealed class PracticeServiceTests : IDisposable
     /// (o <c>CorrectPracticeAsync</c> carimbaria tudo com UtcNow) — o que o recorte
     /// recente e a ponderação por gravidade precisam pra ser testados de forma determinística.
     /// </summary>
-    private async Task SeedCompletedAsync(DateTimeOffset completedAt, params WritingError[] errors)
+    private Task<int> SeedCompletedAsync(DateTimeOffset completedAt, params WritingError[] errors) =>
+        SeedCompletedAsync(completedAt, "seed", errors);
+
+    /// <summary>Idem, com a tradução escolhida — a linha do tempo conta as palavras dela.</summary>
+    private async Task<int> SeedCompletedAsync(DateTimeOffset completedAt, string translation, params WritingError[] errors)
     {
         await using var ctx = _db.NewContext();
-        ctx.Exercises.Add(new ExerciseAttempt
+        var practice = new ExerciseAttempt
         {
             SourceLanguage = Language.Portuguese,
             TargetLanguage = Language.English,
             Level = CefrLevel.B1,
             Status = PracticeStatus.Completed,
             SourceText = "seed",
-            UserTranslation = "seed",
+            UserTranslation = translation,
             CreatedAt = completedAt,
             CompletedAt = completedAt,
             Errors = errors.Select(e => new ExerciseError
@@ -79,8 +84,10 @@ public sealed class PracticeServiceTests : IDisposable
                 Correction = e.Correction,
                 Explanation = e.Explanation,
             }).ToList(),
-        });
+        };
+        ctx.Exercises.Add(practice);
         await ctx.SaveChangesAsync();
+        return practice.Id;
     }
 
     // ── Criar ────────────────────────────────────────────────────────────────
@@ -482,6 +489,7 @@ public sealed class PracticeServiceTests : IDisposable
         var profile = await Service(stub).GetProfileAsync();
         Assert.Equal(1, profile.Lifetime.Attempts);
         Assert.Equal(1, profile.Lifetime.TotalErrors);
+        Assert.Equal(kept.Id, Assert.Single(profile.Timeline).PracticeId); // nem coluna no gráfico
         var review = await Service(stub).GetCategoryErrorsAsync(ErrorCategory.Article);
         Assert.Equal(kept.Id, Assert.Single(review).PracticeId);
     }
@@ -546,6 +554,7 @@ public sealed class PracticeServiceTests : IDisposable
         Assert.Empty(profile.Lifetime.ByCategory);
         Assert.Equal(0, profile.Recent.Attempts);
         Assert.Empty(profile.Recent.ByCategory);
+        Assert.Empty(profile.Timeline);
     }
 
     [Fact]
@@ -613,45 +622,83 @@ public sealed class PracticeServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetProfileAsync_recent_window_keeps_only_last_five_completed()
+    public async Task GetProfileAsync_recent_window_keeps_only_the_newest_completed()
     {
-        // 6 práticas concluídas, categoria distinta em cada, da mais nova pra mais antiga.
-        var cats = new[]
-        {
-            ErrorCategory.Article, ErrorCategory.Preposition, ErrorCategory.Spelling,
-            ErrorCategory.VerbTense, ErrorCategory.WordChoice, ErrorCategory.Pronoun,
-        };
+        // Uma prática a mais que a janela, categoria distinta em cada, da mais nova pra mais antiga.
+        var cats = Enum.GetValues<ErrorCategory>().Take(PracticeService.RecentWindow + 1).ToArray();
         var now = DateTimeOffset.UtcNow;
         for (var i = 0; i < cats.Length; i++)
             await SeedCompletedAsync(now.AddMinutes(-i), Err(cats[i], ErrorSeverity.Understandable));
-        // i=5 (Pronoun) é a mais antiga (-5min) → deve cair fora do recorte recente.
+        var oldest = cats[^1]; // a mais antiga → deve cair fora do recorte recente
 
         var profile = await Service(new StubLlmProvider()).GetProfileAsync();
 
-        Assert.Equal(6, profile.Lifetime.Attempts);
-        Assert.Equal(6, profile.Lifetime.ByCategory.Count);
+        Assert.Equal(cats.Length, profile.Lifetime.Attempts);
+        Assert.Equal(cats.Length, profile.Lifetime.ByCategory.Count);
 
-        Assert.Equal(5, profile.Recent.Attempts);
-        Assert.Equal(5, profile.Recent.ByCategory.Count);
-        Assert.DoesNotContain(profile.Recent.ByCategory, c => c.Category == ErrorCategory.Pronoun);
-        Assert.Contains(profile.Lifetime.ByCategory, c => c.Category == ErrorCategory.Pronoun);
+        Assert.Equal(PracticeService.RecentWindow, profile.Recent.Attempts);
+        Assert.Equal(PracticeService.RecentWindow, profile.Recent.ByCategory.Count);
+        Assert.DoesNotContain(profile.Recent.ByCategory, c => c.Category == oldest);
+        Assert.Contains(profile.Lifetime.ByCategory, c => c.Category == oldest);
     }
 
     [Fact]
     public async Task GetProfileAsync_recent_can_be_clean_while_lifetime_has_errors()
     {
         var now = DateTimeOffset.UtcNow;
-        // Uma antiga com erro; cinco recentes impecáveis (sem erros).
-        await SeedCompletedAsync(now.AddMinutes(-10), Err(ErrorCategory.Article, ErrorSeverity.Understandable));
-        for (var i = 0; i < 5; i++)
+        // Uma antiga com erro; a janela recente inteira impecável (sem erros).
+        await SeedCompletedAsync(now.AddMinutes(-100), Err(ErrorCategory.Article, ErrorSeverity.Understandable));
+        for (var i = 0; i < PracticeService.RecentWindow; i++)
             await SeedCompletedAsync(now.AddMinutes(-i));
 
         var profile = await Service(new StubLlmProvider()).GetProfileAsync();
 
-        Assert.Equal(6, profile.Lifetime.Attempts);
+        Assert.Equal(PracticeService.RecentWindow + 1, profile.Lifetime.Attempts);
         Assert.Single(profile.Lifetime.ByCategory); // Article, do histórico
-        Assert.Equal(5, profile.Recent.Attempts);
-        Assert.Empty(profile.Recent.ByCategory); // limpo nas últimas cinco
+        Assert.Equal(PracticeService.RecentWindow, profile.Recent.Attempts);
+        Assert.Empty(profile.Recent.ByCategory); // limpo na janela recente
+    }
+
+    /// <summary>
+    /// O insumo do gráfico de evolução: uma prática por ponto, da mais antiga pra mais
+    /// nova (não na ordem de gravação), com as palavras da tradução e os erros por
+    /// gravidade. A em andamento fica de fora.
+    /// </summary>
+    [Fact]
+    public async Task GetProfileAsync_timeline_has_one_point_per_completed_practice_oldest_first()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var newer = await SeedCompletedAsync(now, "I went  to the\nbeach",
+            Err(ErrorCategory.Spelling, ErrorSeverity.Polish));
+        var older = await SeedCompletedAsync(now.AddDays(-1), "It was sunny",
+            Err(ErrorCategory.Article, ErrorSeverity.BreaksMeaning),
+            Err(ErrorCategory.Preposition, ErrorSeverity.Understandable),
+            Err(ErrorCategory.Article, ErrorSeverity.Understandable));
+        var clean = await SeedCompletedAsync(now.AddDays(-2), "Hello");
+        await Service(new StubLlmProvider(SampleExercise())).CreatePracticeAsync(CreateRequest());
+
+        var profile = await Service(new StubLlmProvider()).GetProfileAsync();
+
+        Assert.Collection(profile.Timeline,
+            p =>
+            {
+                Assert.Equal(clean, p.PracticeId);
+                Assert.Equal(1, p.Words);
+                Assert.Equal(new SeverityCounts(0, 0, 0), p.Errors);
+            },
+            p =>
+            {
+                Assert.Equal(older, p.PracticeId);
+                Assert.Equal(CefrLevel.B1, p.Level);
+                Assert.Equal(3, p.Words);
+                Assert.Equal(new SeverityCounts(1, 2, 0), p.Errors);
+            },
+            p =>
+            {
+                Assert.Equal(newer, p.PracticeId);
+                Assert.Equal(5, p.Words);
+                Assert.Equal(new SeverityCounts(0, 0, 1), p.Errors);
+            });
     }
 
     // ── Revisão: erros reais por categoria ───────────────────────────────────

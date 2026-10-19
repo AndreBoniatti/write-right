@@ -1,0 +1,27 @@
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    font-size: 0.78rem;
+    color: var(--wr-text-muted);
+}
+
+.legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* retângulo pras barras, traço pra linha: a legenda imita a marca */
+.legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+.legend-line {
+    width: 14px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--wr-primary);
+}

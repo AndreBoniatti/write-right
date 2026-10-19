@@ -27,6 +27,7 @@ public class CategoryRankingTests
         Assert.Equal(ErrorCategory.Article, article.Category);
         Assert.Equal(2, article.Count);
         Assert.Equal(SeverityWeight.Of(ErrorSeverity.BreaksMeaning) + SeverityWeight.Of(ErrorSeverity.Polish), article.Score);
+        Assert.Equal(new SeverityCounts(BreaksMeaning: 1, Understandable: 0, Polish: 1), article.BySeverity);
     }
 
     /// <summary>Um erro que quebra o sentido pesa mais que dois de lapidação.</summary>

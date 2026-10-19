@@ -17,9 +17,9 @@ It's a personal tool first (I use it to study English) and a portfolio piece sec
 
 ![Correction screen: the source text, the translation with each change struck through and replaced in place, the explanation of one change open (category, severity and why), and the four mistakes summed up by category](docs/screenshots/correcao.png)
 
-**Weakness profile.** The same categories aggregated — recent practices next to the whole history — which is what steers the next exercise.
+**Weakness profile.** Errors per 10 words, practice by practice, split by severity — per word, because text length varies and a per-practice count can show progress where there is none. Below, the same categories aggregated (whole history or the last 10 practices), which is what steers the next exercise.
 
-![Weakness profile: totals, the current focus category, and errors aggregated by category with severity-weighted bars, for the last 5 practices and for the whole history](docs/screenshots/perfil.png)
+![Weakness profile: totals and the current focus category, a chart of errors per 10 words for each practice with a rolling average, and the categories ranked by severity weight with bars split by severity](docs/screenshots/perfil.png)
 
 **Vocabulary review.** A card minted from a real mistake: the corrected sentence with the answer blanked out, the source-language phrase as the hint, and — on a miss — what you actually wrote.
 
@@ -161,7 +161,7 @@ Then open **http://localhost:5193**. The SQLite database is created automaticall
 | `PUT` | `/api/practices/{id}/translation` | Save a draft translation without correcting |
 | `POST` | `/api/practices/{id}/correct` | Correct the translation, store the errors, complete the practice |
 | `DELETE` | `/api/practices/{id}` | Soft-delete a practice: it leaves the list, the profile and future analyses (a saved analysis keeps its evidence), but still counts for the day streak and the cost report |
-| `GET`  | `/api/profile` | The aggregated weakness profile |
+| `GET`  | `/api/profile` | The aggregated weakness profile, plus one point per completed practice (words and errors by severity) for the evolution chart |
 | `GET`  | `/api/profile/errors?category=` | Your real errors in one category (review panel — no AI call) |
 | `GET`  | `/api/analysis` | The latest weakness analysis + whether a new one is worth generating |
 | `POST` | `/api/analysis` | Queue a new analysis — `202` right away (`409` if the history is too small); it runs in the background and is followed on `GET /api/analysis` |
@@ -219,6 +219,7 @@ The suite covers the parts with real logic and real regression risk:
 - **Wire contract** — the JSON Claude returns deserializes into the right enums, using the exact same serializer options as production; every category round-trips as a string (the contract that keeps the DB, API and client aligned).
 - **Adaptive generation** — the prompt injects focus categories when there are weaknesses, and doesn't when there aren't.
 - **Persistence + aggregation** — correcting stores the attempt and its errors, and the profile aggregates by category ordered by severity-weighted score, tested against a **real in-memory SQLite** database (so the enum-as-string value converters run for real).
+- **The evolution chart's arithmetic** — errors per 10 words is total errors over total words, not an average of per-practice rates (an 8-word text can't outweigh a 36-word one); the rolling average only looks at the last 10 practices; and the first-vs-last comparison stays silent until the two ends stop overlapping.
 - **Evidence grounding** — the analysis drops any pattern that cites error ids it was never sent or that falls under the evidence floor, and persists nothing when none survive. The window sizing (by error volume, not practice count) and the snapshotting of evidence — an analysis stays intact even after the practice it cited is deleted — are covered too.
 - **The deck** — mostly the failure paths, because they're the ones that quietly corrupt data: every rule of the gate (each one named after a real bad card), a correction that queues its cards in the same transaction, a failed card call that records its cost and stays pending, a recurring error that reschedules instead of duplicating (and writes no review row), a discarded card that's never resurrected, a card that outlives the practice that created it, and siblings from one sentence that never share a day. Plus the interval arithmetic, where a wrong sign breaks nothing visible — it just makes reviews arrive at the wrong time for months.
 - **The day streak** — days are counted on your clock, not UTC, and the day turns at 4am: a practice finished at 00:30 belongs to the evening it started in, or a late session would break the streak on a day you practiced.

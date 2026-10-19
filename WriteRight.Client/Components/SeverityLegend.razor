@@ -1,0 +1,17 @@
+@* A legenda das cores de gravidade dos gráficos do perfil. A cor nunca fala sozinha:
+   cada tom vem com o nome ao lado. *@
+<div class="legend">
+    @foreach (var severity in Enum.GetValues<ErrorSeverity>())
+    {
+        <span><i class="legend-swatch @Ui.SeverityFill(severity)"></i>@Ui.SeverityLabel(severity)</span>
+    }
+    @if (AverageLabel is not null)
+    {
+        <span><i class="legend-line"></i>@AverageLabel</span>
+    }
+</div>
+
+@code {
+    /// <summary>Rótulo da linha de média, quando o gráfico tem uma.</summary>
+    [Parameter] public string? AverageLabel { get; set; }
+}

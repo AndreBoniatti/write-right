@@ -42,6 +42,17 @@
     --wr-info: #0e8fd6;
     --wr-info-soft: rgba(14, 143, 214, 0.12);
 
+    /* Gravidade nos gráficos do perfil: vermelho forte, vermelho médio e cinza neutro —
+       a lapidação é o fundo, não um terceiro vermelho. Três tons do mesmo vermelho
+       ficaram a ΔE 11,7 entre si (o piso é 15): no olho, compreensível e lapidação
+       eram a mesma cor. Validado: vizinhos a ΔE ≥ 15 em visão normal e ≥ 8 com
+       daltonismo. Não reusa danger/warning: vermelho e âmbar se confundem pra quem
+       tem deuteranopia. */
+    --wr-sev-breaks: #ba2b2e;
+    --wr-sev-understandable: #dd7767;
+    --wr-sev-polish: #b4b7bf;
+    --wr-chart-grid: #e9ebf2;
+
     /* Chama da série de dias (acesa, apagada, e o halo atrás dela) */
     --wr-flame-top: #b7a9ff;
     --wr-flame-bottom: #5b4bf0;
@@ -83,6 +94,12 @@
     --wr-danger-soft: rgba(255, 107, 111, 0.15);
     --wr-info: #38bdf8;
     --wr-info-soft: rgba(56, 189, 248, 0.15);
+
+    /* No escuro a ordem inverte: o mais grave é o mais claro, o cinza afunda na superfície. */
+    --wr-sev-breaks: #ff847d;
+    --wr-sev-understandable: #bd524d;
+    --wr-sev-polish: #4e535c;
+    --wr-chart-grid: #222739;
 
     --wr-flame-top: #c9bfff;
     --wr-flame-bottom: #6d5cff;
@@ -265,6 +282,40 @@ a:hover { color: var(--wr-primary-strong); }
 .wr-badge--danger  { background: var(--wr-danger-soft);  color: var(--wr-danger); }
 .wr-badge--info    { background: var(--wr-info-soft);    color: var(--wr-info); }
 .wr-badge--muted   { background: var(--wr-surface-2);    color: var(--wr-text-muted); }
+
+/* ── Gravidade nos gráficos (cores da rampa acima) ─────── */
+
+.wr-sev--breaks         { background: var(--wr-sev-breaks); }
+.wr-sev--understandable { background: var(--wr-sev-understandable); }
+.wr-sev--polish         { background: var(--wr-sev-polish); }
+
+/* ── Seletor segmentado (versão do texto, período do perfil) ── */
+
+.wr-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    background: var(--wr-surface-2);
+    border-radius: 10px;
+}
+
+.wr-seg button {
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 550;
+    border: 0;
+    background: transparent;
+    color: var(--wr-text-muted);
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.wr-seg button[aria-pressed="true"] {
+    background: var(--wr-surface);
+    color: var(--wr-text);
+    box-shadow: var(--wr-shadow-sm);
+}
 
 /* ── Grupos de erro (revisão da prática) ───────────────── */
 

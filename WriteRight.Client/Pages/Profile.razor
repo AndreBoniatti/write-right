@@ -29,41 +29,31 @@ else if (profile is not null)
     {
         var life = profile.Lifetime;
         var top = life.ByCategory.Count > 0 ? life.ByCategory[0] : null;
-        // Recent só difere do histórico quando há mais práticas do que cabem na janela.
-        var split = life.Attempts > profile.Recent.Attempts;
 
         <div class="stat-row">
             <div class="stat-tile">
                 <div class="stat-value">@life.Attempts</div>
-                <div class="stat-label">prática(s) concluída(s)</div>
+                <div class="stat-label">@(life.Attempts == 1 ? "prática concluída" : "práticas concluídas")</div>
             </div>
             <div class="stat-tile">
                 <div class="stat-value">@life.TotalErrors</div>
-                <div class="stat-label">erro(s) no total</div>
+                <div class="stat-label">@(life.TotalErrors == 1 ? "erro no total" : "erros no total")</div>
             </div>
-            <div class="stat-tile">
+            <div class="stat-tile stat-tile--focus">
                 <div class="stat-value stat-value--accent">@(top is null ? "—" : ErrorCatalog.Info(top.Category).LabelPt)</div>
-                <div class="stat-label">prioridade de estudo</div>
+                <div class="stat-label">
+                    prioridade de estudo
+                    @if (top is not null)
+                    {
+                        <text> · </text><a href="practice/new">Praticar agora</a>
+                    }
+                </div>
             </div>
         </div>
 
-        @if (top is not null)
-        {
-            <div class="focus-card">
-                <div class="focus-icon"><Icon Name="target" Size="20" /></div>
-                <div>
-                    <strong>Foco atual: @ErrorCatalog.Info(top.Category).LabelPt.</strong>
-                    As próximas práticas priorizam suas categorias de maior peso (gravidade × frequência).
-                    <a href="practice/new">Começar uma nova prática</a> pra atacar isso.
-                </div>
-            </div>
+        <EvolutionChart Timeline="profile.Timeline" />
 
-            <p class="profile-legend">
-                As barras são ponderadas por gravidade:
-                <strong>Quebra o sentido</strong> pesa 3×, <strong>Compreensível</strong> 2×,
-                <strong>Lapidação</strong> 1×. O número à direita é o volume de erros.
-            </p>
-        }
+        @Categories(life, top?.Category)
 
         @* Esta tela mostra O QUÊ você erra; a análise procura o PORQUÊ. Entrada
            discreta de propósito — o perfil continua sendo os números frios. *@
@@ -71,48 +61,36 @@ else if (profile is not null)
             <span class="analysis-cta-icon"><Icon Name="target" Size="20" /></span>
             <span class="analysis-cta-text">
                 <strong>Análise dos meus erros</strong>
-                <span>Os padrões por trás das categorias — com os erros que sustentam cada um.</span>
+                <span>Os padrões por trás das categorias, com os erros que sustentam cada um.</span>
             </span>
             <span class="analysis-cta-go">Ver</span>
         </a>
-
-        @if (split)
-        {
-            <h2 class="section-title">
-                Onde você tropeça agora
-                <span class="section-hint">· últimas @profile.Recent.Attempts prática(s)</span>
-            </h2>
-            @if (profile.Recent.ByCategory.Count == 0)
-            {
-                <div class="alert alert-success">
-                    Nas suas últimas @profile.Recent.Attempts prática(s), nenhum erro recorrente. Segue assim.
-                </div>
-            }
-            else
-            {
-                @WeakList(profile.Recent, "recent")
-            }
-
-            <h2 class="section-title section-title--spaced">No histórico todo</h2>
-            @WeakList(life, "life")
-        }
-        else
-        {
-            <h2 class="section-title">Onde você mais tropeça</h2>
-            @WeakList(life, "life")
-        }
     }
     </div>
 }
 
 @code {
+    /// <summary>Categorias visíveis antes do "mostrar as outras" — a cauda tem 1 ou 2 erros cada.</summary>
+    private const int TopCategories = 8;
+
+    /// <summary>Erros reais que o painel mostra antes do "ver todos": "Escolha de palavra" sozinha passa de 60.</summary>
+    private const int PreviewErrors = 2;
+
     private ErrorProfile? profile;
     private bool loading = true;
     private string? error;
 
-    // Revisão: quais painéis (tag:categoria) estão abertos, e o cache dos erros reais
-    // por categoria (null = carregando). Carrega sob demanda, na 1ª abertura.
-    private readonly HashSet<string> open = new();
+    /// <summary>Histórico todo (false) ou só a janela recente (true).</summary>
+    private bool recent;
+    private bool allCategories;
+
+    /// <summary>As práticas da janela recente — as últimas da linha do tempo, na mesma ordem do servidor.</summary>
+    private HashSet<int> recentPracticeIds = new();
+
+    // Revisão: quais categorias estão abertas, quais já pediram "ver todos", e o cache
+    // dos erros reais por categoria (null = carregando). Carrega sob demanda, na 1ª abertura.
+    private readonly HashSet<ErrorCategory> open = new();
+    private readonly HashSet<ErrorCategory> showAll = new();
     private readonly Dictionary<ErrorCategory, IReadOnlyList<CategoryError>?> examples = new();
 
     /// <summary>Categorias cuja última leitura falhou — o painel oferece tentar de novo.</summary>
@@ -123,6 +101,10 @@ else if (profile is not null)
         try
         {
             profile = await Api.GetProfileAsync();
+            recentPracticeIds = profile.Timeline
+                .TakeLast(profile.Recent.Attempts)
+                .Select(p => p.PracticeId)
+                .ToHashSet();
         }
         catch (Exception ex)
         {
@@ -134,72 +116,152 @@ else if (profile is not null)
         }
     }
 
-    // Lista de fraquezas de uma visão: barra = PESO (Score), número = volume (Count).
-    // Cada linha expande pra revisar os erros reais daquela categoria (carrega sob demanda).
-    private RenderFragment WeakList(ProfileView view, string tag) =>@<div class="weak-list">
-        @{
-            var maxScore = view.ByCategory.Count == 0 ? 0 : view.ByCategory.Max(c => c.Score);
-            var leader = view.ByCategory.Count == 0 ? (ErrorCategory?)null : view.ByCategory[0].Category;
-        }
-        @foreach (var c in view.ByCategory)
-        {
-            var info = ErrorCatalog.Info(c.Category);
-            var pct = maxScore == 0 ? 0 : (int)Math.Round(100.0 * c.Score / maxScore);
-            var isOpen = open.Contains($"{tag}:{c.Category}");
-            <div class="weak-row @(c.Category == leader ? "weak-row--lead" : "") @(isOpen ? "weak-row--open" : "")">
-                <div class="weak-head weak-head--btn" @onclick="() => ToggleAsync(tag, c.Category)">
-                    <span class="weak-label">@info.LabelPt</span>
-                    <span class="wr-badge wr-badge--muted">@GroupLabel(info.Group)</span>
-                    <span class="weak-count">@c.Count erro(s)</span>
-                    <span class="weak-chevron @(isOpen ? "weak-chevron--open" : "")">
-                        <Icon Name="chevron-down" Size="16" />
-                    </span>
-                </div>
-                <div class="weak-track">
-                    <span class="weak-fill" style="width:@(pct)%"></span>
-                </div>
-                <div class="weak-desc">@info.Description</div>
+    // Uma lista só, com o seletor de período no lugar da seção recente duplicada. A
+    // barra é o VOLUME (Count), dividido por gravidade; a ordem é o PESO (Score) — as
+    // cores mostram por que uma categoria rara mas grave passa na frente.
+    private RenderFragment Categories(ProfileView life, ErrorCategory? focus) => __builder =>
+    {
+        // Recent só difere do histórico quando há mais práticas do que cabem na janela.
+        var split = life.Attempts > profile!.Recent.Attempts;
+        var scopedToRecent = split && recent;
+        var view = scopedToRecent ? profile.Recent : life;
+        var shown = allCategories ? view.ByCategory : view.ByCategory.Take(TopCategories).ToList();
+        var max = view.ByCategory.Count == 0 ? 0 : view.ByCategory.Max(c => c.Count);
+        var rest = view.ByCategory.Count - TopCategories;
 
-                @if (isOpen)
+        <section class="card cats-card" aria-labelledby="cats-title">
+            <div class="cats-head">
+                <div>
+                    <h2 class="cats-title" id="cats-title">Onde você tropeça</h2>
+                    @* Os pesos vêm da mesma régua que ordena: escritos à mão, mudariam só lá. *@
+                    <p class="cats-sub">
+                        Ordenado por peso: quebrar o sentido conta @SeverityWeight.Of(ErrorSeverity.BreaksMeaning)×,
+                        compreensível @SeverityWeight.Of(ErrorSeverity.Understandable)×,
+                        lapidação @SeverityWeight.Of(ErrorSeverity.Polish)×.
+                        Clique numa categoria pra ver os seus erros.
+                    </p>
+                </div>
+                @if (split)
                 {
-                    <div class="review">
-                        @if (examples.TryGetValue(c.Category, out var items) && items is not null)
-                        {
-                            @foreach (var it in items)
-                            {
-                                <div class="review-item">
-                                    <SeverityBadge Value="it.Severity" />
-                                    <div class="review-diff">
-                                        <s class="text-danger">@it.Original</s>
-                                        <span class="review-arrow">→</span>
-                                        <strong class="text-success">@it.Correction</strong>
-                                    </div>
-                                    <div class="review-why">@it.Explanation</div>
-                                </div>
-                            }
-                        }
-                        else if (failed.Contains(c.Category))
-                        {
-                            <p class="review-loading">
-                                Não deu pra carregar seus erros dessa categoria.
-                                <button type="button" class="wr-linkish" @onclick="() => LoadExamplesAsync(c.Category)">Tentar de novo</button>
-                            </p>
-                        }
-                        else
-                        {
-                            <p class="review-loading">Carregando seus erros…</p>
-                        }
+                    <div class="wr-seg" role="group" aria-label="Período">
+                        <button type="button" aria-pressed="@(recent ? "false" : "true")" @onclick="() => SetPeriod(false)">Histórico todo</button>
+                        <button type="button" aria-pressed="@(recent ? "true" : "false")" @onclick="() => SetPeriod(true)">Últimas @profile.Recent.Attempts</button>
                     </div>
                 }
             </div>
-        }
-    </div>;
+            <div class="cats-legend"><SeverityLegend /></div>
+
+            @if (view.ByCategory.Count == 0)
+            {
+                <p class="cats-empty">
+                    @(scopedToRecent ? $"Nas suas últimas {view.Attempts} práticas, nenhum erro." : "Nenhum erro até agora.")
+                    Segue assim.
+                </p>
+            }
+            else
+            {
+                <div class="cats">
+                    @foreach (var c in shown)
+                    {
+                        var info = ErrorCatalog.Info(c.Category);
+                        var isOpen = open.Contains(c.Category);
+                        <div class="cat @(isOpen ? "cat--open" : "")">
+                            <button type="button" class="cat-btn" aria-expanded="@(isOpen ? "true" : "false")"
+                                    @onclick="() => ToggleAsync(c.Category)">
+                                <span class="cat-name">
+                                    <span>@info.LabelPt</span>
+                                    @if (c.Category == focus)
+                                    {
+                                        <span class="cat-focus">foco</span>
+                                    }
+                                </span>
+                                <span class="cat-bar">
+                                    @foreach (var s in Segments(c.BySeverity, max))
+                                    {
+                                        <i class="@Ui.SeverityFill(s.Severity) @(s.Last ? "cat-bar__end" : "")"
+                                           style="left:@Ui.Pct(s.Left);width:@(s.Last ? Ui.Pct(s.Width) : $"calc({Ui.Pct(s.Width)} - 2px)")"
+                                           title="@($"{s.Count} · {Ui.SeverityLabel(s.Severity)}")"></i>
+                                    }
+                                </span>
+                                <span class="cat-count">@c.Count</span>
+                                <span class="cat-chevron"><Icon Name="chevron-down" Size="16" /></span>
+                            </button>
+
+                            @if (isOpen)
+                            {
+                                @Review(c, info, scopedToRecent)
+                            }
+                        </div>
+                    }
+                </div>
+                @if (rest > 0)
+                {
+                    <button type="button" class="cats-more" @onclick="() => allCategories = !allCategories">
+                        @(allCategories ? $"Mostrar só as {TopCategories} primeiras"
+                          : rest == 1 ? "Mostrar a outra categoria"
+                          : $"Mostrar as outras {rest} categorias")
+                    </button>
+                }
+            }
+        </section>
+    };
+
+    // Painel da categoria: o que ela é, a divisão por gravidade (o que a barra mostra
+    // só por cor) e os erros reais, os mais recentes primeiro. No período recente, só
+    // os erros das práticas da janela — senão a barra dizia 5 e o painel oferecia 65.
+    private RenderFragment Review(CategoryWeight c, ErrorCategoryInfo info, bool scopedToRecent) => __builder =>
+    {
+        <div class="review">
+            <p class="review-desc">@info.Description</p>
+            <p class="review-split">@Breakdown(c.BySeverity)</p>
+
+            @if (examples.TryGetValue(c.Category, out var loaded) && loaded is not null)
+            {
+                var items = scopedToRecent ? loaded.Where(e => recentPracticeIds.Contains(e.PracticeId)).ToList() : loaded;
+                @foreach (var it in showAll.Contains(c.Category) ? items : items.Take(PreviewErrors))
+                {
+                    <div class="review-item">
+                        <SeverityBadge Value="it.Severity" />
+                        <div class="review-diff">
+                            <s class="text-danger">@it.Original</s>
+                            <span class="review-arrow">→</span>
+                            <strong class="text-success">@it.Correction</strong>
+                        </div>
+                        <div class="review-why">@it.Explanation</div>
+                    </div>
+                }
+                @if (items.Count > PreviewErrors && !showAll.Contains(c.Category))
+                {
+                    <button type="button" class="wr-linkish review-all" @onclick="() => showAll.Add(c.Category)">
+                        Ver todos os @items.Count erros de @info.LabelPt@(scopedToRecent ? $" nas últimas {profile!.Recent.Attempts}" : "")
+                    </button>
+                }
+            }
+            else if (failed.Contains(c.Category))
+            {
+                <p class="review-loading">
+                    Não deu pra carregar seus erros dessa categoria.
+                    <button type="button" class="wr-linkish" @onclick="() => LoadExamplesAsync(c.Category)">Tentar de novo</button>
+                </p>
+            }
+            else
+            {
+                <p class="review-loading">Carregando seus erros…</p>
+            }
+        </div>
+    };
+
+    private void SetPeriod(bool toRecent)
+    {
+        recent = toRecent;
+        allCategories = false;
+        showAll.Clear(); // "ver todos" vale pro período em que foi pedido
+    }
 
     // Abre/fecha a revisão de uma categoria; carrega os erros reais na 1ª abertura.
-    private async Task ToggleAsync(string tag, ErrorCategory category)
+    private async Task ToggleAsync(ErrorCategory category)
     {
-        var key = $"{tag}:{category}";
-        if (!open.Add(key)) { open.Remove(key); return; } // já estava aberto → fecha
+        if (!open.Add(category)) { open.Remove(category); return; } // já estava aberto → fecha
 
         if (!examples.ContainsKey(category)) await LoadExamplesAsync(category);
     }
@@ -224,12 +286,30 @@ else if (profile is not null)
         }
     }
 
-    private static string GroupLabel(ErrorGroup g) => g switch
+    private sealed record Segment(ErrorSeverity Severity, int Count, double Left, double Width, bool Last);
+
+    /// <summary>
+    /// Os pedaços da barra, mais grave à esquerda, na escala da maior categoria da
+    /// visão. O vão de 2px sai da largura de cada pedaço (menos o último), pra o
+    /// comprimento total continuar fiel à contagem.
+    /// </summary>
+    private static List<Segment> Segments(SeverityCounts counts, int max)
     {
-        ErrorGroup.Structure => "Estrutura",
-        ErrorGroup.Vocabulary => "Vocabulário",
-        ErrorGroup.Mechanics => "Mecânica",
-        ErrorGroup.Style => "Estilo",
-        _ => "Outros",
-    };
+        var parts = counts.MostSevereFirst().Where(p => p.Count > 0).ToList();
+
+        var left = 0.0;
+        var segments = new List<Segment>();
+        for (var i = 0; i < parts.Count; i++)
+        {
+            var width = max == 0 ? 0 : (double)parts[i].Count / max;
+            segments.Add(new(parts[i].Severity, parts[i].Count, left, width, i == parts.Count - 1));
+            left += width;
+        }
+        return segments;
+    }
+
+    private static string Breakdown(SeverityCounts c) =>
+        string.Join(" · ", c.MostSevereFirst()
+            .Where(p => p.Count > 0)
+            .Select(p => $"{p.Count} {Ui.SeverityPhrase(p.Severity, p.Count)}"));
 }

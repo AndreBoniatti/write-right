@@ -5,34 +5,6 @@
     line-height: 1.55;
 }
 
-/* ── Seletor de versão do texto ── */
-
-.wr-seg {
-    display: inline-flex;
-    gap: 2px;
-    padding: 3px;
-    background: var(--wr-surface-2);
-    border-radius: 10px;
-}
-
-.wr-seg button {
-    font: inherit;
-    font-size: 0.78rem;
-    font-weight: 550;
-    border: 0;
-    background: transparent;
-    color: var(--wr-text-muted);
-    padding: 5px 10px;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
-.wr-seg button[aria-pressed="true"] {
-    background: var(--wr-surface);
-    color: var(--wr-text);
-    box-shadow: var(--wr-shadow-sm);
-}
-
 /* ── Correção marcada no texto ── */
 
 .wr-correction {
