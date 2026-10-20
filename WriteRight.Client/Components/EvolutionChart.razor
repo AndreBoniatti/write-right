@@ -1,6 +1,7 @@
 @using System.Globalization
-@* A evolução: erros a cada 10 palavras, uma coluna por prática (empilhada por
-   gravidade, a mais grave na base) e a média móvel por cima.
+@* Erros ao longo do tempo: a cada 10 palavras, uma coluna por prática (empilhada
+   por gravidade, a mais grave na base) e a média móvel por cima. O título é neutro
+   de propósito: "Sua evolução" prometia melhora até quando a linha subia.
 
    As colunas são HTML/CSS pra escalar com a largura sem JS; só a linha é SVG,
    esticado (preserveAspectRatio="none") com traço que não escala. O que vai pra
@@ -10,19 +11,15 @@
 @if (points.Count > 0)
 {
     <section class="card evo-card" aria-labelledby="evo-title">
-        <h2 class="evo-title" id="evo-title">Sua evolução</h2>
+        <h2 class="evo-title" id="evo-title">Erros ao longo do tempo</h2>
         <p class="evo-sub">
-            Erros a cada @ErrorRate.PerWords palavras, uma coluna por prática, da mais antiga à mais
+            A cada @ErrorRate.PerWords palavras, uma coluna por prática, da mais antiga à mais
             recente@(capped ? $" (as últimas {MaxColumns})" : "").
         </p>
 
         <div class="kpi">
             <span class="kpi-value">@Num(headline)</span>
             <span class="kpi-label">@HeadlineLabel</span>
-            @if (delta is not null)
-            {
-                <span class="delta delta--@delta.Value.Kind">@delta.Value.Text</span>
-            }
         </div>
 
         <div class="evo @(active is null ? "" : "evo--hover")" tabindex="0" role="img"
@@ -120,12 +117,6 @@
     /// <summary>Intervalos no eixo Y, no máximo: mais que isso e os rótulos se encavalam em 180px.</summary>
     private const int MaxTickIntervals = 6;
 
-    /// <summary>
-    /// Variação, pra cima ou pra baixo, que ainda conta como "igual": a taxa por
-    /// prática oscila muito, e um "▲ 2%" em vermelho alarmaria por ruído.
-    /// </summary>
-    private const int NoChangeBand = 5;
-
     private static readonly string[] Months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
     /// <summary>A linha do tempo da última conta — o pai re-renderiza e repassa a mesma.</summary>
@@ -143,7 +134,6 @@
     private IReadOnlyList<int> ticks = [];
     private string linePoints = "";
     private double headline;
-    private (string Kind, string Text)? delta;
     private IReadOnlyList<(int Index, string Label)> monthLabels = [];
 
     /// <summary>A prática sob o ponteiro (ou o foco do teclado); null = nenhuma.</summary>
@@ -185,7 +175,6 @@
         hasAverage = rolling.Any(v => v is not null);
 
         headline = ErrorRate.Of(Timeline.TakeLast(ErrorRate.Window)) ?? 0;
-        delta = Delta(ErrorRate.FirstVersusLast(Timeline));
         monthLabels = MonthLabels();
     }
 
@@ -204,28 +193,6 @@
         Timeline.Count > ErrorRate.Window ? $"erros a cada {ErrorRate.PerWords} palavras nas suas últimas {ErrorRate.Window} práticas"
         : Timeline.Count == 1 ? $"erros a cada {ErrorRate.PerWords} palavras na sua primeira prática"
         : $"erros a cada {ErrorRate.PerWords} palavras nas suas {Timeline.Count} práticas";
-
-    /// <summary>
-    /// Subir é ruim (mais erros por palavra): ▲ vermelho, ▼ verde, e a faixa de "igual"
-    /// no meio. O "eram" diz o que é o número: sem ele, "(2,0)" solto não se explicava.
-    /// </summary>
-    private static (string Kind, string Text)? Delta(RateComparison? c)
-    {
-        if (c is null) return null;
-        var before = $"(eram {Num(c.First)})";
-
-        // Começo sem erro nenhum não tem porcentagem (divisão por zero), mas a piora
-        // a partir dele é justamente o que não pode sumir da tela.
-        if (c.First == 0)
-            return c.Last == 0
-                ? ("same", $"≈ igual às {ErrorRate.Window} primeiras {before}")
-                : ("bad", $"▲ a mais que nas {ErrorRate.Window} primeiras {before}");
-
-        var pct = (int)Math.Round((c.Last / c.First - 1) * 100);
-        return pct >= NoChangeBand ? ("bad", $"▲ {pct}% a mais que nas {ErrorRate.Window} primeiras {before}")
-            : pct <= -NoChangeBand ? ("good", $"▼ {-pct}% a menos que nas {ErrorRate.Window} primeiras {before}")
-            : ("same", $"≈ igual às {ErrorRate.Window} primeiras {before}");
-    }
 
     /// <summary>
     /// O mês na primeira prática de cada mês. Vem de trás pra frente, pulando o rótulo

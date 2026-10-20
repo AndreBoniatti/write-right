@@ -4,9 +4,6 @@ using System.Linq;
 
 namespace WriteRight.Shared.Profile;
 
-/// <summary>As primeiras práticas contra as últimas, na mesma régua (erros a cada 10 palavras).</summary>
-public sealed record RateComparison(double First, double Last);
-
 /// <summary>
 /// A régua do gráfico de evolução: erros a cada <see cref="PerWords"/> palavras.
 ///
@@ -14,12 +11,17 @@ public sealed record RateComparison(double First, double Last);
 /// os textos encolheram de ~25 pra ~16 palavras: a contagem por prática caiu de 4,9
 /// pra 4,2 enquanto a taxa por palavra subiu de 2,0 pra 2,6. Contando por prática, a
 /// tela mostrava melhora onde havia piora.
+///
+/// Não há comparação com um ponto do passado (já houve: "▲ 30% a mais que nas 10
+/// primeiras"). Contra as primeiras práticas, a referência ficava presa a outro nível e
+/// a outro corretor; contra as 10 anteriores, ~40 erros por janela faziam o selo trocar
+/// de cor por ruído. A tendência fica com a média móvel.
 /// </summary>
 public static class ErrorRate
 {
     public const int PerWords = 10;
 
-    /// <summary>Tamanho da média móvel e de cada ponta da comparação primeiras × últimas.</summary>
+    /// <summary>Tamanho da média móvel e da manchete ("nas suas últimas 10 práticas").</summary>
     public const int Window = 10;
 
     /// <summary>Com menos práticas que isso, a "média" seria só a própria prática.</summary>
@@ -55,16 +57,4 @@ public static class ErrorRate
                 ? null
                 : Of(points.Skip(Math.Max(0, i + 1 - Window)).Take(Math.Min(Window, i + 1))))
             .ToList();
-
-    /// <summary>
-    /// As primeiras <see cref="Window"/> práticas contra as últimas <see cref="Window"/>.
-    /// Null enquanto as duas pontas se sobrepõem: aí seria comparar a prática com ela mesma.
-    /// </summary>
-    public static RateComparison? FirstVersusLast(IReadOnlyList<PracticePoint> points)
-    {
-        if (points.Count < 2 * Window) return null;
-        var first = Of(points.Take(Window));
-        var last = Of(points.Skip(points.Count - Window));
-        return first is null || last is null ? null : new(first.Value, last.Value);
-    }
 }

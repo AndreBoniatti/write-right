@@ -77,19 +77,4 @@ public class ErrorRateTests
         Assert.Equal(1.0, rolling[10]); // 2..11: a primeira saiu
         Assert.Equal(0.0, rolling[11]); // 3..12: as duas saíram
     }
-
-    // ── Primeiras × últimas ──────────────────────────────────────────────────
-
-    [Fact]
-    public void Overlapping_ends_are_not_compared() =>
-        Assert.Null(ErrorRate.FirstVersusLast(Series(2 * ErrorRate.Window - 1, _ => 1)));
-
-    [Fact]
-    public void Compares_the_first_window_with_the_last()
-    {
-        // As dez primeiras com 2 erros, as dez últimas com 3.
-        var comparison = ErrorRate.FirstVersusLast(Series(2 * ErrorRate.Window, i => i <= ErrorRate.Window ? 2 : 3));
-
-        Assert.Equal(new RateComparison(2.0, 3.0), comparison);
-    }
 }

@@ -14,7 +14,7 @@
     color: var(--wr-text-muted);
 }
 
-/* ── Manchete: a taxa recente e como ela se compara ao começo ── */
+/* ── Manchete: a taxa das últimas práticas ── */
 .kpi {
     display: flex;
     align-items: baseline;
@@ -34,19 +34,6 @@
     font-size: 0.86rem;
     color: var(--wr-text-muted);
 }
-
-.delta {
-    display: inline-flex;
-    align-items: center;
-    font-size: 0.78rem;
-    font-weight: 600;
-    border-radius: 999px;
-    padding: 0.15rem 0.55rem;
-}
-
-.delta--bad  { background: var(--wr-danger-soft);  color: var(--wr-danger); }
-.delta--good { background: var(--wr-success-soft); color: var(--wr-success); }
-.delta--same { background: var(--wr-surface-2);    color: var(--wr-text-muted); }
 
 /* ── Gráfico ─────────────────────────────────────────────── */
 .evo {
