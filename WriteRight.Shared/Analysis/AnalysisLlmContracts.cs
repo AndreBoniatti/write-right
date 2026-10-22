@@ -33,26 +33,25 @@ public sealed record AnalysisErrorRow(
 /// <param name="LifetimePractices">Quantas práticas concluídas existem ao todo.</param>
 /// <param name="MaxPatterns">Teto de padrões na resposta.</param>
 /// <param name="MinEvidence">Mínimo de erros citados pra um padrão ser aceito.</param>
-/// <param name="MaxStudyItems">Teto de itens de estudo na resposta.</param>
 public sealed record AnalysisRequest(
     IReadOnlyList<AnalysisErrorRow> Errors,
     IReadOnlyList<CategoryWeight> LifetimeByCategory,
     int PracticesAnalyzed,
     int LifetimePractices,
     int MaxPatterns,
-    int MinEvidence,
-    int MaxStudyItems);
+    int MinEvidence);
 
 /// <summary>
 /// Padrão como o <b>modelo</b> devolve: evidência por id, ainda não validada nem
 /// hidratada. Vira <see cref="AnalysisPattern"/> só depois de o servidor conferir os ids.
 /// </summary>
+/// <param name="Study">Obrigatório no schema, mas nada garante que veio preenchido.</param>
 public sealed record DraftPattern(
     string Title,
     string Diagnosis,
-    IReadOnlyList<int> EvidenceErrorIds);
+    IReadOnlyList<int> EvidenceErrorIds,
+    AnalysisStudyItem? Study);
 
 /// <summary>Saída crua do modelo, antes da validação de evidência.</summary>
 public sealed record AnalysisDraft(
-    IReadOnlyList<DraftPattern> Patterns,
-    IReadOnlyList<AnalysisStudyItem> StudyItems);
+    IReadOnlyList<DraftPattern> Patterns);

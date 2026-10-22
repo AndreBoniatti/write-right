@@ -117,8 +117,6 @@
     /// <summary>Intervalos no eixo Y, no máximo: mais que isso e os rótulos se encavalam em 180px.</summary>
     private const int MaxTickIntervals = 6;
 
-    private static readonly string[] Months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-
     /// <summary>A linha do tempo da última conta — o pai re-renderiza e repassa a mesma.</summary>
     private IReadOnlyList<PracticePoint>? computedFor;
 
@@ -217,8 +215,8 @@
         var thisYear = DateTimeOffset.Now.Year;
         return picked
             .Select((m, k) => (m.Index, m.At.Year != (k == 0 ? thisYear : picked[k - 1].At.Year)
-                ? $"{Months[m.At.Month - 1]}/{m.At.Year % 100:00}"
-                : Months[m.At.Month - 1]))
+                ? $"{Ui.MonthsShort[m.At.Month - 1]}/{m.At.Year % 100:00}"
+                : Ui.MonthsShort[m.At.Month - 1]))
             .ToList();
     }
 
@@ -226,15 +224,9 @@
     private int AverageWindowAt(int index) => Math.Min(ErrorRate.Window, offset + index + 1);
 
     private static string Summary(PracticePoint p) =>
-        $"{Plural(p.Errors.Total, "erro", "erros")} em {Plural(p.Words, "palavra", "palavras")}";
+        $"{Ui.Plural(p.Errors.Total, "erro", "erros")} em {Ui.Plural(p.Words, "palavra", "palavras")}";
 
-    /// <summary>"10 out" no ano corrente; "10 out 2025" fora dele, pra não confundir com o deste ano.</summary>
-    private static string DateLabel(PracticePoint p)
-    {
-        var at = p.CompletedAt.ToLocalTime();
-        var year = at.Year == DateTimeOffset.Now.Year ? "" : $" {at.Year}";
-        return $"{at.Day} {Months[at.Month - 1]}{year}";
-    }
+    private static string DateLabel(PracticePoint p) => Ui.ShortDate(p.CompletedAt);
 
     private string TipSubtitle(int index)
     {
@@ -262,8 +254,6 @@
         active = null;
         announcement = "";
     }
-
-    private static string Plural(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
 
     /// <summary>Uma casa, com vírgula. Na mão: a cultura pt-BR nem sempre vem no pacote de ICU do WASM.</summary>
     private static string Num(double v) => v.ToString("0.0", CultureInfo.InvariantCulture).Replace('.', ',');

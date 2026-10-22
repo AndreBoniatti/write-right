@@ -38,17 +38,23 @@ public sealed record AnalysisEvidence(
 /// <see cref="Categories"/> é <b>derivada</b> da evidência, não pedida ao modelo:
 /// menos uma superfície pra ele errar. Todo padrão nasce com evidência real —
 /// sem isso ele é descartado no servidor antes de virar registro.
+///
+/// <see cref="Study"/> mora DENTRO do padrão. Numa lista à parte, cada item repetia o
+/// padrão de onde saiu e a tela dizia tudo duas vezes; e parear os dois pela posição
+/// quebrava quando a conferência de evidência descartava um padrão do meio.
 /// </summary>
+/// <param name="Study">O que estudar pra fechar o padrão; null se o modelo devolveu em branco.</param>
 public sealed record AnalysisPattern(
     string Title,
     string Diagnosis,
     IReadOnlyList<ErrorCategory> Categories,
-    IReadOnlyList<AnalysisEvidence> Evidence);
+    IReadOnlyList<AnalysisEvidence> Evidence,
+    AnalysisStudyItem? Study);
 
 /// <summary>
-/// O que estudar a seguir. <see cref="StudyItemKind.Rule"/> traz a regra explicada
-/// em <see cref="Content"/>; <see cref="StudyItemKind.Topic"/> traz o porquê e o que
-/// procurar.
+/// O que estudar pra fechar um padrão. <see cref="StudyItemKind.Rule"/> traz a regra
+/// explicada em <see cref="Content"/>; <see cref="StudyItemKind.Topic"/> traz o porquê
+/// e o que procurar.
 /// </summary>
 public sealed record AnalysisStudyItem(
     StudyItemKind Kind,
@@ -57,16 +63,15 @@ public sealed record AnalysisStudyItem(
 
 /// <summary>
 /// Uma análise gerada e persistida: diagnóstico do estado atual, com a marca d'água
-/// do que ele viu (<see cref="PracticesAnalyzed"/> / <see cref="ErrorsAnalyzed"/>)
-/// pra você saber sobre quanto material a conclusão se apoia.
+/// do que ele viu (<see cref="PracticesAnalyzed"/>) pra você saber sobre quanto
+/// material a conclusão se apoia.
 /// </summary>
+/// <param name="GeneratedAt">O momento do retrato — quando a janela foi montada, não quando a IA respondeu.</param>
 public sealed record WeaknessAnalysis(
     int Id,
     DateTimeOffset GeneratedAt,
     int PracticesAnalyzed,
-    int ErrorsAnalyzed,
-    IReadOnlyList<AnalysisPattern> Patterns,
-    IReadOnlyList<AnalysisStudyItem> StudyItems);
+    IReadOnlyList<AnalysisPattern> Patterns);
 
 /// <summary>Por que o botão de gerar está (ou não) disponível.</summary>
 public enum AnalysisGate
@@ -126,6 +131,10 @@ public sealed record AnalysisJob(
 /// <param name="MinPractices">Piso de práticas pra habilitar a geração.</param>
 /// <param name="MinErrors">Piso de erros pra habilitar a geração.</param>
 /// <param name="Job">Se há geração rodando agora (ou se a última falhou).</param>
+/// <param name="Drift">
+/// Quanto o histórico andou desde a última análise; null sem análise ou com material
+/// novo pouco demais pra comparar (ver <see cref="AnalysisDrift.Measure"/>).
+/// </param>
 public sealed record AnalysisState(
     WeaknessAnalysis? Latest,
     AnalysisGate Gate,
@@ -134,4 +143,5 @@ public sealed record AnalysisState(
     int NewPracticesSinceLatest,
     int MinPractices,
     int MinErrors,
-    AnalysisJob Job);
+    AnalysisJob Job,
+    AnalysisDrift? Drift);

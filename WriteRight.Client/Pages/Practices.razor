@@ -46,7 +46,7 @@ else
                                junta meses diferentes, o mês. *@
                             <span class="wr-row__day">
                                 <span class="wr-row__day-n">@at.Day</span>
-                                <span class="wr-row__day-sub">@(open ? MonthsShort[at.Month - 1] : Weekdays[(int)at.DayOfWeek])</span>
+                                <span class="wr-row__day-sub">@(open ? Ui.MonthsShort[at.Month - 1] : Weekdays[(int)at.DayOfWeek])</span>
                             </span>
                             <span class="wr-row__body">
                                 <span class="wr-row__preview">@p.Preview</span>
@@ -100,9 +100,6 @@ else
     private static readonly string[] Months =
         ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
          "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
-    private static readonly string[] MonthsShort =
-        ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
     private static readonly string[] Weekdays = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 

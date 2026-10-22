@@ -57,6 +57,12 @@ public sealed class StubLlmProvider : ILlmProvider
     /// </summary>
     public CancellationTokenSource? CancelDuringCall { get; set; }
 
+    /// <summary>
+    /// Roda no meio da chamada de análise: simula o mundo andando enquanto a IA pensa
+    /// (o usuário concluindo uma prática, por exemplo).
+    /// </summary>
+    public Func<Task>? DuringAnalysis { get; set; }
+
     private LlmCallFailedException Failure() => new(
         Usage, "stub: falha após a cobrança", new InvalidOperationException("json truncado"));
 
@@ -97,15 +103,16 @@ public sealed class StubLlmProvider : ILlmProvider
             Usage));
     }
 
-    public Task<LlmResult<AnalysisDraft>> AnalyzeAsync(
+    public async Task<LlmResult<AnalysisDraft>> AnalyzeAsync(
         AnalysisRequest request, CancellationToken ct = default)
     {
         LastAnalysisRequest = request;
         CancelDuringCall?.Cancel();
+        if (DuringAnalysis is not null) await DuringAnalysis();
         if (FailAfterBilling) throw Failure();
-        return Task.FromResult(new LlmResult<AnalysisDraft>(
+        return new LlmResult<AnalysisDraft>(
             _analysis ?? throw new InvalidOperationException("StubLlmProvider sem análise configurada."),
-            Usage));
+            Usage);
     }
 
     public Task<LlmResult<CardDesign>> DesignCardsAsync(

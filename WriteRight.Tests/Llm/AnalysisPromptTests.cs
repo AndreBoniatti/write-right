@@ -23,8 +23,7 @@ public class AnalysisPromptTests
         PracticesAnalyzed: 6,
         LifetimePractices: 11,
         MaxPatterns: 5,
-        MinEvidence: 3,
-        MaxStudyItems: 6);
+        MinEvidence: 3);
 
     // ── System prompt ────────────────────────────────────────────────────────
 
@@ -57,6 +56,19 @@ public class AnalysisPromptTests
         Assert.Contains("links", prompt);                // nada de recurso inventado
         Assert.Contains("tamanho de frase", prompt);     // o ponto cego assumido
         Assert.Contains("motivacional", prompt);
+    }
+
+    [Fact]
+    public void System_prompt_keeps_each_field_to_its_own_job()
+    {
+        // A tela mostra, em sequência, a categoria, os erros citados, o diagnóstico e a
+        // regra. Diagnóstico que relista os erros e dá o conselho repete o que está logo
+        // ao lado; título que abre com a categoria repete o selo.
+        var prompt = AnalysisPrompt.BuildSystemPrompt(Request());
+
+        Assert.Contains("NÃO comece pelo nome da categoria", prompt);
+        Assert.Contains("1 ou 2 frases com o PORQUÊ", prompt);
+        Assert.Contains("não dê o conselho (ele vai em 'study')", prompt);
     }
 
     [Fact]
@@ -99,15 +111,18 @@ public class AnalysisPromptTests
     // ── Schema ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Schema_requires_patterns_and_study_items()
+    public void Schema_requires_only_patterns()
     {
+        // Sem lista de estudo à parte: ela repetia os padrões, e parear pela posição
+        // quebrava quando a conferência descartava um padrão do meio.
         var schema = Schema();
 
         Assert.Equal("object", schema.GetProperty("type").GetString());
         Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(
-            new[] { "patterns", "studyItems" },
+            new[] { "patterns" },
             schema.GetProperty("required").EnumerateArray().Select(e => e.GetString()).ToArray());
+        Assert.False(schema.GetProperty("properties").TryGetProperty("studyItems", out _));
     }
 
     /// <summary>
@@ -121,11 +136,10 @@ public class AnalysisPromptTests
     public void Schema_avoids_array_cardinality_keywords_that_the_api_rejects()
     {
         var patterns = Schema().GetProperty("properties").GetProperty("patterns");
-        var studyItems = Schema().GetProperty("properties").GetProperty("studyItems");
         var evidence = patterns.GetProperty("items").GetProperty("properties")
             .GetProperty("evidenceErrorIds");
 
-        foreach (var array in new[] { patterns, studyItems, evidence })
+        foreach (var array in new[] { patterns, evidence })
         {
             Assert.False(array.TryGetProperty("minItems", out _));
             Assert.False(array.TryGetProperty("maxItems", out _));
@@ -143,17 +157,22 @@ public class AnalysisPromptTests
             .GetProperty("items");
 
         Assert.Equal(
-            new[] { "title", "diagnosis", "evidenceErrorIds" },
+            new[] { "title", "diagnosis", "evidenceErrorIds", "study" },
             item.GetProperty("required").EnumerateArray().Select(e => e.GetString()).ToArray());
         Assert.False(item.GetProperty("properties").TryGetProperty("categories", out _));
     }
 
     [Fact]
-    public void Study_item_kind_lists_every_StudyItemKind()
+    public void Study_lives_inside_the_pattern_and_lists_every_StudyItemKind()
     {
-        var kind = Schema().GetProperty("properties").GetProperty("studyItems")
-            .GetProperty("items").GetProperty("properties").GetProperty("kind");
+        var study = Schema().GetProperty("properties").GetProperty("patterns")
+            .GetProperty("items").GetProperty("properties").GetProperty("study");
+        var kind = study.GetProperty("properties").GetProperty("kind");
 
+        Assert.Equal(
+            new[] { "kind", "title", "content" },
+            study.GetProperty("required").EnumerateArray().Select(e => e.GetString()).ToArray());
+        Assert.False(study.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(
             Enum.GetNames<StudyItemKind>().OrderBy(x => x),
             kind.GetProperty("enum").EnumerateArray().Select(e => e.GetString()!).OrderBy(x => x));

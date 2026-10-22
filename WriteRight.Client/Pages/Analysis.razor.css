@@ -16,19 +16,18 @@
     color: var(--wr-primary);
 }
 
-/* Explica a diferença entre esta tela e o perfil já na abertura. */
 .page-lead {
     color: var(--wr-text-muted);
     line-height: 1.55;
     margin-bottom: 1.4rem;
 }
 
-/* ── Cabeçalho: sobre o que a análise se apoia + ação ─────── */
+/* ── Cabeçalho: de quando é a análise + ação ─────────────── */
 .head-card {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 1rem;
+    align-items: center;
+    gap: 1rem 1.5rem;
     background: var(--wr-surface-2);
     border: 1px solid var(--wr-border);
     border-radius: var(--wr-radius);
@@ -36,24 +35,38 @@
     margin-bottom: 2rem;
 }
 
+/* Análise velha: o aviso tem que ser visto, não achado. */
+.head-card--stale {
+    background: var(--wr-warning-soft);
+    border-color: color-mix(in srgb, var(--wr-warning) 35%, transparent);
+}
+
 .head-meta {
-    flex: 1 1 260px;
+    flex: 1 1 380px;
+    min-width: 0;
 }
 
 .head-when {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
     font-size: 0.95rem;
+    font-weight: 600;
 }
 
 .head-basis {
-    margin-top: 0.3rem;
-    font-size: 0.85rem;
-    color: var(--wr-text-muted);
-    line-height: 1.45;
+    margin: 0.45rem 0 0;
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.head-basis strong {
+    font-weight: 650;
 }
 
 .head-action {
     flex: 0 0 auto;
-    text-align: right;
 }
 
 /* Diz POR QUE o botão está como está, em vez de só desabilitar calado. */
@@ -65,16 +78,11 @@
     line-height: 1.4;
 }
 
-.head-progress,
 .head-notice {
     flex: 1 1 100%;
     border-top: 1px solid var(--wr-border);
     padding-top: 0.7rem;
     font-size: 0.85rem;
-    color: var(--wr-text-muted);
-}
-
-.head-notice {
     color: var(--wr-danger);
 }
 
@@ -97,36 +105,32 @@
 }
 
 /* ── Padrões ─────────────────────────────────────────────── */
-.section-title {
-    font-size: 1.05rem;
-    font-weight: 650;
+.section-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.4rem 1rem;
     margin-bottom: 0.9rem;
 }
 
-.section-title--spaced {
-    margin-top: 2.2rem;
+.section-title {
+    font-size: 1.05rem;
+    font-weight: 650;
+    margin: 0;
 }
 
-.section-hint {
-    font-weight: 400;
-    font-size: 0.85rem;
-    color: var(--wr-text-muted);
-}
-
-.pattern-list,
-.study-list {
+.pattern-list {
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
+    gap: 0.75rem;
 }
 
-.pattern,
-.study {
+.pattern {
     background: var(--wr-surface);
     border: 1px solid var(--wr-border);
     border-radius: var(--wr-radius);
     box-shadow: var(--wr-shadow-sm);
-    padding: 1rem 1.15rem;
 }
 
 /* O primeiro padrão é o mais importante — o modelo ordena por isso. */
@@ -135,115 +139,180 @@
     box-shadow: 0 0 0 1px var(--wr-primary-soft);
 }
 
+.pattern-h {
+    margin: 0;
+    font-size: inherit;
+}
+
+/* A linha inteira abre e fecha o padrão. */
 .pattern-head {
     display: flex;
-    align-items: baseline;
-    gap: 0.6rem;
+    align-items: flex-start;
+    gap: 0.7rem;
+    width: 100%;
+    padding: 0.95rem 1.15rem;
+    background: none;
+    border: none;
+    border-radius: var(--wr-radius);
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pattern-head:focus-visible {
+    outline: 2px solid var(--wr-primary);
+    outline-offset: 2px;
 }
 
 .pattern-rank {
     flex: 0 0 auto;
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: var(--wr-primary);
-    background: var(--wr-primary-soft);
-    border-radius: 999px;
     width: 1.5rem;
     height: 1.5rem;
+    margin-top: 0.05rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
+    color: var(--wr-primary);
+    background: var(--wr-primary-soft);
 }
 
-.pattern-title,
-.study-title {
+.pattern-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.pattern-title {
     font-size: 1rem;
     font-weight: 650;
-    margin: 0;
     line-height: 1.35;
 }
 
-.pattern-cats {
+.pattern-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
-    margin: 0.6rem 0 0.55rem;
-}
-
-.pattern-diagnosis {
-    margin: 0;
-    line-height: 1.55;
-}
-
-/* ── Evidência (o lastro do padrão) ──────────────────────── */
-.evidence-toggle {
-    display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    margin-top: 0.75rem;
+    gap: 0.4rem 0.7rem;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--wr-text-muted);
+}
+
+/* Quebra linha: nada limita quantos erros um padrão cita, e sem isso uns 20 quadrados
+   passam da largura do card no celular. */
+.sev-strip {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+/* Mesmo tamanho do quadrado da legenda: a marca e a legenda se reconhecem. */
+.sev {
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+.pattern-chevron {
+    flex: 0 0 auto;
+    display: inline-flex;
+    margin-top: 0.15rem;
+    color: var(--wr-text-muted);
+    transition: transform 0.18s ease;
+}
+
+.pattern-chevron--open {
+    transform: rotate(180deg);
+}
+
+/* Alinhado com o título, depois do número. */
+.pattern-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 0 1.15rem 1.1rem calc(1.15rem + 1.5rem + 0.7rem);
+}
+
+.block-label {
+    margin-bottom: 0.35rem;
+    font-size: 0.7rem;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--wr-text-muted);
+}
+
+.errs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.errs li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
+    line-height: 1.45;
+}
+
+.errs-arrow {
+    color: var(--wr-text-muted);
+    margin: 0 0.15rem;
+}
+
+.errs-cat {
+    margin-left: 0.4rem;
+    vertical-align: 0.1em;
+}
+
+.link-toggle {
+    margin-top: 0.4rem;
     padding: 0;
     background: none;
     border: none;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 600;
     color: var(--wr-primary);
     cursor: pointer;
 }
 
-.evidence-chevron {
-    display: inline-flex;
-    transition: transform 0.18s ease;
+.pattern-why {
+    margin: 0;
+    line-height: 1.55;
 }
 
-.evidence-chevron--open {
-    transform: rotate(180deg);
-}
-
-/* Mesmo visual da revisão do perfil — é o mesmo tipo de conteúdo. */
-.review {
-    margin-top: 0.85rem;
-    padding-top: 0.85rem;
-    border-top: 1px solid var(--wr-border);
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-}
-
-.review-item {
+.rule {
     background: var(--wr-surface-2);
-    border: 1px solid var(--wr-border);
-    border-radius: var(--wr-radius);
-    padding: 0.7rem 0.85rem;
+    border-radius: var(--wr-radius-sm);
+    padding: 0.8rem 0.95rem;
 }
 
-.review-diff {
-    margin-top: 0.45rem;
-    line-height: 1.5;
-}
-
-.review-arrow {
-    color: var(--wr-text-muted);
-    margin: 0 0.2rem;
-}
-
-.review-why {
-    margin-top: 0.3rem;
-    font-size: 0.85rem;
-    color: var(--wr-text-muted);
-    line-height: 1.45;
-}
-
-/* ── Itens de estudo ─────────────────────────────────────── */
-.study-head {
+.rule-head {
     display: flex;
-    align-items: baseline;
-    gap: 0.6rem;
     flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-.study-content {
-    margin-top: 0.6rem;
+.rule-title {
+    font-size: 0.95rem;
+    font-weight: 650;
+}
+
+.rule-content {
+    margin: 0.5rem 0 0;
+    font-size: 0.93rem;
     line-height: 1.6;
     white-space: pre-wrap; /* a regra costuma vir com quebras e exemplos em linhas */
 }
@@ -262,10 +331,23 @@
 @media (max-width: 640px) {
     .head-action {
         flex: 1 1 100%;
-        text-align: left;
     }
 
     .head-hint {
         max-width: none;
+    }
+
+    .pattern-head {
+        padding: 0.9rem 0.95rem;
+    }
+
+    .pattern-body {
+        padding: 0 0.95rem 1rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pattern-chevron {
+        transition: none;
     }
 }

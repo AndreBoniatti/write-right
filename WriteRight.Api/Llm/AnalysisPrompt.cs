@@ -47,13 +47,17 @@ internal static class AnalysisPrompt
         sb.AppendLine("- MENOS padrões bem evidenciados é uma resposta MELHOR que a lista cheia de padrões");
         sb.AppendLine("  esticados. Se os dados só sustentam 1, devolva 1. Não preencha o teto.");
         sb.AppendLine();
-        sb.AppendLine("ITENS DE ESTUDO:");
-        sb.AppendLine("- 'Rule': regra FECHADA, que cabe num parágrafo. Ensine ela ali mesmo, com exemplos");
-        sb.AppendLine("  curtos de certo/errado. Ex.: in/on/at de tempo, artigo com incontáveis, -ed vs -ing.");
-        sb.AppendLine("- 'Topic': habilidade AMPLA que parágrafo nenhum ensina (naturalidade, repertório de");
-        sb.AppendLine("  colocações). Diga o que buscar e por quê; não finja ensinar.");
-        sb.AppendLine("- Cada item deve nascer de um padrão que você reportou. Nada solto.");
-        sb.AppendLine($"- No máximo {request.MaxStudyItems} itens.");
+        sb.AppendLine("CADA PADRÃO TEM (o aluno vê nesta ordem: os erros citados, o porquê, o que estudar):");
+        sb.AppendLine("- 'title': o padrão em uma linha curta, específica. NÃO comece pelo nome da categoria");
+        sb.AppendLine("  (\"Preposição: ...\"): a categoria já aparece ao lado do título.");
+        sb.AppendLine("- 'diagnosis': 1 ou 2 frases com o PORQUÊ — a causa (interferência do português, regra");
+        sb.AppendLine("  generalizada demais). Não repita o título, não liste os erros (eles aparecem logo acima)");
+        sb.AppendLine("  e não dê o conselho (ele vai em 'study').");
+        sb.AppendLine("- 'study': o que estudar pra fechar ESTE padrão.");
+        sb.AppendLine("  - kind 'Rule': regra FECHADA, que cabe num parágrafo. Ensine ela ali mesmo, com exemplos");
+        sb.AppendLine("    curtos de certo/errado. Ex.: in/on/at de tempo, artigo com incontáveis, -ed vs -ing.");
+        sb.AppendLine("  - kind 'Topic': habilidade AMPLA que parágrafo nenhum ensina (naturalidade, repertório");
+        sb.AppendLine("    de colocações). Diga o que buscar e por quê; não finja ensinar.");
         sb.AppendLine();
         sb.AppendLine("PROIBIDO:");
         sb.AppendLine("- Estimar nível (CEFR ou qualquer outro). Os dados não sustentam isso.");
@@ -66,9 +70,7 @@ internal static class AnalysisPrompt
         sb.AppendLine();
         sb.AppendLine("FORMA:");
         sb.AppendLine("- Escreva TUDO em português do Brasil (os exemplos de inglês, claro, em inglês).");
-        sb.AppendLine("- 'title': o padrão em uma linha curta, específica.");
-        sb.AppendLine("- 'diagnosis': 2 a 4 frases — o que é, por que acontece, e o que muda na prática.");
-        sb.AppendLine("  Fale direto na 2ª pessoa (\"você usa...\", \"seu texto...\").");
+        sb.AppendLine("- Fale direto na 2ª pessoa (\"você usa...\", \"seu texto...\").");
         sb.AppendLine();
         sb.AppendLine("CATEGORIAS (o vocabulário do agregado que você recebe):");
         foreach (var info in ErrorCatalog.All)
@@ -126,23 +128,6 @@ internal static class AnalysisPrompt
     /// </summary>
     public static Dictionary<string, JsonElement> BuildResultSchema()
     {
-        var patternItem = new
-        {
-            type = "object",
-            properties = new
-            {
-                title = new { type = "string" },
-                diagnosis = new { type = "string" },
-                evidenceErrorIds = new
-                {
-                    type = "array",
-                    items = new { type = "integer" },
-                },
-            },
-            required = new[] { "title", "diagnosis", "evidenceErrorIds" },
-            additionalProperties = false,
-        };
-
         var studyItem = new
         {
             type = "object",
@@ -156,15 +141,32 @@ internal static class AnalysisPrompt
             additionalProperties = false,
         };
 
+        var patternItem = new
+        {
+            type = "object",
+            properties = new
+            {
+                title = new { type = "string" },
+                diagnosis = new { type = "string" },
+                evidenceErrorIds = new
+                {
+                    type = "array",
+                    items = new { type = "integer" },
+                },
+                study = studyItem,
+            },
+            required = new[] { "title", "diagnosis", "evidenceErrorIds", "study" },
+            additionalProperties = false,
+        };
+
         return new Dictionary<string, JsonElement>
         {
             ["type"] = JsonSerializer.SerializeToElement("object"),
             ["properties"] = JsonSerializer.SerializeToElement(new
             {
                 patterns = new { type = "array", items = patternItem },
-                studyItems = new { type = "array", items = studyItem },
             }),
-            ["required"] = JsonSerializer.SerializeToElement(new[] { "patterns", "studyItems" }),
+            ["required"] = JsonSerializer.SerializeToElement(new[] { "patterns" }),
             ["additionalProperties"] = JsonSerializer.SerializeToElement(false),
         };
     }

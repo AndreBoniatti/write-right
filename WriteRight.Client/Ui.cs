@@ -45,6 +45,20 @@ public static class Ui
         _ => "de lapidação",
     };
 
+    /// <summary>"1 erro", "3 erros" — em vez do "erro(s)".</summary>
+    public static string Plural(int count, string one, string many) => $"{count} {(count == 1 ? one : many)}";
+
+    public static readonly IReadOnlyList<string> MonthsShort =
+        ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+    /// <summary>"10 out" no ano corrente; "10 out 2025" fora dele, pra não confundir com o deste ano.</summary>
+    public static string ShortDate(DateTimeOffset at)
+    {
+        var local = at.ToLocalTime();
+        var year = local.Year == DateTimeOffset.Now.Year ? "" : $" {local.Year}";
+        return $"{local.Day} {MonthsShort[local.Month - 1]}{year}";
+    }
+
     /// <summary>
     /// Uma fração (0–1) como porcentagem pra <c>style</c>, sempre com ponto decimal: no
     /// navegador em pt-BR, um "12,5%" quebra o CSS sem erro nenhum.

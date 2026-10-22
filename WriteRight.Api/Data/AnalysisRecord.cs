@@ -3,7 +3,7 @@ namespace WriteRight.Api.Data;
 /// <summary>
 /// Entidade de persistência de uma análise de fraquezas gerada pela IA.
 ///
-/// O corpo (padrões e itens de estudo) fica em JSON, não em tabelas filhas, de
+/// O corpo (padrões, cada um com o que estudar) fica em JSON, não em tabelas filhas, de
 /// propósito: é um <b>documento</b> — lido sempre inteiro, nunca consultado por
 /// campo nem agregado. Modelar relacionalmente custaria quatro tabelas e uma
 /// árvore de navegação pra ganhar zero consulta. O JSON guarda enums como string,
@@ -17,6 +17,7 @@ public class AnalysisRecord
 {
     public int Id { get; set; }
 
+    /// <summary>O momento do retrato: quando a janela foi montada, não quando a IA respondeu.</summary>
     public DateTimeOffset GeneratedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>
@@ -30,7 +31,4 @@ public class AnalysisRecord
 
     /// <summary>JSON de <c>AnalysisPattern[]</c> (já validado e hidratado).</summary>
     public string PatternsJson { get; set; } = "[]";
-
-    /// <summary>JSON de <c>AnalysisStudyItem[]</c>.</summary>
-    public string StudyItemsJson { get; set; } = "[]";
 }

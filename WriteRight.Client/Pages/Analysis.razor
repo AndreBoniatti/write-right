@@ -11,12 +11,11 @@
     </a>
 
     <h1 class="mb-2 d-flex align-items-center gap-2">
-        <Icon Name="target" Size="26" /> Análise dos meus erros
+        <Icon Name="text-search" Size="26" /> Análise dos meus erros
     </h1>
     <p class="page-lead">
-        O perfil conta <em>o quê</em> você erra. Aqui a IA lê os seus erros reais e procura
-        o <em>porquê</em>: a sub-regra dentro da categoria e o fio que liga categorias diferentes.
-        Todo padrão vem com os erros que o sustentam — se não tem evidência, não vira padrão.
+        A IA lê os seus erros reais e procura a regra por trás deles. Cada padrão mostra os
+        erros que o sustentam.
     </p>
 
     @if (loading)
@@ -63,8 +62,13 @@
     private string? error;
     private string? notice;
 
-    // Quais padrões estão com a evidência aberta (índice na lista).
-    private readonly HashSet<int> openEvidence = new();
+    /// <summary>Erros à vista em cada padrão antes do "mostrar os outros".</summary>
+    private const int VisibleEvidence = 3;
+
+    // Padrões abertos e padrões com todos os erros à vista (índice na lista). Abre só
+    // o primeiro: o modelo ordena por importância, e cinco abertos viram um paredão.
+    private readonly HashSet<int> openPatterns = [0];
+    private readonly HashSet<int> allEvidence = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -99,28 +103,34 @@
         }
     }
 
-    // Cabeçalho: o que sustenta a análise atual + a ação de gerar/atualizar.
-    private RenderFragment Header(AnalysisState s) =>@<div class="head-card">
+    // Cabeçalho: de quando é a análise, o quanto o histórico andou desde então, e a ação.
+    // Análise velha (o gate já diz que vale regerar) ganha o aviso em vez de uma linha cinza.
+    private RenderFragment Header(AnalysisState s) =>@<div class="head-card @(IsStale(s) ? "head-card--stale" : "")">
         <div class="head-meta">
             @if (s.Latest is { } l)
             {
                 <div class="head-when">
-                    Gerada em <strong>@l.GeneratedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong>
-                </div>
-                <div class="head-basis">
-                    Baseada em @l.PracticesAnalyzed prática(s) e @l.ErrorsAnalyzed erro(s) reais.
-                    @if (s.NewPracticesSinceLatest > 0)
+                    @if (IsStale(s))
                     {
-                        <span> Você fez @s.NewPracticesSinceLatest prática(s) desde então.</span>
+                        <span class="wr-badge wr-badge--warning">Desatualizada</span>
                     }
+                    <span>@Generated(l.GeneratedAt)</span>
                 </div>
+                <p class="head-basis">
+                    @Basis(l, s.NewPracticesSinceLatest)
+                    @if (s.Drift is { } d)
+                    {
+                        @DriftText(d)
+                    }
+                </p>
             }
             else
             {
-                <div class="head-when"><strong>Sem análise gerada.</strong></div>
-                <div class="head-basis">
-                    Histórico atual: @s.CompletedPractices prática(s) concluída(s), @s.TotalErrors erro(s).
-                </div>
+                <div class="head-when">Sem análise gerada.</div>
+                <p class="head-basis">
+                    Histórico atual: @Ui.Plural(s.CompletedPractices, "prática concluída", "práticas concluídas"),
+                    @Ui.Plural(s.TotalErrors, "erro", "erros").
+                </p>
             }
         </div>
 
@@ -137,127 +147,204 @@
                     <span>@(s.Latest is null ? "Gerar análise" : "Atualizar análise")</span>
                 }
             </button>
-            @if (generating)
-            {
-                <div class="head-hint">
-                    Roda no servidor — pode sair desta página ou fechar a aba.
-                    O resultado fica salvo.
-                </div>
-            }
-            else if (s.Gate == AnalysisGate.NotEnoughData)
-            {
-                <div class="head-hint">
-                    Precisa de @s.MinPractices prática(s) e @s.MinErrors erro(s).
-                    Você tem @s.CompletedPractices e @s.TotalErrors.
-                </div>
-            }
-            else if (s.Gate == AnalysisGate.UpToDate && !generating)
-            {
-                <div class="head-hint">Pouca coisa mudou desde a última — regerar provavelmente dirá o mesmo.</div>
-            }
+            <div class="head-hint">@Hint(s)</div>
         </div>
 
-        @if (generating)
-        {
-            <div class="head-progress">
-                Lendo seus erros e procurando padrão. Isso leva alguns segundos.
-            </div>
-        }
         @if (notice is not null)
         {
             <div class="head-notice">@notice</div>
         }
     </div>;
 
-    // O relatório em si: padrões (com evidência) e o que estudar.
+    // O relatório: cada padrão na ordem em que se aprende — os seus erros, o porquê, a regra.
     private RenderFragment Report(WeaknessAnalysis a) =>@<div>
-        <h2 class="section-title">
-            O que está por trás dos seus erros
-            <span class="section-hint">· @a.Patterns.Count padr(ão/ões)</span>
-        </h2>
-
-        @if (a.Patterns.Count == 0)
-        {
-            <div class="alert alert-info">Nenhum padrão com evidência suficiente nesta análise.</div>
-        }
+        <div class="section-head">
+            <h2 class="section-title">O que está por trás dos seus erros</h2>
+            <SeverityLegend />
+        </div>
 
         <div class="pattern-list">
             @for (var i = 0; i < a.Patterns.Count; i++)
             {
                 var index = i;
                 var p = a.Patterns[index];
-                var isOpen = openEvidence.Contains(index);
-                <div class="pattern @(index == 0 ? "pattern--lead" : "")">
-                    <div class="pattern-head">
-                        <span class="pattern-rank">@(index + 1)</span>
-                        <h3 class="pattern-title">@p.Title</h3>
-                    </div>
+                var isOpen = openPatterns.Contains(index);
+                var showAll = allEvidence.Contains(index);
+                // O mais grave primeiro; dentro da mesma gravidade, o mais recente (o id da
+                // prática cresce com o tempo). A ordem gravada é a em que o modelo citou.
+                var evidence = p.Evidence
+                    .OrderBy(e => e.Severity)
+                    .ThenByDescending(e => e.PracticeId)
+                    .ToList();
+                var breaks = evidence.Count(e => e.Severity == ErrorSeverity.BreaksMeaning);
+                var hidden = evidence.Count - VisibleEvidence;
+                // Padrão de uma categoria já diz a categoria no cabeçalho; o que cruza
+                // categorias precisa dizer de qual é cada erro, senão o fio entre elas some.
+                var crossesCategories = p.Categories.Count > 1;
+                <article class="pattern @(index == 0 ? "pattern--lead" : "")">
+                    <h3 class="pattern-h">
+                        <button class="pattern-head" type="button" aria-expanded="@(isOpen ? "true" : "false")"
+                                aria-controls="pattern-body-@index" @onclick="() => Toggle(openPatterns, index)">
+                            <span class="pattern-rank">@(index + 1)</span>
+                            <span class="pattern-main">
+                                <span class="pattern-title">@p.Title</span>
+                                <span class="pattern-meta">
+                                    @foreach (var c in p.Categories)
+                                    {
+                                        <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(c).LabelPt</span>
+                                    }
+                                    @* Um quadrado por erro citado, na cor da gravidade: o peso do padrão de relance. *@
+                                    <span class="sev-strip" aria-hidden="true">
+                                        @foreach (var e in evidence)
+                                        {
+                                            <i class="sev @Ui.SeverityFill(e.Severity)"></i>
+                                        }
+                                    </span>
+                                    <span>
+                                        @Ui.Plural(evidence.Count, "erro", "erros")@(breaks > 0
+                                            ? $" · {breaks} {Ui.SeverityPhrase(ErrorSeverity.BreaksMeaning, breaks)}"
+                                            : "")
+                                    </span>
+                                </span>
+                            </span>
+                            <span class="pattern-chevron @(isOpen ? "pattern-chevron--open" : "")">
+                                <Icon Name="chevron-down" Size="18" />
+                            </span>
+                        </button>
+                    </h3>
 
-                    <div class="pattern-cats">
-                        @foreach (var c in p.Categories)
-                        {
-                            <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(c).LabelPt</span>
-                        }
-                    </div>
-
-                    <p class="pattern-diagnosis">@p.Diagnosis</p>
-
-                    <button class="evidence-toggle" @onclick="() => ToggleEvidence(index)">
-                        <span class="evidence-chevron @(isOpen ? "evidence-chevron--open" : "")">
-                            <Icon Name="chevron-down" Size="16" />
-                        </span>
-                        @(isOpen ? "Esconder" : "Ver") os @p.Evidence.Count erro(s) que sustentam isso
-                    </button>
-
-                    @if (isOpen)
-                    {
-                        <div class="review">
-                            @foreach (var e in p.Evidence)
+                    @* Sempre no DOM (escondido quando fechado): o aria-controls do cabeçalho
+                       precisa apontar pra algo que existe. *@
+                    <div class="pattern-body" id="pattern-body-@index" hidden="@(!isOpen)">
+                        <div>
+                            <div class="block-label">Seus erros</div>
+                            <ul class="errs" id="pattern-errs-@index">
+                                @foreach (var e in showAll ? evidence : evidence.Take(VisibleEvidence))
+                                {
+                                    <li title="@e.Explanation">
+                                        <i class="sev @Ui.SeverityFill(e.Severity)" role="img"
+                                           aria-label="@Ui.SeverityLabel(e.Severity)"></i>
+                                        <span>
+                                            <s class="text-danger">@e.Original</s>
+                                            <span class="errs-arrow">→</span>
+                                            <strong class="text-success">@e.Correction</strong>
+                                            @if (crossesCategories)
+                                            {
+                                                <span class="wr-badge wr-badge--muted errs-cat">@ErrorCatalog.Info(e.Category).LabelPt</span>
+                                            }
+                                        </span>
+                                    </li>
+                                }
+                            </ul>
+                            @if (hidden > 0)
                             {
-                                <div class="review-item">
-                                    <SeverityBadge Value="e.Severity" />
-                                    <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(e.Category).LabelPt</span>
-                                    <div class="review-diff">
-                                        <s class="text-danger">@e.Original</s>
-                                        <span class="review-arrow">→</span>
-                                        <strong class="text-success">@e.Correction</strong>
-                                    </div>
-                                    <div class="review-why">@e.Explanation</div>
-                                </div>
+                                <button class="link-toggle" type="button" aria-expanded="@(showAll ? "true" : "false")"
+                                        aria-controls="pattern-errs-@index" @onclick="() => Toggle(allEvidence, index)">
+                                    @(showAll ? "Mostrar menos" : hidden == 1 ? "Mostrar o outro" : $"Mostrar os outros {hidden}")
+                                </button>
                             }
                         </div>
-                    }
-                </div>
+
+                        <div>
+                            <div class="block-label">Por quê</div>
+                            <p class="pattern-why">@p.Diagnosis</p>
+                        </div>
+
+                        @if (p.Study is { } study)
+                        {
+                            <div class="rule">
+                                <div class="rule-head">
+                                    <span class="@KindClass(study.Kind)">@KindLabel(study.Kind)</span>
+                                    <span class="rule-title">@study.Title</span>
+                                </div>
+                                <p class="rule-content">@study.Content</p>
+                            </div>
+                        }
+                    </div>
+                </article>
             }
         </div>
 
-        @if (a.StudyItems.Count > 0)
-        {
-            <h2 class="section-title section-title--spaced">O que estudar a seguir</h2>
-            <div class="study-list">
-                @foreach (var item in a.StudyItems)
-                {
-                    <div class="study">
-                        <div class="study-head">
-                            <span class="@KindClass(item.Kind)">@KindLabel(item.Kind)</span>
-                            <h3 class="study-title">@item.Title</h3>
-                        </div>
-                        <div class="study-content">@item.Content</div>
-                    </div>
-                }
-            </div>
-        }
-
         <p class="analysis-foot">
-            A análise olha só as linhas de erro registradas — nunca os textos inteiros. Por isso ela
-            não comenta coisas como tamanho de frase ou repetição de vocabulário: sem registro,
-            seria afirmação sem lastro. Ponto cego escolhido, não esquecimento.
+            A análise lê só as linhas de erro, não os textos inteiros. Por isso ela não comenta
+            tamanho de frase nem repetição de vocabulário.
         </p>
     </div>;
 
-    private void ToggleEvidence(int index)
+    private static void Toggle(HashSet<int> set, int index)
     {
-        if (!openEvidence.Add(index)) openEvidence.Remove(index);
+        if (!set.Add(index)) set.Remove(index);
+    }
+
+    /// <summary>O gate já diz que vale regerar: é o mesmo critério, agora dito com destaque.</summary>
+    private static bool IsStale(AnalysisState s) => s.Latest is not null && s.Gate == AnalysisGate.Ready;
+
+    private static string Generated(DateTimeOffset at)
+    {
+        var days = (DateTime.Today - at.ToLocalTime().Date).Days;
+        return days switch
+        {
+            // Negativo é relógio do servidor adiantado em relação ao navegador: é "hoje".
+            <= 0 => "Gerada hoje",
+            1 => "Gerada ontem",
+            _ => $"Gerada em {Ui.ShortDate(at)}, há {days} dias",
+        };
+    }
+
+    private static string Basis(WeaknessAnalysis l, int newSince) =>
+        $"Ela leu {Ui.Plural(l.PracticesAnalyzed, "prática", "práticas")}" + newSince switch
+        {
+            0 => ".",
+            1 => ", e depois veio mais 1.",
+            _ => $", e depois vieram mais {newSince}.",
+        };
+
+    private static RenderFragment DriftText(AnalysisDrift d)
+    {
+        var read = Percent(d.CoveredShareRead);
+        var since = Percent(d.CoveredShareSince);
+        var items = d.TopUncoveredSince
+            .Select(c => $"{ErrorCatalog.Info(c.Category).LabelPt} ({Percent(c.Share)}%)")
+            .ToList();
+        // "A, B e C"
+        var uncovered = items.Count <= 1
+            ? string.Concat(items)
+            : string.Join(", ", items.Take(items.Count - 1)) + " e " + items[^1];
+
+        return @<text>
+            @if (read == since)
+            {
+                <span> Nesse tempo, as categorias que ela cobre seguem em <strong>@since%</strong> dos seus erros.</span>
+            }
+            else
+            {
+                <span>
+                    Nesse tempo, as categorias que ela cobre @(since < read ? "caíram" : "subiram") de
+                    <strong>@read%</strong> para <strong>@since%</strong> dos seus erros.
+                </span>
+            }
+            @if (uncovered.Length > 0)
+            {
+                <span> As que mais aparecem agora e ela não cobre: @uncovered.</span>
+            }
+        </text>;
+    }
+
+    private static int Percent(double share) => (int)Math.Round(share * 100, MidpointRounding.AwayFromZero);
+
+    /// <summary>Diz POR QUE o botão está como está, em vez de só desabilitar calado.</summary>
+    private string Hint(AnalysisState s)
+    {
+        if (generating) return "Aguarde, isso leva alguns instantes. Se sair da página, o resultado fica salvo.";
+
+        return s.Gate switch
+        {
+            AnalysisGate.NotEnoughData =>
+                $"Precisa de {Ui.Plural(s.MinPractices, "prática", "práticas")} e {Ui.Plural(s.MinErrors, "erro", "erros")}. " +
+                $"Você tem {s.CompletedPractices} e {s.TotalErrors}.",
+            AnalysisGate.UpToDate => "Pouca coisa mudou desde a última — regerar provavelmente dirá o mesmo.",
+            _ => "Leva alguns instantes.",
+        };
     }
 
     /// <summary>De quanto em quanto tempo se pergunta ao servidor se a análise terminou.</summary>
@@ -352,7 +439,10 @@
             }
             else if (fresh.Latest?.Id != previousId)
             {
-                openEvidence.Clear(); // análise nova = painéis fechados de novo
+                // Análise nova: volta ao estado de abertura, só o primeiro padrão aberto.
+                openPatterns.Clear();
+                openPatterns.Add(0);
+                allEvidence.Clear();
             }
             else
             {

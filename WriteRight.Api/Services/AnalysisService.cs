@@ -64,8 +64,6 @@ public sealed class AnalysisService
     /// <summary>Erros citados mínimos pra um padrão valer. Menos que isso é coincidência.</summary>
     internal const int MinEvidence = 3;
 
-    internal const int MaxStudyItems = 6;
-
     /// <summary>
     /// (De)serialização do corpo da análise. Enums como STRING pelo mesmo motivo do
     /// resto do schema: o JSON no banco continua legível a olho nu.
@@ -114,16 +112,18 @@ public sealed class AnalysisService
             : practices.Count(p => p.CompletedAt > latest.GeneratedAt);
 
         var gate = Gate(practices.Count, errors.Count, latest, newSince);
+        var analysis = latest is null ? null : ToContract(latest);
 
         return new AnalysisState(
-            latest is null ? null : ToContract(latest),
+            analysis,
             gate,
             practices.Count,
             errors.Count,
             newSince,
             MinPractices,
             MinErrors,
-            _jobs.Current);
+            _jobs.Current,
+            analysis is null ? null : MeasureDrift(analysis, practices, errors));
     }
 
     /// <summary>
@@ -135,6 +135,11 @@ public sealed class AnalysisService
     public async Task<(AnalysisOutcome Outcome, WeaknessAnalysis? Analysis)> GenerateAsync(
         CancellationToken ct = default)
     {
+        // A análise é datada pelo retrato, não pela resposta: a chamada leva perto de um
+        // minuto, e a tela diz que dá pra sair e seguir praticando. Datada no fim, uma
+        // prática concluída no meio passaria por "lida" sem ter ido ao modelo, e nunca
+        // contaria como nova.
+        var takenAt = DateTimeOffset.UtcNow;
         var (practices, errors) = await LoadCompletedAsync(ct);
         if (practices.Count < MinPractices || errors.Count < MinErrors)
             return (AnalysisOutcome.NotEnoughData, null);
@@ -148,8 +153,7 @@ public sealed class AnalysisService
             window.Practices,
             practices.Count,
             MaxPatterns,
-            MinEvidence,
-            MaxStudyItems);
+            MinEvidence);
 
         LlmResult<AnalysisDraft> result;
         try
@@ -178,11 +182,10 @@ public sealed class AnalysisService
 
         var record = new AnalysisRecord
         {
-            GeneratedAt = DateTimeOffset.UtcNow,
+            GeneratedAt = takenAt,
             PracticesAnalyzed = window.Practices,
             ErrorsAnalyzed = window.Errors.Count,
             PatternsJson = JsonSerializer.Serialize(patterns, Json),
-            StudyItemsJson = JsonSerializer.Serialize(StudyItems(result.Value.StudyItems), Json),
         };
 
         // A análise em si também é gravada com o token não cancelável: ela já foi
@@ -274,7 +277,8 @@ public sealed class AnalysisService
                 draft.Title.Trim(),
                 draft.Diagnosis.Trim(),
                 evidence.Select(e => e.Category).Distinct().ToList(),
-                evidence));
+                evidence,
+                Study(draft.Study)));
 
             if (grounded.Count == MaxPatterns) break;
         }
@@ -282,12 +286,39 @@ public sealed class AnalysisService
         return grounded;
     }
 
-    private static List<AnalysisStudyItem> StudyItems(IReadOnlyList<AnalysisStudyItem> items) =>
-        items
-            .Where(i => !string.IsNullOrWhiteSpace(i.Title) && !string.IsNullOrWhiteSpace(i.Content))
-            .Take(MaxStudyItems)
-            .Select(i => new AnalysisStudyItem(i.Kind, i.Title.Trim(), i.Content.Trim()))
-            .ToList();
+    /// <summary>
+    /// O schema exige o item, mas não que venha preenchido. Em branco ele sai, e o
+    /// padrão fica: o diagnóstico com lastro vale mesmo sem a regra.
+    /// </summary>
+    private static AnalysisStudyItem? Study(AnalysisStudyItem? item) =>
+        item is null || string.IsNullOrWhiteSpace(item.Title) || string.IsNullOrWhiteSpace(item.Content)
+            ? null
+            : new AnalysisStudyItem(item.Kind, item.Title.Trim(), item.Content.Trim());
+
+    // ── Quanto o histórico andou ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Compara o material que a análise leu com o que veio depois dela (ver
+    /// <see cref="AnalysisDrift"/>). A janela não é gravada, só o tamanho dela; como
+    /// <see cref="BuildWindow"/> pega as práticas mais recentes até a geração, refazer
+    /// o recorte com esse tamanho devolve o mesmo material. A exceção é uma prática da
+    /// janela excluída depois: aí o recorte desce uma prática a mais.
+    /// </summary>
+    private static AnalysisDrift? MeasureDrift(
+        WeaknessAnalysis latest, IReadOnlyList<CompletedPractice> practices, IReadOnlyList<ErrorRecord> errors)
+    {
+        var read = practices
+            .Where(p => p.CompletedAt <= latest.GeneratedAt)
+            .OrderByDescending(p => p.CompletedAt)
+            .Take(latest.PracticesAnalyzed)
+            .Select(p => p.Id)
+            .ToHashSet();
+
+        return AnalysisDrift.Measure(
+            latest.Patterns.SelectMany(p => p.Categories).ToHashSet(),
+            errors.Where(e => read.Contains(e.PracticeId)).Select(e => e.Category).ToList(),
+            errors.Where(e => e.CompletedAt > latest.GeneratedAt).Select(e => e.Category).ToList());
+    }
 
     // ── Gate ─────────────────────────────────────────────────────────────────
 
@@ -353,9 +384,7 @@ public sealed class AnalysisService
         record.Id,
         record.GeneratedAt,
         record.PracticesAnalyzed,
-        record.ErrorsAnalyzed,
-        JsonSerializer.Deserialize<List<AnalysisPattern>>(record.PatternsJson, Json) ?? [],
-        JsonSerializer.Deserialize<List<AnalysisStudyItem>>(record.StudyItemsJson, Json) ?? []);
+        JsonSerializer.Deserialize<List<AnalysisPattern>>(record.PatternsJson, Json) ?? []);
 
     private sealed record CompletedPractice(int Id, DateTimeOffset CompletedAt);
 

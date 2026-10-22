@@ -36,10 +36,6 @@ namespace WriteRight.Api.Migrations
                     b.Property<int>("PracticesAnalyzed")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("StudyItemsJson")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.HasKey("Id");
 
                     b.ToTable("Analyses");
