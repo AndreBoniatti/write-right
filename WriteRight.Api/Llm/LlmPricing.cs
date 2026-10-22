@@ -3,20 +3,9 @@ using Microsoft.Extensions.Options;
 namespace WriteRight.Api.Llm;
 
 /// <summary>
-/// Converte tokens em dólares.
-///
-/// A tabela existe porque a API <b>não devolve custo</b>: o bloco <c>usage</c> da
-/// Messages API só traz contagem de token, e a Models API não expõe preço. Traduzir
-/// token em dinheiro é sempre responsabilidade do cliente. (A Usage &amp; Cost Admin
-/// API devolve USD de verdade, mas é agregada por organização e com latência — serve
-/// pra CONFERIR este cálculo depois, não pra substituí-lo.)
-///
-/// As tarifas vêm SÓ de <c>Llm:Pricing</c> no appsettings — não há tabela embutida
-/// no código. Preço muda com mais frequência que código, e ter os valores em dois
-/// lugares só cria a dúvida de qual está valendo. Como não existe fallback,
-/// <see cref="LlmOptionsValidator"/> derruba a app no startup se algum modelo em uso
-/// estiver sem tarifa: falha barulhenta na hora de subir, em vez de relatório de
-/// custo silenciosamente vazio semanas depois.
+/// Converte tokens em dólares. Existe porque a API <b>não devolve custo</b>: o bloco
+/// <c>usage</c> só traz contagem de token, e traduzir isso em dinheiro é do cliente.
+/// As tarifas vêm de <see cref="LlmOptions.Pricing"/>.
 /// </summary>
 public sealed class LlmPricing
 {
@@ -57,16 +46,11 @@ public sealed class LlmPricing
     }
 
     /// <summary>
-    /// Busca a tarifa aceitando tanto o alias quanto o snapshot datado.
-    ///
-    /// O que se grava é o modelo da RESPOSTA — o que foi cobrado de verdade — e um
-    /// alias resolve pra um snapshot: pedir <c>claude-haiku-4-5</c> devolve
-    /// <c>claude-haiku-4-5-20251001</c>. Sem esta queda pro alias, configurar o preço
-    /// do alias (a única coisa que dá pra fazer, já que o snapshot só aparece em
-    /// runtime) nunca casaria, e toda chamada viraria custo nulo.
-    ///
-    /// Exato tem precedência: dá pra precificar um snapshot específico se um dia a
-    /// tarifa dele divergir da do alias.
+    /// Busca a tarifa aceitando tanto o alias quanto o snapshot datado. O que se grava é
+    /// o modelo da RESPOSTA, e um alias resolve pra um snapshot: pedir
+    /// <c>claude-haiku-4-5</c> devolve <c>claude-haiku-4-5-20251001</c>. Sem esta queda
+    /// pro alias, o preço configurado nunca casaria e toda chamada viraria custo nulo.
+    /// Exato tem precedência.
     /// </summary>
     private bool TryGetRate(string model, out ModelRate rate)
     {

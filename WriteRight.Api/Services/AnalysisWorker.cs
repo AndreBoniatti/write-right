@@ -12,9 +12,8 @@ namespace WriteRight.Api.Services;
 ///    <see cref="IServiceScopeFactory"/>.
 ///
 ///  • <b>O trabalho não é cancelável.</b> O <c>stoppingToken</c> governa só a espera
-///    por itens na fila; a geração em si recebe <see cref="CancellationToken.None"/>.
-///    Abortar no meio não devolveria o dinheiro (a chamada já está em curso do lado
-///    da Anthropic) e só trocaria um gasto contabilizado por um gasto invisível.
+///    por itens na fila; a geração em si recebe <see cref="CancellationToken.None"/>
+///    (ver <see cref="UsageService.AfterBilling"/>).
 /// </summary>
 public sealed class AnalysisWorker : BackgroundService
 {

@@ -6,21 +6,18 @@ namespace WriteRight.Api.Llm;
 /// <summary>
 /// Prompt e schema do passo que desenha os cards de vocabulário, separado da correção.
 ///
-/// <b>Por que um passo separado.</b> Antes, quem decidia o card era a CATEGORIA que a
-/// correção dava ao erro — um rótulo feito pro perfil, não pro card. Medido no deck
-/// real (2026-10-07, 24 práticas, 76 cards rotulados à mão antes de rodar): 32% dos
-/// cards eram ruins — gramática arquivada como vocabulário, resposta alternativa
-/// válida punida, trecho de frase no lugar de item. E o contrário também: "wait for"
-/// e "receipt → recipe" nunca viraram card. Aqui o modelo responde a pergunta certa,
-/// sobre o erro em si, e pode responder "não vira card".
+/// <b>Por que um passo separado.</b> A categoria que a correção dá ao erro é um rótulo
+/// feito pro perfil, não pro card: decidir por ela deixa passar gramática arquivada
+/// como vocabulário e trecho de frase no lugar de item, e perde item arquivado como
+/// preposição ("wait for"). Aqui o modelo responde a pergunta certa, sobre o erro em
+/// si, e pode responder "não vira card".
 ///
-/// <b>Este texto foi medido; mexa medindo.</b> Na mesma rodada:
+/// <b>Este texto foi medido; mexa medindo.</b>
 /// <list type="bullet">
-/// <item>Sem <c>alsoCorrect</c>, o modelo recusava todo item com sinônimo
-/// ("advogado" → lawyer/attorney): 100% dos ruins barrados, mas só 70% dos bons
-/// mantidos. Com a lista, 83% / 93%.</item>
+/// <item>Sem <c>alsoCorrect</c>, o modelo recusa todo item com sinônimo
+/// ("advogado" → lawyer/attorney) e perde boa parte dos cards bons.</item>
 /// <item>"preposição isolada" na lista de gramática custa "wait for"/"leave for";
-/// sem ela, nasceu "in the cart". Ficou, porque card ruim é pior que card a menos.</item>
+/// sem ela, nasce "in the cart". Ficou, porque card ruim é pior que card a menos.</item>
 /// <item>Os portões que o código aplica depois (<c>CardGate</c>) fecham o resto.</item>
 /// </list>
 /// </summary>

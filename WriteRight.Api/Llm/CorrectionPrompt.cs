@@ -51,9 +51,6 @@ internal static class CorrectionPrompt
     /// JSON schema do <see cref="CorrectionResult"/> pro structured output. Os
     /// enums vêm direto do C# (<see cref="Enum.GetNames{T}()"/>) → o schema fica
     /// sempre em sincronia com a taxonomia, sem lista duplicada.
-    ///
-    /// Não há campo pra card aqui: a correção não decide mais o que vira card de
-    /// vocabulário. Isso é um passo próprio, depois (ver <c>CardPrompt</c>).
     /// </summary>
     public static Dictionary<string, JsonElement> BuildResultSchema()
     {

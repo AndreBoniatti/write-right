@@ -7,15 +7,14 @@ namespace WriteRight.Shared.Profile;
 /// <summary>
 /// A régua do gráfico de evolução: erros a cada <see cref="PerWords"/> palavras.
 ///
-/// Por palavra, e não por prática, porque o tamanho do texto varia. No histórico real
-/// os textos encolheram de ~25 pra ~16 palavras: a contagem por prática caiu de 4,9
-/// pra 4,2 enquanto a taxa por palavra subiu de 2,0 pra 2,6. Contando por prática, a
-/// tela mostrava melhora onde havia piora.
+/// Por palavra, e não por prática, porque o tamanho do texto varia: com textos mais
+/// curtos, a contagem por prática cai mesmo quando a taxa por palavra sobe, e a tela
+/// mostraria melhora onde há piora.
 ///
-/// Não há comparação com um ponto do passado (já houve: "▲ 30% a mais que nas 10
-/// primeiras"). Contra as primeiras práticas, a referência ficava presa a outro nível e
-/// a outro corretor; contra as 10 anteriores, ~40 erros por janela faziam o selo trocar
-/// de cor por ruído. A tendência fica com a média móvel.
+/// Não há comparação com um ponto fixo do passado. Contra as primeiras práticas, a
+/// referência fica presa a outro nível e a outro corretor; contra as 10 anteriores,
+/// ~40 erros por janela fazem o selo trocar de cor por ruído. A tendência fica com a
+/// média móvel.
 /// </summary>
 public static class ErrorRate
 {

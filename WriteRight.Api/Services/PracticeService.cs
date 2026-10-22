@@ -20,9 +20,8 @@ public enum PracticeOutcome
 }
 
 /// <summary>
-/// Orquestra o ciclo de vida da prática: cria (gera + persiste como InProgress),
-/// lista, retoma, salva rascunho, corrige (→ Completed, readonly), exclui, e monta
-/// o perfil de fraquezas. Mantém o <see cref="ILlmProvider"/> focado só na IA.
+/// Orquestra o ciclo de vida da prática (criar → salvar rascunho → corrigir → excluir)
+/// e monta o perfil de fraquezas. Mantém o <see cref="ILlmProvider"/> focado só na IA.
 /// </summary>
 public sealed class PracticeService
 {
@@ -38,11 +37,9 @@ public sealed class PracticeService
     private const int FocusCategoryCount = 3;
 
     /// <summary>
-    /// Tamanho do recorte "recente" do perfil: as N práticas concluídas mais novas.
-    /// Eram 5, mas 5 práticas davam ~18 erros espalhados por 10 categorias, quase todas
-    /// com 1 ou 2 — uma ordem que era ruído apresentado como padrão. É a mesma janela
-    /// do gráfico de evolução: a tela diz "últimas 10" nos dois lugares, e duas
-    /// constantes acabariam dizendo números diferentes.
+    /// Tamanho do recorte "recente" do perfil. É a mesma janela do gráfico de evolução:
+    /// a tela diz "últimas N" nos dois lugares, e duas constantes acabariam dizendo
+    /// números diferentes.
     /// </summary>
     public const int RecentWindow = ErrorRate.Window;
 
@@ -62,23 +59,22 @@ public sealed class PracticeService
     /// <summary>
     /// Cria uma prática: gera o texto e persiste como <see cref="PracticeStatus.InProgress"/>.
     /// Se <see cref="CreatePracticeRequest.FocusOnWeaknesses"/>, mira a geração nas
-    /// categorias mais frequentes do perfil (direcionamento adaptativo no servidor).
+    /// categorias mais pesadas do perfil.
     /// </summary>
     public async Task<PracticeDetail> CreatePracticeAsync(CreatePracticeRequest request, CancellationToken ct = default)
     {
         if (request.SourceLanguage == request.TargetLanguage)
-            throw new ArgumentException("Origem e alvo devem ser idiomas diferentes.");
+            throw new InvalidRequestException("Origem e alvo devem ser idiomas diferentes.");
 
         if (request.WordCount is < PracticeLimits.MinWords or > PracticeLimits.MaxWords)
-            throw new ArgumentException(
+            throw new InvalidRequestException(
                 $"O texto deve ter entre {PracticeLimits.MinWords} e {PracticeLimits.MaxWords} palavras.");
 
         IReadOnlyList<ErrorCategory>? focus = null;
         if (request.FocusOnWeaknesses)
         {
-            // Mira o top-N vitalício — já ordenado por PESO (gravidade × frequência),
-            // não por contagem crua. Logo a geração ataca o que mais atrapalha. Só o
-            // ranking: o perfil inteiro leria todas as traduções pra montar o gráfico.
+            // Top-N vitalício por PESO (gravidade × frequência), não por contagem crua.
+            // Só o ranking: o perfil inteiro leria todas as traduções pra montar o gráfico.
             var ranking = CategoryRanking.Rank(
                 (await CompletedErrorsAsync(ct)).Select(e => (e.Category, e.Severity)));
             if (ranking.Count > 0)
@@ -86,9 +82,8 @@ public sealed class PracticeService
         }
 
         // Sorteia a FORMA do texto (tempo verbal, registro, ponto de vista, assunto).
-        // Sem isto, uma prática sem foco manda um prompt idêntico toda vez — e prompt
-        // idêntico devolve sempre o mesmo texto modal. A variedade tem que vir daqui,
-        // porque o modelo não lembra o que já gerou.
+        // Prompt idêntico devolve sempre o mesmo texto modal, e o modelo não lembra o
+        // que já gerou — a variedade tem que vir daqui.
         LlmResult<GeneratedExercise> generated;
         try
         {
@@ -119,13 +114,10 @@ public sealed class PracticeService
             CreatedAt = DateTimeOffset.UtcNow,
         };
 
-        // Token não cancelável daqui pra frente: o texto já foi pago. Descartá-lo
-        // porque o navegador desistiu significaria pagar de novo pelo mesmo texto.
         _db.Exercises.Add(practice);
         await _db.SaveChangesAsync(UsageService.AfterBilling);
 
-        // Segundo save: o Id da prática só existe depois do primeiro. Duas idas ao
-        // banco logo após uma chamada de rede de vários segundos — irrelevante.
+        // Segundo save: o Id da prática só existe depois do primeiro.
         _usage.Record(LlmOperation.Generation, generated.Usage, practiceId: practice.Id);
         await _db.SaveChangesAsync(UsageService.AfterBilling);
 
@@ -140,10 +132,8 @@ public sealed class PracticeService
     public async Task<PracticePage> ListPracticesAsync(
         int skip = 0, int take = PageSize, CancellationToken ct = default)
     {
-        // Ordena pelo Id, não pelo CreatedAt: o SQLite não faz ORDER BY sobre
-        // DateTimeOffset, e a ordem tem que estar no SQL pra a página sair do banco.
-        // O Id cresce junto com a data — os dois nascem no mesmo insert.
-        // ErrorCount vira subquery COUNT; o preview é cortado em memória.
+        // Pelo Id: a mesma ordem da criação, e única — a paginação precisa de ordem
+        // total, ou uma prática aparece em duas páginas e outra em nenhuma.
         var rows = await _db.Exercises
             .OrderByDescending(p => p.Status == PracticeStatus.InProgress)
             .ThenByDescending(p => p.Id)
@@ -180,9 +170,8 @@ public sealed class PracticeService
     /// o fuso é o cliente (ver <see cref="PracticeStreak"/>).
     ///
     /// Inclui as excluídas: excluir é arrumar a lista, não desfazer o dia em que você
-    /// praticou. Sem isso, apagar a única prática de cinco dias atrás quebrava a série.
-    /// Só a prática de tradução conta — revisar cards não acende a chama, de propósito:
-    /// o incentivo é fazer uma prática de verdade.
+    /// praticou. Só a prática de tradução conta — revisar cards não acende a chama, de
+    /// propósito: o incentivo é fazer uma prática de verdade.
     /// </summary>
     public async Task<IReadOnlyList<DateTimeOffset>> ListCompletionTimesAsync(CancellationToken ct = default) =>
         await _db.Exercises
@@ -201,7 +190,6 @@ public sealed class PracticeService
         return practice is null ? null : ToDetail(practice);
     }
 
-    /// <summary>Salva o rascunho da tradução ("Salvar e sair") sem corrigir.</summary>
     public async Task<PracticeOutcome> SaveDraftAsync(int id, string userTranslation, CancellationToken ct = default)
     {
         var practice = await _db.Exercises.FirstOrDefaultAsync(p => p.Id == id, ct);
@@ -215,15 +203,15 @@ public sealed class PracticeService
 
     /// <summary>
     /// Corrige a prática: chama a IA, persiste os erros na MESMA tentativa e a marca
-    /// como <see cref="PracticeStatus.Completed"/> (readonly). Idempotência barata:
-    /// uma prática já concluída volta <see cref="PracticeOutcome.ReadOnly"/>.
-    /// Tradução em branco é recusada antes de tudo: corrigir nada ainda seria cobrado.
+    /// como <see cref="PracticeStatus.Completed"/> (readonly). Uma prática já concluída
+    /// volta <see cref="PracticeOutcome.ReadOnly"/>. Tradução em branco é recusada antes
+    /// de tudo: corrigir nada ainda seria cobrado.
     /// </summary>
     public async Task<(PracticeOutcome Outcome, PracticeDetail? Detail)> CorrectPracticeAsync(
         int id, string userTranslation, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(userTranslation))
-            throw new ArgumentException("A tradução está em branco.");
+            throw new InvalidRequestException("A tradução está em branco.");
 
         var practice = await _db.Exercises
             .Include(p => p.Errors)
@@ -243,14 +231,12 @@ public sealed class PracticeService
         }
         catch (LlmCallFailedException ex)
         {
-            // A correção mais cara é a que estoura o teto de saída e não desserializa.
             // A prática segue em andamento (dá pra tentar de novo), mas o gasto fica.
             _usage.Record(LlmOperation.Correction, ex.Usage, practiceId: practice.Id);
             await _db.SaveChangesAsync(UsageService.AfterBilling);
             throw;
         }
 
-        // A prática já tem Id aqui, então o registro entra na MESMA transação da correção.
         _usage.Record(LlmOperation.Correction, result.Usage, practiceId: practice.Id);
 
         var correction = result.Value;
@@ -270,13 +256,10 @@ public sealed class PracticeService
         // Os cards ficam pra depois, fora desta requisição (ver CardWorker) — mas a
         // PROMESSA deles entra aqui, na mesma transação da correção. Assim não existe
         // prática corrigida sem cards pendentes: se o app cair antes de o worker
-        // rodar, o próximo boot retoma. O deck é consequência da correção, não
-        // condição dela.
+        // rodar, o próximo boot retoma.
         practice.CardsStatus = CardsStatus.Pending;
 
-        // Correção e consumo na mesma transação, com o token não cancelável: se o
-        // navegador desistiu, a prática fica corrigida e o usuário a encontra ao
-        // recarregar, em vez de pagar outra correção.
+        // Correção, consumo e promessa dos cards numa transação só.
         await _db.SaveChangesAsync(UsageService.AfterBilling);
         _cardJobs.Notify();
 
@@ -286,9 +269,8 @@ public sealed class PracticeService
     /// <summary>
     /// Exclui uma prática, em qualquer status. Exclusão LÓGICA: carimba
     /// <see cref="ExerciseAttempt.DeletedAt"/> e o filtro global a tira — com os erros
-    /// junto — da lista, do detalhe, do perfil e das próximas análises. A linha fica
-    /// porque carrega fatos que excluir não desfaz: o dia em que você praticou e o que
-    /// custou. Excluir de novo devolve NotFound: pro filtro, ela já não existe.
+    /// junto — de toda consulta. A linha fica porque carrega fatos que excluir não
+    /// desfaz: o dia em que você praticou e o que custou.
     /// </summary>
     public async Task<PracticeOutcome> DeletePracticeAsync(int id, CancellationToken ct = default)
     {
@@ -301,26 +283,20 @@ public sealed class PracticeService
     }
 
     /// <summary>
-    /// Perfil de fraquezas, ponderado por severidade (Quebra o sentido ×3,
-    /// Compreensível ×2, Lapidação ×1) — o que atrapalha pesa mais que a lapidação.
-    /// Devolve duas visões: <c>Lifetime</c> (todo o histórico, insumo do gerador
-    /// adaptativo) e <c>Recent</c> (as últimas <see cref="RecentWindow"/> práticas
-    /// concluídas, onde o usuário vaza agora), mais a linha do tempo por prática do
-    /// gráfico de evolução. Só práticas CONCLUÍDAS entram (as em andamento ainda não
-    /// têm erros, por construção).
+    /// Perfil de fraquezas, ponderado por severidade (ver <see cref="SeverityWeight"/>).
+    /// Duas visões: <c>Lifetime</c> (todo o histórico, insumo do gerador adaptativo) e
+    /// <c>Recent</c> (as últimas <see cref="RecentWindow"/> concluídas), mais a linha do
+    /// tempo por prática do gráfico de evolução.
     /// </summary>
     public async Task<ErrorProfile> GetProfileAsync(CancellationToken ct = default)
     {
-        // Agrega em memória (dados pessoais, volume baixo) — evita depender da
-        // tradução de GroupBy sobre enum-as-string e de ORDER BY sobre
-        // DateTimeOffset no SQLite (mesmo motivo de ListPracticesAsync). A tradução
-        // vem inteira só pra contar as palavras; o texto não sai daqui.
-        var completed = (await _db.Exercises
-                .Where(p => p.Status == PracticeStatus.Completed && p.CompletedAt != null)
-                .Select(p => new { p.Id, p.CompletedAt, p.Level, p.UserTranslation })
-                .ToListAsync(ct))
+        // A tradução vem inteira só pra contar as palavras; o texto não sai daqui.
+        var completed = await _db.Exercises
+            .Where(p => p.Status == PracticeStatus.Completed && p.CompletedAt != null)
             .OrderBy(p => p.CompletedAt)
-            .ToList();
+            .ThenBy(p => p.Id)
+            .Select(p => new { p.Id, p.CompletedAt, p.Level, p.UserTranslation })
+            .ToListAsync(ct);
 
         // Só os erros das práticas lidas acima: uma correção que termine entre as duas
         // leituras entraria no total de erros sem entrar nas práticas nem na linha do tempo.
@@ -353,33 +329,17 @@ public sealed class PracticeService
     /// concluídas. Releitura pura do histórico: NÃO chama a IA.
     /// </summary>
     public async Task<IReadOnlyList<CategoryError>> GetCategoryErrorsAsync(
-        ErrorCategory category, CancellationToken ct = default)
-    {
-        // Filtra por categoria no SQL (há índice em Category); status e ordem por
-        // data resolvem-se em memória (o SQLite não ordena bem DateTimeOffset — mesmo
-        // motivo de ListPracticesAsync).
-        var rows = await _db.Errors
-            .Where(e => e.Category == category)
-            .Select(e => new
-            {
-                e.Severity,
-                e.Original,
-                e.Correction,
-                e.Explanation,
-                e.ExerciseAttemptId,
-                e.ExerciseAttempt!.Status,
-                e.ExerciseAttempt!.CompletedAt,
-            })
+        ErrorCategory category, CancellationToken ct = default) =>
+        await _db.Errors
+            .Where(e => e.Category == category
+                && e.ExerciseAttempt!.Status == PracticeStatus.Completed
+                && e.ExerciseAttempt.CompletedAt != null)
+            .OrderByDescending(e => e.ExerciseAttempt!.CompletedAt)
+            .ThenBy(e => e.Id)
+            .Select(e => new CategoryError(
+                e.ExerciseAttemptId, e.ExerciseAttempt!.CompletedAt!.Value, e.Severity,
+                e.Original, e.Correction, e.Explanation))
             .ToListAsync(ct);
-
-        return rows
-            .Where(r => r.Status == PracticeStatus.Completed && r.CompletedAt is not null)
-            .OrderByDescending(r => r.CompletedAt)
-            .Select(r => new CategoryError(
-                r.ExerciseAttemptId, r.CompletedAt!.Value, r.Severity,
-                r.Original, r.Correction, r.Explanation))
-            .ToList();
-    }
 
     /// <summary>
     /// Os erros das práticas concluídas — a base do ranking da geração e do perfil.
@@ -387,18 +347,14 @@ public sealed class PracticeService
     /// filtro é rede de segurança, não corte esperado.
     /// </summary>
     private async Task<List<ErrorRow>> CompletedErrorsAsync(CancellationToken ct) =>
-        (await _db.Errors
+        await _db.Errors
             .Where(e => e.ExerciseAttempt!.Status == PracticeStatus.Completed && e.ExerciseAttempt.CompletedAt != null)
-            .Select(e => new { e.Category, e.Severity, e.ExerciseAttemptId })
-            .ToListAsync(ct))
-        .Select(e => new ErrorRow(e.Category, e.Severity, e.ExerciseAttemptId))
-        .ToList();
+            .Select(e => new ErrorRow(e.Category, e.Severity, e.ExerciseAttemptId))
+            .ToListAsync(ct);
 
-    /// <summary>Monta uma visão do perfil: agrupa por categoria, pondera por severidade e ordena por peso.</summary>
     private static ProfileView BuildView(IReadOnlyList<ErrorRow> errors, int attempts) =>
         new(attempts, errors.Count, CategoryRanking.Rank(errors.Select(e => (e.Category, e.Severity))));
 
-    /// <summary>Linha de erro materializada do banco, pra agregar em memória.</summary>
     private sealed record ErrorRow(ErrorCategory Category, ErrorSeverity Severity, int AttemptId);
 
     private static string Preview(string sourceText) =>

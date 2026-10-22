@@ -24,14 +24,11 @@ public sealed class UsageService
     /// Token deliberadamente NÃO cancelável, para tudo que grava DEPOIS da chamada
     /// à IA.
     ///
-    /// O <c>ct</c> de uma requisição minimal API é o <c>HttpContext.RequestAborted</c>:
-    /// ele é cancelado no instante em que o navegador desiste — e o cliente Blazor
-    /// desiste sozinho no timeout padrão de 100s do <c>HttpClient</c>. Usar esse token
-    /// depois da chamada descartaria exatamente o registro do dinheiro já gasto e o
-    /// resultado já pago, que é o pior momento possível para desistir.
-    ///
-    /// Antes da chamada o <c>ct</c> normal continua valendo: cancelar uma leitura que
-    /// ainda não custou nada é o comportamento certo.
+    /// O <c>ct</c> de uma requisição é o <c>HttpContext.RequestAborted</c>, cancelado no
+    /// instante em que o navegador desiste. Usar esse token depois da chamada descartaria
+    /// o registro do dinheiro já gasto e o resultado já pago — o usuário pagaria de novo
+    /// em vez de encontrá-lo ao recarregar. Antes da chamada o <c>ct</c> normal vale:
+    /// cancelar o que ainda não custou nada é o certo.
     /// </summary>
     public static CancellationToken AfterBilling => CancellationToken.None;
 
@@ -69,9 +66,8 @@ public sealed class UsageService
     }
 
     /// <summary>
-    /// Relatório de consumo. Agrega em memória pelo mesmo motivo do resto do app: o
-    /// SQLite não soma <c>decimal</c> (guardado como TEXT) nem ordena
-    /// <c>DateTimeOffset</c>. Volume pessoal — custo irrelevante.
+    /// Relatório de consumo. Agrega em memória porque o SQLite não soma <c>decimal</c>
+    /// (guardado como TEXT). Volume pessoal — custo irrelevante.
     /// </summary>
     public async Task<UsageReport> GetReportAsync(CancellationToken ct = default)
     {

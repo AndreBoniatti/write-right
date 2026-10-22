@@ -60,9 +60,7 @@ internal static partial class ClozeBuilder
     /// <summary>
     /// Primeira ocorrência de <paramref name="value"/> como palavra(s) INTEIRA(s): letra
     /// ou número colado antes ou depois desclassifica a ocorrência. Sem isto a resposta
-    /// curta "law" virava a lacuna dentro de "lawyer" — "The ___yer advised…" — e isso
-    /// aconteceu de verdade, na avaliação de 2026-10-07. Quanto mais curta a resposta,
-    /// mais fácil ela aparecer dentro de outra palavra.
+    /// curta "law" vira a lacuna dentro de "lawyer" — "The ___yer advised…".
     ///
     /// Case-insensitive porque a resposta pode vir do meio da frase e o texto ter a
     /// palavra no início (maiúscula) — é a mesma resposta.

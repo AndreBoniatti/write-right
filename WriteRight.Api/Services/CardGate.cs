@@ -18,13 +18,6 @@ internal sealed record GatedCard(
 /// <b>montável e coerente</b> — coisas que se verificam contra o texto, sem opinião.
 /// A regra da casa é a mesma do <see cref="ClozeBuilder"/>: card ruim é pior que card
 /// nenhum, então qualquer dúvida mecânica derruba a proposta inteira.
-///
-/// Os dois limites numéricos foram validados de graça, reprocessando a saída já paga
-/// do modelo (2026-10-07): cada um derrubou um card ruim que o modelo deixou passar
-/// ("went back home" com 8 alternativas; "brings the student closer to"), ao preço
-/// de um card bom ("takes him for a walk"). Evidência pequena — um card cada —, mas o
-/// princípio se sustenta sozinho: lista longa de alternativas é ambiguidade com outro
-/// nome, e resposta longa é pedaço de frase, não item.
 /// </summary>
 internal static class CardGate
 {
@@ -36,7 +29,7 @@ internal static class CardGate
     /// </summary>
     public const int MaxAnswerWords = 3;
 
-    /// <summary>Acima disso a lacuna não tem resposta definida, por mais que a lista tente.</summary>
+    /// <summary>Lista longa de alternativas é ambiguidade com outro nome: a lacuna não tem resposta definida.</summary>
     public const int MaxAlternatives = 4;
 
     /// <param name="sentErrors">Os erros na ORDEM em que foram enviados ao modelo — a proposta os cita pela posição.</param>
@@ -66,7 +59,7 @@ internal static class CardGate
         // Se o que o aluno escreveu já CONTÉM a resposta — ou uma das aceitas —, ele
         // sabia a palavra e errou outra coisa em volta ("the lawyer" → "a lawyer" não é
         // card de "lawyer"). O card o reprovaria por algo que ele acertou. O prompt
-        // proíbe; aqui é a trava. Contra os cards da avaliação, não derrubou nenhum bom.
+        // proíbe; aqui é a trava.
         var alternatives = (proposal.AlsoCorrect ?? [])
             .Select(a => a.Trim())
             .Where(a => a.Length > 0 && AnswerMatch.Normalize(a) != key)

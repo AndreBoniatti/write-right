@@ -26,7 +26,7 @@ namespace WriteRight.Api.Migrations
                     b.Property<int>("ErrorsAnalyzed")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset>("GeneratedAt")
+                    b.Property<DateTime>("GeneratedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("PatternsJson")
@@ -57,7 +57,7 @@ namespace WriteRight.Api.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("ReviewedAt")
+                    b.Property<DateTime>("ReviewedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TypedAnswer")
@@ -86,17 +86,17 @@ namespace WriteRight.Api.Migrations
                     b.Property<string>("CardsStatus")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("CompletedAt")
+                    b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CorrectedText")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("DeletedAt")
+                    b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Level")
@@ -189,7 +189,7 @@ namespace WriteRight.Api.Migrations
                     b.Property<decimal?>("CostUsd")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<long>("DurationMs")
@@ -241,10 +241,10 @@ namespace WriteRight.Api.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("DueAt")
+                    b.Property<DateTime>("DueAt")
                         .HasColumnType("TEXT");
 
                     b.Property<double>("Ease")
@@ -260,7 +260,7 @@ namespace WriteRight.Api.Migrations
                     b.Property<int>("Lapses")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("LastReviewedAt")
+                    b.Property<DateTime?>("LastReviewedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Prompt")

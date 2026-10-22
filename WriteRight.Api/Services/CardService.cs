@@ -132,9 +132,6 @@ public sealed class CardService
     {
         var now = DateTimeOffset.UtcNow;
 
-        // Materializa e ordena em memória: o SQLite não ordena DateTimeOffset direito
-        // (mesmo motivo do ListPracticesAsync). Volume pessoal, custo irrelevante.
-        //
         // Traz os APOSENTADOS junto: eles não entram na fila, mas o Queue precisa
         // vê-los pra saber se um irmão da frase já foi revisado hoje.
         var cards = await _db.Cards

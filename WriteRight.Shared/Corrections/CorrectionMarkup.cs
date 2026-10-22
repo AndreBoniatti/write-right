@@ -26,10 +26,9 @@ public sealed record ChangedText(string Removed, string Inserted, IReadOnlyList<
 /// O texto corrigido com cada mudança marcada no lugar e presa aos erros que a explicam.
 ///
 /// Parte da DIFERENÇA palavra a palavra entre tradução e corrigido, não da lista de
-/// erros: nas práticas reais, 20 de 45 têm erros sobrepostos ("appreciate a lot this
-/// convivency moments" contém outros três), e trocar erro a erro repetiria trechos. A
-/// diferença é linear por construção e ainda mostra o que o corretor mudou sem
-/// registrar (11 de 244 trechos). Medido em 46 práticas: 243 de 243 erros localizados.
+/// erros: erros se sobrepõem ("appreciate a lot this convivency moments" contém outros
+/// três), e trocar erro a erro repetiria trechos. A diferença é linear por construção
+/// e ainda mostra o que o corretor mudou sem registrar.
 /// </summary>
 public sealed record CorrectionMarkup(IReadOnlyList<MarkupSegment> Segments, IReadOnlyList<int> UnlocatedErrors)
 {

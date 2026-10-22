@@ -44,13 +44,10 @@ public sealed class CardMintingService
     /// passada). Prática excluída não gasta uma chamada pra virar card.
     ///
     /// Falha da IA SOBE como exceção — quem decide tentar de novo ou desistir é o
-    /// worker. O gasto, esse, é gravado antes de subir: dinheiro gasto é fato
-    /// consumado, independente do desfecho.
+    /// worker. O gasto, esse, é gravado antes de subir.
     /// </summary>
     public async Task<int> MintAsync(int practiceId)
     {
-        // Nada aqui é cancelável, pelo mesmo motivo do AnalysisWorker: abortar no meio
-        // de uma chamada já em curso não devolve o dinheiro, só esconde o gasto.
         var ct = UsageService.AfterBilling;
 
         var practice = await _db.Exercises

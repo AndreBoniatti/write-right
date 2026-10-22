@@ -188,14 +188,10 @@ public sealed class AnalysisService
             PatternsJson = JsonSerializer.Serialize(patterns, Json),
         };
 
-        // A análise em si também é gravada com o token não cancelável: ela já foi
-        // paga. Se o navegador desistiu no meio, o usuário a encontra ao recarregar,
-        // em vez de pagar de novo pela mesma análise.
         _db.Analyses.Add(record);
         await _db.SaveChangesAsync(UsageService.AfterBilling);
 
-        // Segundo save: o Id da análise só existe depois do primeiro (mesmo motivo
-        // do CreatePracticeAsync).
+        // Segundo save: o Id da análise só existe depois do primeiro.
         _usage.Record(LlmOperation.Analysis, result.Usage, analysisId: record.Id);
         await _db.SaveChangesAsync(UsageService.AfterBilling);
 
@@ -333,20 +329,17 @@ public sealed class AnalysisService
     // ── Carga / mapeamento ───────────────────────────────────────────────────
 
     /// <summary>
-    /// Carrega práticas concluídas e seus erros. Materializa e filtra em memória pelo
-    /// mesmo motivo do <see cref="PracticeService"/>: o SQLite não traduz bem GroupBy
-    /// sobre enum-as-string nem ORDER BY sobre DateTimeOffset. Volume pessoal.
+    /// Carrega práticas concluídas e seus erros. Os erros são cruzados com as práticas
+    /// lidas aqui, não filtrados no SQL: uma correção que terminasse entre as duas
+    /// leituras traria erro de prática que a janela não conhece.
     /// </summary>
     private async Task<(List<CompletedPractice> Practices, List<ErrorRecord> Errors)> LoadCompletedAsync(
         CancellationToken ct)
     {
-        var practices = (await _db.Exercises
-            .Where(p => p.Status == PracticeStatus.Completed)
-            .Select(p => new { p.Id, p.CompletedAt })
-            .ToListAsync(ct))
-            .Where(p => p.CompletedAt is not null)
+        var practices = await _db.Exercises
+            .Where(p => p.Status == PracticeStatus.Completed && p.CompletedAt != null)
             .Select(p => new CompletedPractice(p.Id, p.CompletedAt!.Value))
-            .ToList();
+            .ToListAsync(ct);
 
         var completedAt = practices.ToDictionary(p => p.Id, p => p.CompletedAt);
 
@@ -371,12 +364,6 @@ public sealed class AnalysisService
         return (practices, errors);
     }
 
-    /// <summary>
-    /// A análise mais recente. Pelo Id, não pelo <c>GeneratedAt</c>, pelo mesmo motivo
-    /// do <see cref="PracticeService.ListPracticesAsync"/>: o SQLite não ordena
-    /// DateTimeOffset, e o Id cresce junto com a data. Assim só UMA análise sai do
-    /// banco — esta leitura roda a cada poucos segundos enquanto a tela acompanha.
-    /// </summary>
     private async Task<AnalysisRecord?> LoadLatestAsync(CancellationToken ct) =>
         await _db.Analyses.OrderByDescending(a => a.Id).FirstOrDefaultAsync(ct);
 

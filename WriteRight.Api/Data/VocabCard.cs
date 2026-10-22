@@ -5,20 +5,14 @@ using WriteRight.Shared.Taxonomy;
 namespace WriteRight.Api.Data;
 
 /// <summary>
-/// Um card de vocabulário, cunhado a partir de um erro real do usuário.
+/// Um card de vocabulário, cunhado a partir de um erro real do usuário. Existe porque o
+/// loop adaptativo por CATEGORIA não alcança vocabulário: regra generaliza, item léxico
+/// não — e erro de vocabulário quase nunca se repete sozinho.
 ///
-/// Existe porque o loop adaptativo por CATEGORIA não alcança vocabulário: regra
-/// generaliza (aprendeu "excited about", transfere), item léxico não. Gerar mais
-/// um texto marcado "WordChoice" não faz reencontrar "colorful façades" — e na
-/// prática os erros de vocabulário quase nunca se repetem sozinhos. Só um deck
-/// explícito força a repetição.
-///
-/// <b>O conteúdo é COPIADO, não referenciado.</b> A decisão nasceu quando excluir
-/// uma prática apagava a linha em cascata — apontar pro erro de origem mataria cards
-/// em revisão há meses. Hoje a exclusão é lógica, mas a cópia continua certa por
-/// outro motivo: o card não é um espelho do erro. A reincidência reescreve o
-/// conteúdo inteiro com o fracasso mais recente, e lacuna, dica e alternativas são
-/// desenho próprio. Um id de origem apontaria pra um erro que já não é o do card.
+/// <b>O conteúdo é COPIADO, não referenciado.</b> O card não é um espelho do erro: a
+/// reincidência reescreve o conteúdo inteiro com o fracasso mais recente, e lacuna,
+/// dica e alternativas são desenho próprio. Um id de origem apontaria pra um erro que
+/// já não é o do card.
 /// </summary>
 public class VocabCard
 {
@@ -39,8 +33,7 @@ public class VocabCard
 
     /// <summary>
     /// Outras respostas que também contam como certas ("attorney" pra um card de
-    /// "lawyer"). É o que deixa o card existir sem punir sinônimo: medido no deck real,
-    /// recusar todo item com sinônimo derrubava 30% dos cards bons. Gravado como JSON
+    /// "lawyer"). É o que deixa o card existir sem punir sinônimo. Gravado como JSON
     /// (coleção primitiva do EF).
     /// </summary>
     public List<string> Alternatives { get; set; } = new();
@@ -48,11 +41,8 @@ public class VocabCard
     /// <summary>
     /// Dica no idioma de ORIGEM. <b>Obrigatória</b>: sem ela a lacuna não tem resposta
     /// única ("at the ___ center" aceita qualquer coisa), e o card seria errado pra
-    /// sempre, contando lapso e sujando a estatística do agendador.
-    ///
-    /// Não-anulável de propósito, e a coluna é NOT NULL: um card sem dica não é um card
-    /// incompleto, é um card que não deveria existir. Quem filtra é o <c>CardGate</c>;
-    /// o tipo é o que garante.
+    /// sempre, contando lapso e sujando a estatística do agendador. Quem filtra é o
+    /// <c>CardGate</c>; o tipo e a coluna NOT NULL é que garantem.
     /// </summary>
     public string Hint { get; set; } = "";
 

@@ -6,17 +6,9 @@ using WriteRight.Shared.Exercises;
 namespace WriteRight.Api.Llm;
 
 /// <summary>
-/// Costura pro provedor de IA. Hoje só existe a implementação Anthropic; a
-/// interface está aqui pra não acoplar o resto do app a um provedor específico
-/// (e é o ponto de extensão se um dia virar produto multi-provedor).
-///
-/// Decisão de arquitetura: modelo é configurável (ver <see cref="LlmOptions"/>),
-/// mas provedor NÃO é dinâmico via front — seria over-engineering pro uso pessoal.
-///
-/// Todo método devolve <see cref="LlmResult{T}"/>: o resultado E o que ele consumiu.
-/// O consumo sai por aqui, em vez de o provider gravar sozinho, porque quem sabe a
-/// qual prática (ou análise) a chamada pertence é o serviço — e provider sem
-/// <c>DbContext</c> continua trocável por stub sem arrastar banco pro teste.
+/// Costura pro provedor de IA: o resto do app não conhece a Anthropic, e os testes
+/// trocam isto por um stub. Todo método devolve <see cref="LlmResult{T}"/> — o
+/// resultado E o que ele consumiu.
 /// </summary>
 public interface ILlmProvider
 {

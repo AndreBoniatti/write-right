@@ -5,8 +5,8 @@ namespace WriteRight.Shared.Cards;
 /// <summary>
 /// Um erro da prática do jeito que o desenhista de cards o recebe: só o par
 /// escrito → corrigido. Categoria e explicação ficam de fora de propósito — a
-/// categoria é justamente o rótulo que errava ao decidir o que vira card, e quem
-/// decide agora é o modelo, olhando o erro em si.
+/// categoria é um rótulo feito pro perfil, e quem decide o card é o modelo, olhando
+/// o erro em si.
 ///
 /// O erro é identificado pela POSIÇÃO na lista (1, 2, 3…), que é como o modelo o cita
 /// de volta em <see cref="CardProposal.Error"/>.

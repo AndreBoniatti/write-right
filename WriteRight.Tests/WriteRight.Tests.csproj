@@ -14,9 +14,12 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
 
     <!-- SQLite in-memory nos testes do PracticeService: exercita os value-converters
-         (enum-as-string) e o comportamento relacional de verdade, ao contrário do
-         provider EF InMemory. Versão casada com a WriteRight.Api. -->
+         (enums como string, datas em UTC) e o comportamento relacional de verdade, ao
+         contrário do provider EF InMemory. Versão casada com a WriteRight.Api. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
+
+    <!-- A API inteira em memória, pros testes do pipeline de erro. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
   </ItemGroup>
 
   <ItemGroup>

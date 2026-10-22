@@ -6,7 +6,7 @@ namespace WriteRight.Client;
 
 /// <summary>
 /// Textos de tela que mais de uma página usa. Um lugar só pra a mesma coisa não ser
-/// dita de dois jeitos — a mensagem de erro, por exemplo, já existiu em duas versões.
+/// dita de dois jeitos.
 /// </summary>
 public static class Ui
 {
@@ -69,8 +69,6 @@ public static class Ui
     /// <summary>
     /// A falha em palavras, separando os dois casos que pedem ações diferentes: a API
     /// fora do ar (sem status — o pedido nem chegou) e a API que respondeu com erro.
-    /// Antes tudo virava "a API está rodando?", inclusive o 500 de uma correção que
-    /// falhou com a API de pé.
     /// </summary>
     public static string ErrorMessage(Exception ex) => ex switch
     {

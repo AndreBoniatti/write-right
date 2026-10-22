@@ -43,8 +43,15 @@ public sealed class FoldStudyItemsIntoPatternsTests : IDisposable
             VALUES ('2026-08-06 01:30:17+00:00', 19, 70, {patternsJson}, {studyItemsJson})
             """);
 
-    private List<string> Column(string column) =>
-        _ctx.Database.SqlQueryRaw<string>($"SELECT {column} AS Value FROM Analyses ORDER BY Id").ToList();
+    private List<string> Column(string column)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = $"SELECT {column} FROM Analyses ORDER BY Id";
+        using var reader = command.ExecuteReader();
+        var values = new List<string>();
+        while (reader.Read()) values.Add(reader.GetString(0));
+        return values;
+    }
 
     [Fact]
     public void Up_puts_each_study_item_inside_the_pattern_at_the_same_position()

@@ -13,9 +13,6 @@ namespace WriteRight.Api.Data;
 /// muito abaixo, estão longos e o card foi esquecido antes de voltar. Responder
 /// exige o par (intervalo vigente, acertou ou não) no momento de CADA revisão,
 /// que é exatamente o que o estado atual não preserva.
-///
-/// Escrito desde o início porque o custo é assimétrico: adicionar depois só dá
-/// dados dali pra frente — o histórico anterior não se reconstrói.
 /// </summary>
 public class CardReview
 {

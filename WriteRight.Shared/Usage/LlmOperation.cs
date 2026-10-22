@@ -4,9 +4,6 @@ namespace WriteRight.Shared.Usage;
 /// Qual das chamadas de IA do app gerou o consumo. Vive no <c>Shared</c> (e não
 /// no backend) porque o relatório de uso é contrato de API — o cliente precisa do
 /// mesmo enum pra rotular a quebra por operação.
-///
-/// Persistido como STRING, igual ao resto do schema: reordenar o enum não reescreve
-/// o histórico.
 /// </summary>
 public enum LlmOperation
 {

@@ -14,12 +14,10 @@ public sealed record CategoryShare(ErrorCategory Category, double Share);
 ///
 /// O "antes" são TODOS os erros das práticas da janela, não só os das categorias que
 /// foram ao modelo: a fração é "dos seus erros naquelas práticas", o mesmo recorte do
-/// "depois". Por isso ele passa do <c>ErrorsAnalyzed</c> gravado (no histórico real,
-/// 99 erros contra 70 enviados).
+/// "depois". Por isso ele passa do <c>ErrorsAnalyzed</c> gravado.
 ///
-/// Existe porque a análise é um retrato e envelhece calada. No histórico real, uma
-/// análise de 19 práticas seguia na tela 36 práticas depois. Nesse tempo, as categorias
-/// dela tinham caído de 41% pra 22% dos erros, e o que crescia não aparecia em lugar nenhum.
+/// Existe porque a análise é um retrato e envelhece calada: as categorias dela podem
+/// encolher enquanto o que cresce não aparece em lugar nenhum.
 /// </summary>
 /// <param name="CoveredShareRead">Fração dos erros das práticas da janela que cai nas categorias dos padrões.</param>
 /// <param name="CoveredShareSince">A mesma fração nos erros das práticas concluídas depois dela.</param>

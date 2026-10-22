@@ -5,10 +5,8 @@ namespace WriteRight.Api.Data;
 ///
 /// Existe porque a cunhagem roda FORA da requisição de correção, e uma falha ali é
 /// invisível por natureza: ninguém pediu os cards, então ninguém percebe que eles não
-/// nasceram. A fila da análise pode ser em memória porque, se ela se perder, a tela
-/// volta pra "pedir de novo"; aqui não existe esse "de novo". O status no banco é o
-/// que transforma um restart no meio do caminho em "retoma no próximo boot" em vez de
-/// "perde em silêncio".
+/// nasceram. O status no banco é o que transforma um restart no meio do caminho em
+/// "retoma no próximo boot" em vez de "perde em silêncio".
 ///
 /// Null na prática significa "não se aplica": prática em andamento, ou corrigida antes
 /// de este passo existir.

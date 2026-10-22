@@ -4,8 +4,8 @@ using WriteRight.Shared.Cards;
 namespace WriteRight.Tests.Cards;
 
 /// <summary>
-/// A frente do card sai por string matching, sem IA — medido em 99% dos erros de
-/// vocabulário reais. O que estes testes protegem é sobretudo o CAMINHO DE FALHA:
+/// A frente do card sai por string matching, sem IA, pra quase todo erro de
+/// vocabulário real. O que estes testes protegem é sobretudo o CAMINHO DE FALHA:
 /// quando a frase não presta, o card não pode nascer. Um card com frente ruim é
 /// pior que card nenhum — seria respondido errado pra sempre e envenenaria as
 /// estatísticas que dizem se o agendador funciona.
@@ -130,7 +130,7 @@ public class ClozeBuilderTests
     }
 
     /// <summary>
-    /// Caso real da avaliação de 2026-10-07: a resposta "law" virou a lacuna dentro de
+    /// Caso real: a resposta "law" virou a lacuna dentro de
     /// "lawyer" — "The ___yer advised…". Só palavra inteira vira lacuna.
     /// </summary>
     [Fact]

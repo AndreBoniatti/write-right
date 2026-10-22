@@ -12,68 +12,43 @@ namespace WriteRight.Api.Llm;
 
 /// <summary>
 /// Implementação Anthropic da <see cref="ILlmProvider"/> — chama o Claude com
-/// structured output tanto na geração quanto na correção.
+/// structured output em todas as operações.
 ///
 /// <b>O <c>ct</c> NÃO é repassado ao SDK, de propósito.</b> Ele é o
-/// <c>RequestAborted</c> da requisição, cancelado assim que o navegador desiste — e
-/// o cliente Blazor desiste sozinho no timeout padrão de 100s. Abortar a chamada ali
-/// não devolveria o dinheiro (a geração já está em curso do lado da Anthropic) e
-/// ainda destruiria o bloco de <c>usage</c> da resposta, trocando um gasto
-/// contabilizado por um gasto invisível. Deixar completar custa o mesmo e mantém o
-/// resultado — que é persistido com <c>UsageService.AfterBilling</c>, então o usuário
-/// o encontra ao recarregar em vez de pagar de novo.
+/// <c>RequestAborted</c> da requisição, cancelado assim que o navegador desiste.
+/// Abortar a chamada ali não devolveria o dinheiro (a geração já está em curso do lado
+/// da Anthropic) e ainda destruiria o bloco de <c>usage</c> da resposta. Deixar
+/// completar custa o mesmo e mantém o resultado (ver <c>UsageService.AfterBilling</c>).
 /// </summary>
 public sealed class AnthropicLlmProvider : ILlmProvider
 {
     /// <summary>
-    /// Effort da correção e da análise (Sonnet 5). <c>High</c> é o default do modelo — está aqui
-    /// EXPLÍCITO justamente por isso: default é decisão do PROVEDOR, e depender dele
-    /// significa que uma mudança do lado da Anthropic altera o custo e o comportamento
-    /// do app sem passar por um commit. Effort é a alavanca de custo mais forte que
-    /// existe aqui; ela não pode ser implícita.
+    /// Effort da correção e da análise. EXPLÍCITO mesmo quando coincide com o default:
+    /// default é decisão do provedor, e depender dele deixaria uma mudança do lado da
+    /// Anthropic alterar custo e comportamento do app sem passar por um commit.
     ///
-    /// NÃO vai na geração: o Haiku 4.5 não suporta o parâmetro (a chamada erraria).
-    ///
-    /// <b>Medium</b>, em avaliação desde 2026-08-30. Medido em 14 correções reais:
-    /// custa ~37% menos que <c>High</c> e responde em metade do tempo (14s contra 25s),
-    /// com a mesma cobertura de erros — 6,8 contra 6,6 por prática. O <c>High</c> gasta
-    /// o excedente deliberando à toa: num texto de 8 palavras queimou 3.432 tokens de
-    /// saída pra achar 2 erros.
-    ///
-    /// O Medium arquiva mais erro gramatical em categoria de vocabulário ("the schedule
-    /// → my schedule" como WordChoice). Isso era um risco pro deck enquanto a categoria
-    /// decidia o que virava card; deixou de ser quando a cunhagem ganhou passo próprio
-    /// (<see cref="CardEffort"/>), que julga o erro em si. Sobra o efeito no perfil, que
-    /// é ruído pequeno numa agregação.
-    ///
-    /// O que observar no uso: severidade fora do lugar (ela diverge ~30% entre execuções
-    /// em QUALQUER effort — não é sintoma de Medium). Voltar pra High é trocar esta linha.
+    /// <b>Medium</b> porque, nas correções reais, custou bem menos que <c>High</c> e
+    /// respondeu na metade do tempo com a mesma cobertura de erros. NÃO vai na geração:
+    /// o Haiku 4.5 não suporta o parâmetro.
     /// </summary>
     private static readonly Effort ReasoningEffort = Effort.Medium;
 
     /// <summary>
-    /// Effort do desenho de cards: <b>High</b>, e no Opus 5.5 (cujo default é Medium —
-    /// mais um motivo pra não depender de default). Ao contrário da correção, aqui a
-    /// pergunta central é "existe outra resposta igualmente certa?", um julgamento
-    /// contra si mesmo, que é onde deliberar rende.
-    ///
-    /// Medido em 2026-10-07 sobre 24 práticas: o Opus 5.5 em High pensou ~900 tokens
-    /// por prática contra ~3.000 do Sonnet 5 em High — saiu MAIS BARATO (US$ 0,025
-    /// contra 0,033), seis vezes mais rápido (~10 s) e muito mais preciso (o Sonnet
-    /// deixou passar 37% dos cards ruins; o Opus, 17%).
+    /// Effort do desenho de cards: <b>High</b>. Aqui a pergunta central é "existe outra
+    /// resposta igualmente certa?", um julgamento contra si mesmo, que é onde deliberar
+    /// rende.
     /// </summary>
     private static readonly Effort CardEffort = Effort.High;
 
     /// <summary>
     /// Teto de saída (pensamento + JSON) da correção, da análise e dos cards. O teto em
-    /// si não custa nada — cobra-se o que é gerado, não o que é permitido —, então ele
-    /// fica com folga larga sobre o maior uso medido (2026-10-15: correção ~5 mil tokens;
-    /// análise ~4,9 mil com 70 erros, e a janela dela vai até 180).
+    /// si não custa nada — cobra-se o que é gerado —, então fica com folga larga sobre
+    /// o maior uso visto.
     ///
     /// Não passa de 16 mil porque as chamadas são sem streaming, e esse é o teto que o
-    /// SDK recomenda pra resposta caber no timeout HTTP. Timeout é o pior desfecho
-    /// possível: a chamada é cobrada e a resposta, junto com o registro do uso, se perde.
-    /// Precisar de mais é sinal pra trocar pra streaming, não pra subir este número.
+    /// SDK recomenda pra resposta caber no timeout HTTP. Timeout é o pior desfecho: a
+    /// chamada é cobrada e a resposta se perde. Precisar de mais é sinal pra trocar pra
+    /// streaming, não pra subir este número.
     /// </summary>
     private const int MaxOutputTokens = 16_000;
 
@@ -85,16 +60,18 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     private const int GenerationMaxTokens = 2_000;
 
     private readonly LlmOptions _options;
+    private readonly Lazy<AnthropicClient> _client;
 
     public AnthropicLlmProvider(IOptions<LlmOptions> options)
     {
         _options = options.Value;
+        _client = new(CreateClient);
     }
 
     public async Task<LlmResult<GeneratedExercise>> GenerateExerciseAsync(
         ExerciseGenerationRequest request, CancellationToken ct = default)
     {
-        var client = CreateClient();
+        var client = _client.Value;
 
         var clock = Stopwatch.StartNew();
         var response = await client.Messages.Create(new MessageCreateParams
@@ -124,7 +101,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     public async Task<LlmResult<CorrectionResult>> CorrectAsync(
         CorrectionRequest request, CancellationToken ct = default)
     {
-        var client = CreateClient();
+        var client = _client.Value;
 
         var clock = Stopwatch.StartNew();
         var response = await client.Messages.Create(new MessageCreateParams
@@ -152,7 +129,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     public async Task<LlmResult<AnalysisDraft>> AnalyzeAsync(
         AnalysisRequest request, CancellationToken ct = default)
     {
-        var client = CreateClient();
+        var client = _client.Value;
 
         var clock = Stopwatch.StartNew();
         var response = await client.Messages.Create(new MessageCreateParams
@@ -180,7 +157,7 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     public async Task<LlmResult<CardDesign>> DesignCardsAsync(
         CardDesignRequest request, CancellationToken ct = default)
     {
-        var client = CreateClient();
+        var client = _client.Value;
 
         var clock = Stopwatch.StartNew();
         var response = await client.Messages.Create(new MessageCreateParams
@@ -265,7 +242,10 @@ public sealed class AnthropicLlmProvider : ILlmProvider
         return text;
     }
 
-    /// <summary>Cria o cliente Anthropic com a key configurada (validação num lugar só).</summary>
+    /// <summary>
+    /// Um cliente só, com um <c>HttpClient</c> só, pra vida toda do app. Criado na
+    /// primeira chamada: sem key, as telas que não chamam a IA continuam abrindo.
+    /// </summary>
     private AnthropicClient CreateClient()
     {
         if (string.IsNullOrWhiteSpace(_options.ApiKey))

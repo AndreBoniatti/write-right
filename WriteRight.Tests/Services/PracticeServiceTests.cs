@@ -14,7 +14,7 @@ using WriteRight.Tests.Support;
 namespace WriteRight.Tests.Services;
 
 /// <summary>
-/// O coração do loop adaptativo, agora com ciclo de vida: criar (gera + persiste
+/// O coração do loop adaptativo, com o ciclo de vida da prática: criar (gera + persiste
 /// como "Em andamento"), retomar, salvar rascunho, corrigir (→ concluída, readonly),
 /// excluir, e agregar o perfil. Testado contra SQLite real (value-converters de
 /// verdade) com um <see cref="StubLlmProvider"/> — sem rede nem custo de IA.
@@ -167,7 +167,7 @@ public sealed class PracticeServiceTests : IDisposable
         var request = new CreatePracticeRequest(
             Language.English, Language.English, 60, CefrLevel.B1);
 
-        await Assert.ThrowsAsync<ArgumentException>(
+        await Assert.ThrowsAsync<InvalidRequestException>(
             () => Service(new StubLlmProvider(SampleExercise())).CreatePracticeAsync(request));
     }
 
@@ -185,7 +185,7 @@ public sealed class PracticeServiceTests : IDisposable
         var stub = new StubLlmProvider(SampleExercise());
         var request = new CreatePracticeRequest(Language.Portuguese, Language.English, words, CefrLevel.B1);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => Service(stub).CreatePracticeAsync(request));
+        await Assert.ThrowsAsync<InvalidRequestException>(() => Service(stub).CreatePracticeAsync(request));
 
         Assert.Null(stub.LastGenerationRequest);
         await using var ctx = _db.NewContext();
@@ -342,7 +342,7 @@ public sealed class PracticeServiceTests : IDisposable
         var stub = new StubLlmProvider(SampleExercise(), CorrectionWith(ErrorCategory.Article));
         var created = await Service(stub).CreatePracticeAsync(CreateRequest());
 
-        await Assert.ThrowsAsync<ArgumentException>(() => Service(stub).CorrectPracticeAsync(created.Id, blank));
+        await Assert.ThrowsAsync<InvalidRequestException>(() => Service(stub).CorrectPracticeAsync(created.Id, blank));
 
         Assert.Null(stub.LastCorrectionRequest);
         var reloaded = await Service(stub).GetPracticeAsync(created.Id);

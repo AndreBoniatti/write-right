@@ -5,9 +5,7 @@ namespace WriteRight.Api.Llm;
 /// recusa do modelo, JSON truncado por bater no teto de tokens, schema inesperado.
 ///
 /// Existe por um motivo só: <b>carregar o <see cref="Usage"/> para fora</b>. Sem isto
-/// a exceção subiria crua e o gasto sumiria do registro — e o caso mais caro é
-/// justamente este, porque estourar o teto de saída significa ter pago pelos tokens
-/// todos antes de o JSON ficar impossível de ler.
+/// a exceção subiria crua e o gasto sumiria do registro.
 ///
 /// Não é lançada quando a chamada falha ANTES de completar (rede, 429, 5xx): aí não
 /// houve cobrança e não há consumo a registrar.

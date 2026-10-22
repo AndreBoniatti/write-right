@@ -7,8 +7,7 @@ public class WriteRightDbContext : DbContext
     /// <summary>
     /// Nome do filtro de exclusão lógica. Nomeado pra que quem precisa enxergar as
     /// excluídas desligue SÓ ele (<c>IgnoreQueryFilters([SoftDeleteFilter])</c>): um
-    /// <c>IgnoreQueryFilters()</c> sem nome desligaria também qualquer filtro que vier
-    /// depois — o de usuário, por exemplo, se o app deixar de ser de uma pessoa só.
+    /// <c>IgnoreQueryFilters()</c> sem nome desligaria também qualquer filtro futuro.
     /// </summary>
     public const string SoftDeleteFilter = "SoftDelete";
 
@@ -21,6 +20,13 @@ public class WriteRightDbContext : DbContext
     public DbSet<VocabCard> Cards => Set<VocabCard>();
     public DbSet<CardReview> CardReviews => Set<CardReview>();
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // O SQLite não compara nem ordena DateTimeOffset. Gravado como DateTime em UTC,
+        // ORDER BY e filtro por data descem pro SQL.
+        configurationBuilder.Properties<DateTimeOffset>().HaveConversion<UtcDateTimeConverter>();
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var exercise = modelBuilder.Entity<ExerciseAttempt>();
@@ -30,9 +36,8 @@ public class WriteRightDbContext : DbContext
         exercise.Property(e => e.Level).HasConversion<string>();
         exercise.Property(e => e.CardsStatus).HasConversion<string>();
 
-        // Blindagem no banco (defense-in-depth): origem e alvo nunca podem ser
-        // iguais. A validação da aplicação dá o erro amigável; isto é a rede de
-        // segurança de última instância, mesmo que algo passe por fora do serviço.
+        // Rede de segurança no banco: a validação do serviço dá o erro amigável, isto
+        // segura o que passar por fora dele.
         exercise.ToTable(t => t.HasCheckConstraint(
             "CK_Exercise_LanguagesDiffer", "SourceLanguage <> TargetLanguage"));
 
@@ -58,10 +63,8 @@ public class WriteRightDbContext : DbContext
              .OnDelete(DeleteBehavior.Restrict);
 
         // Os erros seguem a prática: os de uma prática excluída saem do perfil, da
-        // revisão por categoria e das PRÓXIMAS análises (a já gerada guarda a evidência
-        // como cópia, de propósito). É também o filtro que o EF pede quando o lado
-        // principal de uma relação obrigatória tem filtro próprio. Mesmo nome: desligar
-        // a exclusão lógica desliga os dois juntos.
+        // revisão por categoria e das próximas análises (a já gerada guarda a evidência
+        // como cópia). Mesmo nome: desligar a exclusão lógica desliga os dois juntos.
         error.HasQueryFilter(SoftDeleteFilter, e => e.ExerciseAttempt!.DeletedAt == null);
 
         var call = modelBuilder.Entity<LlmCall>();
@@ -82,18 +85,15 @@ public class WriteRightDbContext : DbContext
             .HasForeignKey(c => c.AnalysisId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Custo como TEXT (padrão do SQLite pra decimal): round-trip exato, sem o
-        // erro de arredondamento que double traria em dinheiro. A contrapartida é
-        // que SUM/ORDER BY não descem pro SQL — agrega-se em memória, igual ao
-        // resto do app (mesmo motivo do ListPracticesAsync).
+        // Custo como TEXT (padrão do SQLite pra decimal): round-trip exato, sem o erro de
+        // arredondamento que double traria em dinheiro. Em troca, SUM não desce pro SQL.
         call.Property(c => c.CostUsd).HasColumnType("TEXT");
 
         var card = modelBuilder.Entity<VocabCard>();
 
-        // NOT NULL no banco, não só no C#: a garantia de que todo card tem dica passa
-        // a ser do schema, e não da disciplina de quem escreve o serviço. O CHECK
-        // completa — sozinho, NOT NULL ainda deixaria passar string vazia, que na
-        // tela dá exatamente o mesmo card sem resposta possível.
+        // NOT NULL no banco, não só no C#: a garantia de que todo card tem dica é do
+        // schema. O CHECK completa — NOT NULL sozinho ainda deixaria passar string
+        // vazia, que na tela dá o mesmo card sem resposta possível.
         card.Property(c => c.Hint).IsRequired();
         card.ToTable(t => t.HasCheckConstraint("CK_Card_HintNotEmpty", "trim(Hint) <> ''"));
 
@@ -102,9 +102,6 @@ public class WriteRightDbContext : DbContext
         card.Property(c => c.SourceLanguage).HasConversion<string>();
         card.Property(c => c.TargetLanguage).HasConversion<string>();
 
-        // Índice pelo estado: a consulta quente é "o que está vencido" (State ativo +
-        // DueAt). DueAt fora do índice de propósito — é DateTimeOffset, que o SQLite
-        // não compara direito, e o filtro por data acontece em memória.
         card.HasIndex(c => c.State);
 
         var review = modelBuilder.Entity<CardReview>();
@@ -112,7 +109,6 @@ public class WriteRightDbContext : DbContext
 
         // Restrict pelo mesmo motivo dos erros: card nunca é apagado (descartar só
         // marca), e o log de revisões é o único jeito de saber se o agendador funciona.
-        // Um DELETE físico por engano tem que falhar, não levar o histórico junto.
         review.HasOne(r => r.VocabCard)
               .WithMany(c => c.Reviews)
               .HasForeignKey(r => r.VocabCardId)

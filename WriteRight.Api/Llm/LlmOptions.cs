@@ -1,15 +1,8 @@
 namespace WriteRight.Api.Llm;
 
 /// <summary>
-/// Configuração do provedor de IA.
-///
-/// A <see cref="ApiKey"/> NUNCA vai no código nem no appsettings versionado —
-/// vem de user-secrets (dev) ou variável de ambiente (execução):
-///   dotnet user-secrets set "Llm:ApiKey" "sk-ant-..."   (no projeto Api)
-///
-/// Os modelos são configuráveis (split barato/bom decidido no projeto):
-/// Haiku gera, Sonnet corrige, Opus desenha os cards. Trocáveis por config sem
-/// tocar no código.
+/// Configuração do provedor de IA. A <see cref="ApiKey"/> NUNCA vai no código nem no
+/// appsettings versionado — vem de user-secrets (dev) ou variável de ambiente.
 /// </summary>
 public sealed class LlmOptions
 {
@@ -25,34 +18,26 @@ public sealed class LlmOptions
     public string CorrectionModel { get; set; } = "claude-sonnet-5";
 
     /// <summary>
-    /// Modelo pra análise de fraquezas. É a tarefa mais analítica do app — a
-    /// correção olha um texto, esta olha o histórico inteiro e precisa achar
-    /// estrutura. Modelo fraco aqui devolve exatamente o conselho genérico que o
-    /// desenho todo tenta evitar. Roda raro (análise persistida), então o custo por
-    /// chamada pesa pouco.
+    /// Modelo pra análise de fraquezas: olha o histórico inteiro e precisa achar
+    /// estrutura, e modelo fraco aqui devolve o conselho genérico que o desenho todo
+    /// tenta evitar. Roda raro (análise persistida), então o custo pesa pouco.
     /// </summary>
     public string AnalysisModel { get; set; } = "claude-sonnet-5";
 
     /// <summary>
-    /// Modelo pro desenho dos cards de vocabulário. O MAIOR dos quatro, de propósito:
-    /// card errado entra no SM-2 e é treinado por meses, então é onde precisão vale
-    /// mais que custo. E, medido, nem custa mais — o Opus 5.5 pensa bem menos que o
-    /// Sonnet 5 nessa tarefa. Ver <c>CardPrompt</c>.
+    /// Modelo pro desenho dos cards. O MAIOR dos quatro, de propósito: card errado entra
+    /// no SM-2 e é treinado por meses, então é onde precisão vale mais que custo.
     /// </summary>
     public string CardModel { get; set; } = "claude-opus-5-5";
 
     /// <summary>
     /// Tarifas por modelo, em USD por 1M de tokens. <b>Única</b> fonte de preço — não
-    /// há tabela embutida no código, de propósito: preço muda mais que código, e ter
-    /// os valores em dois lugares só cria a dúvida de qual está valendo.
+    /// há tabela embutida no código: preço muda mais que código, e ter os valores em dois
+    /// lugares só cria a dúvida de qual está valendo. Config e não banco porque são
+    /// poucos valores, editados raramente, versionados junto do código que os usa.
     ///
     /// Como não há fallback, todo modelo em uso PRECISA estar aqui; quem cobra isso é
     /// o <see cref="LlmOptionsValidator"/>, no startup.
-    ///
-    /// Vive em config e não no banco porque isto é <b>configuração</b>, não dado:
-    /// poucos valores, editados raramente, e que devem ser versionados junto do código
-    /// que os usa. (Preço que você COBRA do usuário é outra coisa — esse sim vai pro
-    /// banco quando existir.)
     /// </summary>
     public Dictionary<string, ModelRate> Pricing { get; set; } = new();
 }

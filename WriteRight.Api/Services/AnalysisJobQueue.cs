@@ -6,11 +6,10 @@ namespace WriteRight.Api.Services;
 /// <summary>
 /// Fila de uma posição para a geração de análise, com o estado da execução corrente.
 ///
-/// <b>Em memória, de propósito (por ora).</b> Se o processo reiniciar no meio, o job
-/// se perde e o usuário só precisa pedir de novo — nada é corrompido, porque o que
-/// já foi pago é gravado por <see cref="UsageService.AfterBilling"/> antes de
-/// qualquer coisa. Durabilidade de verdade pede uma linha de job no banco; é o
-/// próximo passo se isto virar produto, não agora.
+/// <b>Em memória, de propósito.</b> Se o processo reiniciar no meio, o job se perde e
+/// o usuário só precisa pedir de novo — nada é corrompido, porque o que já foi pago é
+/// gravado antes de qualquer coisa. Os cards, que não têm esse "pedir de novo", usam
+/// fila no banco (ver <c>CardsStatus</c>).
 ///
 /// Uma posição só porque não faz sentido enfileirar duas análises do mesmo histórico:
 /// a segunda leria quase o mesmo material e cobraria de novo. Pedido durante uma

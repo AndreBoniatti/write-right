@@ -7,9 +7,8 @@ namespace WriteRight.Tests.Llm;
 /// Lê o <c>appsettings.json</c> REAL do projeto Api e o submete ao mesmo validador
 /// que roda no startup.
 ///
-/// Só passou a valer a pena quando o preço deixou de ter default no código: o arquivo
-/// virou a fonte única, e um modelo mal grafado ali derruba a app no boot. Este teste
-/// troca "descobre no deploy" por "descobre no <c>dotnet test</c>".
+/// O arquivo é a fonte única de preço, e um modelo mal grafado ali derruba a app no
+/// boot. Este teste troca "descobre no deploy" por "descobre no <c>dotnet test</c>".
 /// </summary>
 public class ProductionConfigTests
 {

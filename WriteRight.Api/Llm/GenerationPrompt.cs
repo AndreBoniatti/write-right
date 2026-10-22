@@ -43,8 +43,7 @@ internal static class GenerationPrompt
         // Tema do usuário é fronteira; assunto sorteado é trampolim. A diferença de
         // palavra importa: "Tema: X" o modelo lê como cerca e não sai dali, o que
         // reduziria os textos aos limites literais do catálogo. Quando a escolha foi
-        // NOSSA, e não do usuário, ele deve poder derivar. (O fallback antigo, "um
-        // tema cotidiano", era o funil que produzia sempre a mesma vinheta doméstica.)
+        // NOSSA, e não do usuário, ele deve poder derivar.
         if (!string.IsNullOrWhiteSpace(request.Theme))
             sb.AppendLine($"Tema: {request.Theme}.");
         else if (request.Variety is { } picked)

@@ -3,16 +3,12 @@ using Microsoft.Extensions.Options;
 namespace WriteRight.Api.Llm;
 
 /// <summary>
-/// Valida <see cref="LlmOptions"/> no startup (<c>ValidateOnStart</c>).
+/// Valida <see cref="LlmOptions"/> no startup (<c>ValidateOnStart</c>). Sem esta trava,
+/// esquecer um preço não quebraria nada visível — só o relatório de custo viria vazio.
+/// Erro de dinheiro que não aparece é o pior tipo, então ele vira falha de boot.
 ///
-/// Existe porque as tarifas moram só no appsettings, sem fallback no código: sem
-/// esta trava, esquecer um preço não quebraria nada visível — a app subiria, as
-/// práticas funcionariam, e só o relatório de custo viria vazio. Erro de dinheiro
-/// que não aparece é o pior tipo, então ele vira falha de boot.
-///
-/// A <see cref="LlmOptions.ApiKey"/> NÃO é validada aqui de propósito: ela falha com
-/// mensagem amigável no primeiro uso, e exigi-la no boot impediria a app de subir só
-/// pra ler o histórico.
+/// A <see cref="LlmOptions.ApiKey"/> NÃO é validada aqui de propósito: exigi-la no boot
+/// impediria a app de subir só pra ler o histórico.
 /// </summary>
 public sealed class LlmOptionsValidator : IValidateOptions<LlmOptions>
 {

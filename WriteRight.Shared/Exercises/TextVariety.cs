@@ -31,9 +31,9 @@ public sealed record TextVariety(
     char? CharacterInitial);
 
 /// <summary>
-/// As listas de onde a <see cref="TextVariety"/> é sorteada. Larga de propósito:
-/// o fallback antigo era "um tema cotidiano", que é um funil estreito — vinheta
-/// doméstica em pretérito é o centro exato dessa distribuição.
+/// As listas de onde a <see cref="TextVariety"/> é sorteada. Larga de propósito: um
+/// tema genérico como "cotidiano" é um funil estreito — vinheta doméstica em pretérito
+/// é o centro exato dessa distribuição.
 /// </summary>
 public static class VarietyCatalog
 {

@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore WriteRight.slnx
+
+      - name: Build
+        run: dotnet build WriteRight.slnx --configuration Release --no-restore
+
+      # O provider da IA é trocado por um stub nos testes: nenhuma chamada paga, nenhuma key.
+      - name: Test
+        run: dotnet test WriteRight.slnx --configuration Release --no-build

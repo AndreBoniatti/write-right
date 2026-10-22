@@ -2,6 +2,7 @@
 
 > AI-powered writing practice: translate texts and get corrections that track your recurring mistakes to focus your studies.
 
+[![CI](https://github.com/AndreBoniatti/write-right/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreBoniatti/write-right/actions/workflows/ci.yml)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Blazor WebAssembly](https://img.shields.io/badge/Blazor-WebAssembly-512BD4)
 ![EF Core · SQLite](https://img.shields.io/badge/EF%20Core-SQLite-003B57)
@@ -110,9 +111,9 @@ A few decisions worth naming:
 
 ## Tech stack
 
-- **Backend:** ASP.NET Core minimal API (.NET 10, C#)
+- **Backend:** ASP.NET Core minimal API (.NET 10, C#) with typed results, errors as ProblemDetails (RFC 9457) and an OpenAPI document
 - **Frontend:** Blazor WebAssembly (standalone SPA)
-- **Data:** EF Core + SQLite (enums persisted as strings; migratable to Postgres later). Nothing the user did is physically deleted: practices are soft-deleted behind a global query filter, and foreign keys are `RESTRICT`, so a stray physical delete fails instead of cascading
+- **Data:** EF Core + SQLite (enums persisted as strings, dates as UTC so ordering and date filters run in SQL; migratable to Postgres later). Nothing the user did is physically deleted: practices are soft-deleted behind a global query filter, and foreign keys are `RESTRICT`, so a stray physical delete fails instead of cascading
 - **AI:** Claude via the official Anthropic C# SDK, using **structured output**
 - **Tests:** xUnit
 
@@ -127,7 +128,7 @@ WriteRight.slnx
 ├── WriteRight.Shared/   # DTOs + the error taxonomy (shared by API and UI)
 ├── WriteRight.Api/      # Minimal API, EF Core/SQLite, Claude integration
 ├── WriteRight.Client/   # Blazor WebAssembly SPA
-└── WriteRight.Tests/    # xUnit — covers the core (taxonomy, schema, persistence, aggregation)
+└── WriteRight.Tests/    # xUnit — the core (taxonomy, schema, persistence, aggregation) and the HTTP error pipeline
 ```
 
 ## Running locally
@@ -153,6 +154,8 @@ dotnet run --project WriteRight.Client   # SPA   → http://localhost:5193
 Then open **http://localhost:5193**. The SQLite database is created automatically on first run.
 
 **API endpoints**
+
+In development the API serves its OpenAPI document at `/openapi/v1.json`, browsable at **http://localhost:5056/scalar**. The API's own errors come back as ProblemDetails: `400` for a request refused before any work (same source and target language, a blank translation), `404`/`409` for a missing or read-only resource, `502` when the AI answered — and charged — but its response couldn't be used. Anything unexpected is still a plain `500` (in development, with the exception page).
 
 | Method | Route | Purpose |
 |---|---|---|
@@ -220,14 +223,16 @@ The suite covers the parts with real logic and real regression risk:
 - **Structured-output schema** — the JSON schema lists every category and severity, so it can't drift from the taxonomy.
 - **Wire contract** — the JSON Claude returns deserializes into the right enums, using the exact same serializer options as production; every category round-trips as a string (the contract that keeps the DB, API and client aligned).
 - **Adaptive generation** — the prompt injects focus categories when there are weaknesses, and doesn't when there aren't.
-- **Persistence + aggregation** — correcting stores the attempt and its errors, and the profile aggregates by category ordered by severity-weighted score, tested against a **real in-memory SQLite** database (so the enum-as-string value converters run for real).
+- **Persistence + aggregation** — correcting stores the attempt and its errors, and the profile aggregates by category ordered by severity-weighted score, tested against a **real in-memory SQLite** database (so the value converters — enums as strings, dates as UTC — run for real).
 - **The evolution chart's arithmetic** — errors per 10 words is total errors over total words, not an average of per-practice rates (an 8-word text can't outweigh a 36-word one); and the rolling average only looks at the last 10 practices.
 - **Evidence grounding** — the analysis drops any pattern that cites error ids it was never sent or that falls under the evidence floor, and persists nothing when none survive; a pattern keeps its own study rule even when a neighbour is dropped. The window sizing (by error volume, not practice count) and the snapshotting of evidence — an analysis stays intact even after the practice it cited is deleted — are covered too, as are the staleness numbers, which only appear once there's at least as much new material as the analysis read (smaller samples swing by noise), and the dating of an analysis by when its window was taken, so a practice finished while the AI was thinking counts as new.
 - **The deck** — mostly the failure paths, because they're the ones that quietly corrupt data: every rule of the gate (each one named after a real bad card), a correction that queues its cards in the same transaction, a failed card call that records its cost and stays pending, a recurring error that reschedules instead of duplicating (and writes no review row), a discarded card that's never resurrected, a card that outlives the practice that created it, and siblings from one sentence that never share a day. Plus the interval arithmetic, where a wrong sign breaks nothing visible — it just makes reviews arrive at the wrong time for months.
 - **The day streak** — days are counted on your clock, not UTC, and the day turns at 4am: a practice finished at 00:30 belongs to the evening it started in, or a late session would break the streak on a day you practiced.
 - **Soft delete** — a deleted practice leaves the list, the detail, the profile and the next analysis's window, but still counts for the streak and for the average cost (its spend stays in the total, so dropping it from the divisor would inflate the average); a physical delete is refused by the schema.
+- **Data migrations** — the ones that rewrite stored data run for real against SQLite, up and down, since they run on their own at startup and a wrong one would corrupt the history silently.
+- **HTTP errors** — the whole API runs in memory and answers bad requests: a refused request is a `400` with the reason, a body or query that doesn't bind is still a `400` and not a `500`, a failed AI call is a `502`, and every error keeps the CORS header (without it the browser hides the error and the client thinks the API is down).
 
-**Conscious gap:** the real HTTP call to Anthropic isn't tested — it costs money and is flaky. The model sits behind an interface and is swapped for a fake in tests, so everything *around* the call is covered. New logic ships with tests, and the suite runs on every change.
+**Conscious gap:** the real HTTP call to Anthropic isn't tested — it costs money and is flaky. The model sits behind an interface and is swapped for a fake in tests, so everything *around* the call is covered. New logic ships with tests, and CI runs the suite on every push.
 
 ## Status
 

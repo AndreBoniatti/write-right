@@ -9,7 +9,7 @@ namespace WriteRight.Tests.Cards;
 
 /// <summary>
 /// O portão entre a proposta do modelo e o card. Cada regra aqui existe por um card
-/// ruim de verdade — os exemplos são do deck real e da avaliação de 2026-10-07. A
+/// ruim de verdade — os exemplos são do deck real. A
 /// regra da casa: na dúvida mecânica, o card não nasce.
 /// </summary>
 public class CardGateTests

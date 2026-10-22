@@ -18,9 +18,7 @@ namespace WriteRight.Api.Data;
 ///
 /// <see cref="PracticeId"/> e <see cref="AnalysisId"/> são FKs opcionais com
 /// Restrict: o gasto aconteceu e é irreversível, e nenhuma exclusão pode apagar o
-/// registro de que você pagou. Já foram referências fracas (int sem FK) enquanto a
-/// exclusão de prática era física; com a exclusão lógica, a prática nunca some, e a
-/// FK passa a garantir que não existe gasto apontando pra uma prática inexistente.
+/// registro de que você pagou.
 /// </summary>
 public class LlmCall
 {

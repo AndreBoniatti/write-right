@@ -34,8 +34,7 @@ public sealed record CardCheckRequest(string TypedAnswer);
 /// <remarks>
 /// As três hipóteses vêm calculadas do servidor, pelo MESMO
 /// <c>CardScheduler</c> que vai agendar de verdade — em vez de o cliente refazer
-/// a conta e as duas versões poderem discordar. Sem custo: são três chamadas de
-/// função pura dentro de uma requisição que já estava acontecendo.
+/// a conta e as duas versões poderem discordar.
 ///
 /// É o intervalo AGENDADO. Um card com irmãos pode aparecer um pouco depois
 /// disso, porque a frase entrega um card por dia.

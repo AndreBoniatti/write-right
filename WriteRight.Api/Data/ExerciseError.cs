@@ -4,11 +4,7 @@ namespace WriteRight.Api.Data;
 
 /// <summary>
 /// Entidade de persistência de um erro. É o que se agrega pra montar o perfil
-/// de fraquezas (GROUP BY Category / Severity).
-///
-/// <see cref="Category"/> e <see cref="Severity"/> são gravados como STRING
-/// (ver <see cref="WriteRightDbContext"/>) pra os dados ficarem legíveis e
-/// resistirem a reordenação dos enums.
+/// de fraquezas.
 /// </summary>
 public class ExerciseError
 {
