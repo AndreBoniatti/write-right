@@ -225,7 +225,7 @@ a:hover { color: var(--wr-primary-strong); }
 /* ── Foco (anel suave no lugar do azul do template) ──────── */
 
 .btn:focus, .btn:focus-visible,
-.form-control:focus, .form-select:focus, .form-check-input:focus {
+.form-control:focus, .form-select:focus {
     box-shadow: 0 0 0 3px var(--wr-primary-soft);
     border-color: var(--wr-primary);
     outline: none;
@@ -253,15 +253,6 @@ a:hover { color: var(--wr-primary-strong); }
     font-size: 0.82rem;
     font-weight: 550;
     margin-bottom: 0.3rem;
-}
-
-.form-check-input {
-    background-color: var(--wr-surface);
-    border-color: var(--wr-border);
-}
-.form-check-input:checked {
-    background-color: var(--wr-primary);
-    border-color: var(--wr-primary);
 }
 
 /* ── Badges soft (pílulas) ─────────────────────────────── */

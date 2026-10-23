@@ -1,14 +1,11 @@
 using System.Text;
 using System.Text.Json;
 using WriteRight.Shared.Exercises;
-using WriteRight.Shared.Taxonomy;
 
 namespace WriteRight.Api.Llm;
 
 /// <summary>
 /// Constrói o prompt de geração de exercício e o schema do structured output.
-/// O gancho adaptativo vive aqui: quando há FocusCategories, o texto é pedido de
-/// forma que a tradução force o aluno a praticar suas fraquezas.
 /// </summary>
 internal static class GenerationPrompt
 {
@@ -61,19 +58,6 @@ internal static class GenerationPrompt
             sb.AppendLine($"- Ponto de vista: {variety.PointOfView}.");
             if (variety.CharacterInitial is { } initial)
                 sb.AppendLine($"- O nome do personagem deve começar com a letra {initial}.");
-        }
-
-        if (request.FocusCategories is { Count: > 0 })
-        {
-            sb.AppendLine();
-            sb.AppendLine("IMPORTANTE — componha o texto de forma que a TRADUÇÃO para o idioma-alvo");
-            sb.AppendLine("naturalmente exija que o estudante lide com estes tipos de dificuldade");
-            sb.AppendLine("(sem marcá-los no texto; apenas faça-os surgir de forma natural):");
-            foreach (var cat in request.FocusCategories)
-            {
-                var info = ErrorCatalog.Info(cat);
-                sb.AppendLine($"- {info.LabelPt}: {info.Description}");
-            }
         }
         return sb.ToString();
     }

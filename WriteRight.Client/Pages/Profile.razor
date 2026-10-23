@@ -39,21 +39,15 @@ else if (profile is not null)
                 <div class="stat-value">@life.TotalErrors</div>
                 <div class="stat-label">@(life.TotalErrors == 1 ? "erro no total" : "erros no total")</div>
             </div>
-            <div class="stat-tile stat-tile--focus">
+            <div class="stat-tile stat-tile--top">
                 <div class="stat-value stat-value--accent">@(top is null ? "—" : ErrorCatalog.Info(top.Category).LabelPt)</div>
-                <div class="stat-label">
-                    prioridade de estudo
-                    @if (top is not null)
-                    {
-                        <text> · </text><a href="practice/new">Praticar agora</a>
-                    }
-                </div>
+                <div class="stat-label">maior peso</div>
             </div>
         </div>
 
         <EvolutionChart Timeline="profile.Timeline" />
 
-        @Categories(life, top?.Category)
+        @Categories(life)
 
         @* Esta tela mostra O QUÊ você erra; a análise procura o PORQUÊ. Entrada
            discreta de propósito — o perfil continua sendo os números frios. *@
@@ -119,7 +113,7 @@ else if (profile is not null)
     // Uma lista só, com o seletor de período no lugar da seção recente duplicada. A
     // barra é o VOLUME (Count), dividido por gravidade; a ordem é o PESO (Score) — as
     // cores mostram por que uma categoria rara mas grave passa na frente.
-    private RenderFragment Categories(ProfileView life, ErrorCategory? focus) => __builder =>
+    private RenderFragment Categories(ProfileView life) => __builder =>
     {
         // Recent só difere do histórico quando há mais práticas do que cabem na janela.
         var split = life.Attempts > profile!.Recent.Attempts;
@@ -168,13 +162,7 @@ else if (profile is not null)
                         <div class="cat @(isOpen ? "cat--open" : "")">
                             <button type="button" class="cat-btn" aria-expanded="@(isOpen ? "true" : "false")"
                                     @onclick="() => ToggleAsync(c.Category)">
-                                <span class="cat-name">
-                                    <span>@info.LabelPt</span>
-                                    @if (c.Category == focus)
-                                    {
-                                        <span class="cat-focus">foco</span>
-                                    }
-                                </span>
+                                <span class="cat-name">@info.LabelPt</span>
                                 <span class="cat-bar">
                                     @foreach (var s in Segments(c.BySeverity, max))
                                     {

@@ -34,7 +34,6 @@ public sealed class PracticeService
     /// no meio de uma palavra.
     /// </summary>
     private const int PreviewLength = 160;
-    private const int FocusCategoryCount = 3;
 
     /// <summary>
     /// Tamanho do recorte "recente" do perfil. É a mesma janela do gráfico de evolução:
@@ -58,8 +57,6 @@ public sealed class PracticeService
 
     /// <summary>
     /// Cria uma prática: gera o texto e persiste como <see cref="PracticeStatus.InProgress"/>.
-    /// Se <see cref="CreatePracticeRequest.FocusOnWeaknesses"/>, mira a geração nas
-    /// categorias mais pesadas do perfil.
     /// </summary>
     public async Task<PracticeDetail> CreatePracticeAsync(CreatePracticeRequest request, CancellationToken ct = default)
     {
@@ -70,17 +67,6 @@ public sealed class PracticeService
             throw new InvalidRequestException(
                 $"O texto deve ter entre {PracticeLimits.MinWords} e {PracticeLimits.MaxWords} palavras.");
 
-        IReadOnlyList<ErrorCategory>? focus = null;
-        if (request.FocusOnWeaknesses)
-        {
-            // Top-N vitalício por PESO (gravidade × frequência), não por contagem crua.
-            // Só o ranking: o perfil inteiro leria todas as traduções pra montar o gráfico.
-            var ranking = CategoryRanking.Rank(
-                (await CompletedErrorsAsync(ct)).Select(e => (e.Category, e.Severity)));
-            if (ranking.Count > 0)
-                focus = ranking.Take(FocusCategoryCount).Select(c => c.Category).ToList();
-        }
-
         // Sorteia a FORMA do texto (tempo verbal, registro, ponto de vista, assunto).
         // Prompt idêntico devolve sempre o mesmo texto modal, e o modelo não lembra o
         // que já gerou — a variedade tem que vir daqui.
@@ -90,7 +76,7 @@ public sealed class PracticeService
             generated = await _llm.GenerateExerciseAsync(
                 new ExerciseGenerationRequest(
                     request.SourceLanguage, request.TargetLanguage, request.WordCount,
-                    request.Level, request.Theme, focus, VarietyCatalog.Pick()),
+                    request.Level, request.Theme, VarietyCatalog.Pick()),
                 ct);
         }
         catch (LlmCallFailedException ex)
@@ -284,9 +270,9 @@ public sealed class PracticeService
 
     /// <summary>
     /// Perfil de fraquezas, ponderado por severidade (ver <see cref="SeverityWeight"/>).
-    /// Duas visões: <c>Lifetime</c> (todo o histórico, insumo do gerador adaptativo) e
-    /// <c>Recent</c> (as últimas <see cref="RecentWindow"/> concluídas), mais a linha do
-    /// tempo por prática do gráfico de evolução.
+    /// Duas visões: <c>Lifetime</c> (todo o histórico) e <c>Recent</c> (as últimas
+    /// <see cref="RecentWindow"/> concluídas), mais a linha do tempo por prática do
+    /// gráfico de evolução.
     /// </summary>
     public async Task<ErrorProfile> GetProfileAsync(CancellationToken ct = default)
     {
@@ -301,7 +287,11 @@ public sealed class PracticeService
         // Só os erros das práticas lidas acima: uma correção que termine entre as duas
         // leituras entraria no total de erros sem entrar nas práticas nem na linha do tempo.
         var completedIds = completed.Select(p => p.Id).ToHashSet();
-        var errors = (await CompletedErrorsAsync(ct)).Where(e => completedIds.Contains(e.AttemptId)).ToList();
+        var errors = (await _db.Errors
+            .Select(e => new ErrorRow(e.Category, e.Severity, e.ExerciseAttemptId))
+            .ToListAsync(ct))
+            .Where(e => completedIds.Contains(e.AttemptId))
+            .ToList();
 
         var recentIds = completed
             .TakeLast(RecentWindow)
@@ -339,17 +329,6 @@ public sealed class PracticeService
             .Select(e => new CategoryError(
                 e.ExerciseAttemptId, e.ExerciseAttempt!.CompletedAt!.Value, e.Severity,
                 e.Original, e.Correction, e.Explanation))
-            .ToListAsync(ct);
-
-    /// <summary>
-    /// Os erros das práticas concluídas — a base do ranking da geração e do perfil.
-    /// Todo erro já pertence a uma prática concluída (só a correção grava erros); o
-    /// filtro é rede de segurança, não corte esperado.
-    /// </summary>
-    private async Task<List<ErrorRow>> CompletedErrorsAsync(CancellationToken ct) =>
-        await _db.Errors
-            .Where(e => e.ExerciseAttempt!.Status == PracticeStatus.Completed && e.ExerciseAttempt.CompletedAt != null)
-            .Select(e => new ErrorRow(e.Category, e.Severity, e.ExerciseAttemptId))
             .ToListAsync(ct);
 
     private static ProfileView BuildView(IReadOnlyList<ErrorRow> errors, int attempts) =>

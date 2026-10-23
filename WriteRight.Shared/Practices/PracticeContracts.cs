@@ -6,17 +6,13 @@ namespace WriteRight.Shared.Practices;
 
 /// <summary>
 /// Cria uma prática = gera o texto e persiste como <see cref="PracticeStatus.InProgress"/>.
-/// O direcionamento adaptativo é resolvido no servidor: com
-/// <see cref="FocusOnWeaknesses"/>, o backend puxa as categorias mais frequentes do
-/// perfil e mira a geração nelas (o cliente não precisa saber do perfil).
 /// </summary>
 public sealed record CreatePracticeRequest(
     Language SourceLanguage,
     Language TargetLanguage,
     int WordCount,
     CefrLevel Level,
-    string? Theme = null,
-    bool FocusOnWeaknesses = false);
+    string? Theme = null);
 
 /// <summary>
 /// Tamanho aceito pro texto gerado, em palavras. No Shared porque a tela e o servidor

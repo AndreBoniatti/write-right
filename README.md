@@ -8,7 +8,7 @@
 ![EF Core · SQLite](https://img.shields.io/badge/EF%20Core-SQLite-003B57)
 ![Claude](https://img.shields.io/badge/AI-Claude-D97757)
 
-WriteRight is a small app I built to practice writing in another language — and to actually use, not just demo. You translate a short generated text, an LLM corrects it and **classifies every mistake into a fixed taxonomy**, and those classifications pile up into a profile of your weaknesses that then **steers the next exercise** toward the categories you get wrong most.
+WriteRight is a small app I built to practice writing in another language — and to actually use, not just demo. You translate a short generated text, an LLM corrects it and **classifies every mistake into a fixed taxonomy**, and those classifications pile up into a profile of your weaknesses. A second step looks for the patterns behind them, and the vocabulary mistakes come back as flashcards built from what you actually wrote.
 
 It's a personal tool first (I use it to study English) and a portfolio piece second.
 
@@ -18,17 +18,17 @@ It's a personal tool first (I use it to study English) and a portfolio piece sec
 
 ![Correction screen: the source text, the translation with each change struck through and replaced in place, the explanation of one change open (category, severity and why), and the four mistakes summed up by category](docs/screenshots/correcao.png)
 
-**Weakness profile.** Errors per 10 words, practice by practice, split by severity — per word, because text length varies and a per-practice count can show progress where there is none. Below, the same categories aggregated (whole history or the last 10 practices), which is what steers the next exercise.
+**Weakness profile.** Errors per 10 words, practice by practice, split by severity — per word, because text length varies and a per-practice count can show progress where there is none. Below, the same categories aggregated (whole history or the last 10 practices).
 
-![Weakness profile: totals and the current focus category, a chart of errors per 10 words for each practice with a rolling average, and the categories ranked by severity weight with bars split by severity](docs/screenshots/perfil.png)
+![Weakness profile: totals and the category with the most weight, a chart of errors per 10 words for each practice with a rolling average, and the categories ranked by severity weight with bars split by severity](docs/screenshots/perfil.png)
 
 **Vocabulary review.** A card minted from a real mistake: the corrected sentence with the answer blanked out, the source-language phrase as the hint, and — on a miss — what you actually wrote.
 
 ![Vocabulary review: a cloze sentence with the source-language hint, the revealed answer, and your own wrong answer below it](docs/screenshots/deck.png)
 
-## The idea: an adaptive error loop
+## The idea: an error memory
 
-Most correction tools tell you what's wrong once and forget it. WriteRight remembers. The core is a closed loop — **error → category → profile → targeted generation**:
+Most correction tools tell you what's wrong once and forget it. WriteRight remembers. Every correction feeds the same store, and three views read from it, each answering a different question:
 
 ```mermaid
 flowchart LR
@@ -36,18 +36,22 @@ flowchart LR
     T --> C[Correct with Claude<br/>structured output]
     C --> E[Categorized errors]
     E --> P[(Persist)]
-    P --> W[Weakness profile]
-    W -->|focus categories| G
+    P --> W[Weakness profile<br/>what]
+    P --> A[Analysis<br/>why]
+    P --> D[Vocabulary cards<br/>which words]
 ```
 
 1. **Generate** a short text at your CEFR level, optionally themed.
 2. **Translate** it yourself.
 3. **Correct** — the model returns the fixed text plus every error, each tagged with a **category** and a **severity**, via structured output (a JSON schema, not free text).
 4. **Persist** every categorized error.
-5. **Profile** — aggregate errors by category to surface your top weaknesses.
-6. **Target** — the next text is generated so that translating it naturally forces those weak categories to come up again.
+5. **Profile** — *what* you get wrong: errors per 10 words over time, and the categories ranked by severity weight.
+6. **Analysis** — *why*: a stronger model looks for the patterns behind the categories, and every claim has to cite your real errors.
+7. **Deck** — *which words*: vocabulary mistakes come back as flashcards, on a spaced-repetition schedule.
 
 The fixed taxonomy is what makes this work: stable categories mean the profile stays comparable over time, and the model is *required* to classify into them rather than inventing labels.
+
+**What I took out: generation aimed at the profile.** The next text used to be written so that translating it would force your three heaviest categories to come up again — the original core of the project, switched on by default. I kept switching it off: the token counts of my last 40 generation calls show it on at most once. The data says why. After 57 practices my heaviest category is `WordChoice`, and its 67 errors have 66 different corrections: there's no rule to drill, and the generator only ever received the category's one-line description, never the words I'd got wrong. The second heaviest, `Spelling`, has the same problem. Two of the three slots went to categories a generated text can't aim at. What a category can't reach, the deck reaches with the real items, and the analysis explains.
 
 ## The taxonomy (the core asset)
 
@@ -76,18 +80,18 @@ The analysis window is sized **by error volume, not by practice count** — coun
 
 Each pattern reads in the order you'd learn it: your own errors first, then one or two sentences on *why* they happen, then the rule to study — inside the pattern, not in a separate list that repeated every pattern a second time. And because a saved analysis ages silently, the page says when it's stale, with numbers measured straight from the database, no AI call: an analysis of 19 practices was still on my screen 36 practices later, while the categories it covered had fallen from 41% to 22% of my errors and what was growing appeared nowhere.
 
-## The vocabulary deck: where the category loop can't reach
+## The vocabulary deck: where categories can't reach
 
-The adaptive loop works by **category**, and that's the right unit for grammar: a rule generalises. Learn that it's "excited *about*" and the next preposition you meet benefits. Vocabulary doesn't work that way — each lexical item is its own thing.
+A **category** is the right unit for grammar: a rule generalises. Learn that it's "excited *about*" and the next preposition you meet benefits. Vocabulary doesn't work that way — each lexical item is its own thing.
 
-My own data made this concrete. Of 188 errors across 36 practices, **82 (44%) were vocabulary** — and those 82 had **82 distinct corrections**. Not one repeated on its own, and the ratio has held as the history grew. Generating another text tagged `WordChoice` will never make me meet "colorful façades" again. Category-level targeting is structurally blind here, and no amount of tuning fixes that.
+My own data made this concrete. Of 188 errors across 36 practices, **82 (44%) were vocabulary** — and those 82 had **82 distinct corrections**. Not one repeated on its own, and the ratio has held as the history grew.
 
 So there's a deck, and it's built from the same source of truth as everything else:
 
 ```mermaid
 flowchart LR
     E[Categorized errors] --> P[(Persist)]
-    P --> W[Weakness profile] -->|focus categories| G[Generate text]
+    P --> W[Weakness profile]
     P -->|after the correction| C[Card design] --> D[Vocabulary cards] -->|spaced repetition| R[Review session]
     R -->|failed again| D
 ```
@@ -222,7 +226,6 @@ The suite covers the parts with real logic and real regression risk:
 - **Taxonomy** — every category has metadata; the catalog and the enum stay in sync.
 - **Structured-output schema** — the JSON schema lists every category and severity, so it can't drift from the taxonomy.
 - **Wire contract** — the JSON Claude returns deserializes into the right enums, using the exact same serializer options as production; every category round-trips as a string (the contract that keeps the DB, API and client aligned).
-- **Adaptive generation** — the prompt injects focus categories when there are weaknesses, and doesn't when there aren't.
 - **Persistence + aggregation** — correcting stores the attempt and its errors, and the profile aggregates by category ordered by severity-weighted score, tested against a **real in-memory SQLite** database (so the value converters — enums as strings, dates as UTC — run for real).
 - **The evolution chart's arithmetic** — errors per 10 words is total errors over total words, not an average of per-practice rates (an 8-word text can't outweigh a 36-word one); and the rolling average only looks at the last 10 practices.
 - **Evidence grounding** — the analysis drops any pattern that cites error ids it was never sent or that falls under the evidence floor, and persists nothing when none survive; a pattern keeps its own study rule even when a neighbour is dropped. The window sizing (by error volume, not practice count) and the snapshotting of evidence — an analysis stays intact even after the practice it cited is deleted — are covered too, as are the staleness numbers, which only appear once there's at least as much new material as the analysis read (smaller samples swing by noise), and the dating of an analysis by when its window was taken, so a practice finished while the AI was thinking counts as new.
@@ -236,7 +239,7 @@ The suite covers the parts with real logic and real regression risk:
 
 ## Status
 
-The loop works end to end: generate → translate → correct → profile → review. The UI is functional but intentionally plain — I'm refining it. This is a personal project I use to study, kept clean because the repo is public; it isn't aiming for monetization.
+Everything works end to end: generate → translate → correct → profile, analysis and card review. The UI is functional but intentionally plain — I'm refining it. This is a personal project I use to study, kept clean because the repo is public; it isn't aiming for monetization.
 
 **Not measured yet:** whether the scheduler's intervals are any good. The review log records the interval a card was shown at and whether it was hit, which is what makes the question answerable — but it needs months of reviews before the answer means anything, and there's no screen for it yet.
 

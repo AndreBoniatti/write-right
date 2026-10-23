@@ -5,7 +5,7 @@ namespace WriteRight.Shared.Taxonomy;
 ///
 /// Toda correção da IA é <b>obrigada</b> a classificar cada erro em UMA destas
 /// (via structured output). Isso é o que permite acumular o perfil de fraquezas
-/// do usuário e direcionar a geração dos próximos exercícios.
+/// do usuário.
 ///
 /// Regras:
 ///  • Lista FECHADA. Cada categoria nova fragmenta os dados históricos — não

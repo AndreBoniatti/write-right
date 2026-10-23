@@ -28,7 +28,7 @@ public enum CardDecisionKind
     /// <summary>Item léxico que o aluno não sabia, e a dica determina a resposta.</summary>
     Card,
 
-    /// <summary>Problema gramatical — quem cuida é o loop de categorias, não o deck.</summary>
+    /// <summary>Problema gramatical — fica com o perfil e a análise, não com o deck.</summary>
     Grammar,
 
     /// <summary>O que o aluno escreveu também estava certo; a correção foi preferência.</summary>

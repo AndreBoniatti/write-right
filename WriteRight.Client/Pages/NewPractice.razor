@@ -58,14 +58,6 @@
                     <label class="form-label">Tema (opcional)</label>
                     <input class="form-control" @bind="theme" @bind:event="oninput" placeholder="ex.: viagem, trabalho, comida…" />
                 </div>
-                <div class="col-12">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="focus" @bind="focusOnWeaknesses" />
-                        <label class="form-check-label" for="focus">
-                            Focar nas minhas fraquezas (usa o perfil pra mirar o exercício)
-                        </label>
-                    </div>
-                </div>
             </div>
             <div class="mt-auto pt-3">
                 <button class="btn btn-primary" @onclick="Create" disabled="@(loading || !WordCountOk)">
@@ -91,17 +83,6 @@
                 <p class="summary-line">Tema: <strong>@theme</strong></p>
             }
 
-            <p class="summary-line summary-focus">
-                @if (focusOnWeaknesses)
-                {
-                    <span>🎯 Mirado nas suas maiores fraquezas.</span>
-                }
-                else
-                {
-                    <span>Texto neutro, sem foco específico.</span>
-                }
-            </p>
-
             <hr class="summary-hr" />
 
             <div class="summary-eyebrow">Como funciona</div>
@@ -109,7 +90,7 @@
                 <li>A IA gera o texto no idioma de origem.</li>
                 <li>Você escreve a tradução.</li>
                 <li>A correção classifica cada erro por categoria.</li>
-                <li>Os erros viram seu perfil e miram as próximas práticas.</li>
+                <li>Os erros viram seu perfil, e os de vocabulário viram cards pra revisar.</li>
             </ol>
         </div>
     </div>
@@ -151,7 +132,6 @@
 
     private CefrLevel level = CefrLevel.B1;
     private string? theme;
-    private bool focusOnWeaknesses = true;
 
     private bool loading;
     private string? error;
@@ -164,7 +144,7 @@
         {
             var req = new CreatePracticeRequest(
                 source, target, wordCount, level,
-                string.IsNullOrWhiteSpace(theme) ? null : theme, focusOnWeaknesses);
+                string.IsNullOrWhiteSpace(theme) ? null : theme);
 
             var detail = await Api.CreatePracticeAsync(req);
             Nav.NavigateTo($"practice/{detail.Id}");

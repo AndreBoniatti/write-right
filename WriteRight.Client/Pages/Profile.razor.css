@@ -41,10 +41,6 @@
     color: var(--wr-text-muted);
 }
 
-.stat-label a {
-    font-weight: 600;
-}
-
 /* ── Onde você tropeça ───────────────────────────────────── */
 .cats-card {
     padding: 1rem 1.15rem 0.75rem;
@@ -112,28 +108,10 @@
 }
 
 .cat-name {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
     min-width: 0;
     font-size: 0.9rem;
     font-weight: 550;
-}
-
-.cat-name > span:first-child {
     overflow-wrap: anywhere;
-}
-
-.cat-focus {
-    flex: 0 0 auto;
-    font-size: 0.66rem;
-    font-weight: 650;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--wr-primary);
-    background: var(--wr-primary-soft);
-    border-radius: 999px;
-    padding: 0.05rem 0.45rem;
 }
 
 /* barra horizontal: mais grave à esquerda (a base), ponta arredondada só no fim */
@@ -292,7 +270,7 @@
         grid-template-columns: 1fr 1fr;
     }
 
-    .stat-tile--focus {
+    .stat-tile--top {
         grid-column: 1 / -1;
     }
 

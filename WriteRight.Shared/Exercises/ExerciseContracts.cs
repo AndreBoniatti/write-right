@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using WriteRight.Shared.Taxonomy;
-
 namespace WriteRight.Shared.Exercises;
 
 /// <summary>
@@ -12,10 +9,6 @@ namespace WriteRight.Shared.Exercises;
 /// <param name="WordCount">Tamanho aproximado do texto, em palavras.</param>
 /// <param name="Level">Nível de dificuldade (CEFR).</param>
 /// <param name="Theme">Tema livre (ex.: "viagem", "trabalho"). Nulo = a IA escolhe.</param>
-/// <param name="FocusCategories">
-/// Gancho adaptativo: categorias que o texto deve <b>forçar</b> o usuário a
-/// praticar (as fraquezas do perfil). Nulo/vazio = texto neutro.
-/// </param>
 /// <param name="Variety">
 /// Eixos de forma sorteados no servidor (tempo verbal, registro, ponto de vista,
 /// assunto). É o que impede a geração de convergir sempre pro mesmo texto — ver
@@ -26,9 +19,8 @@ public sealed record ExerciseGenerationRequest(
     Language TargetLanguage,
     int WordCount,
     CefrLevel Level,
-    string? Theme = null,
-    IReadOnlyList<ErrorCategory>? FocusCategories = null,
-    TextVariety? Variety = null);
+    string? Theme,
+    TextVariety? Variety);
 
 /// <summary>Texto gerado pro usuário traduzir.</summary>
 public sealed record GeneratedExercise(string SourceText);

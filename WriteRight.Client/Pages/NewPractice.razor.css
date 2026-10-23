@@ -37,12 +37,6 @@
     font-weight: 600;
 }
 
-.summary-focus {
-    margin-top: 0.5rem;
-    font-size: 0.95rem;
-    color: var(--wr-text);
-}
-
 .summary-hr {
     border: 0;
     border-top: 1px solid var(--wr-border);

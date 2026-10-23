@@ -14,10 +14,10 @@ using WriteRight.Tests.Support;
 namespace WriteRight.Tests.Services;
 
 /// <summary>
-/// O coração do loop adaptativo, com o ciclo de vida da prática: criar (gera + persiste
-/// como "Em andamento"), retomar, salvar rascunho, corrigir (→ concluída, readonly),
-/// excluir, e agregar o perfil. Testado contra SQLite real (value-converters de
-/// verdade) com um <see cref="StubLlmProvider"/> — sem rede nem custo de IA.
+/// O ciclo de vida da prática: criar (gera + persiste como "Em andamento"), retomar,
+/// salvar rascunho, corrigir (→ concluída, readonly), excluir, e agregar o perfil.
+/// Testado contra SQLite real (value-converters de verdade) com um
+/// <see cref="StubLlmProvider"/> — sem rede nem custo de IA.
 /// </summary>
 public sealed class PracticeServiceTests : IDisposable
 {
@@ -36,8 +36,8 @@ public sealed class PracticeServiceTests : IDisposable
         return new(stub, ctx, new UsageService(ctx, TestPricing.Default()), _cardJobs);
     }
 
-    private static CreatePracticeRequest CreateRequest(bool focusOnWeaknesses = false) =>
-        new(Language.Portuguese, Language.English, 60, CefrLevel.B1, Theme: "cotidiano", FocusOnWeaknesses: focusOnWeaknesses);
+    private static CreatePracticeRequest CreateRequest() =>
+        new(Language.Portuguese, Language.English, 60, CefrLevel.B1, Theme: "cotidiano");
 
     private static GeneratedExercise SampleExercise(string? sourceText = null) =>
         new(sourceText ?? "Um texto gerado.");
@@ -110,39 +110,12 @@ public sealed class PracticeServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CreatePracticeAsync_targets_top_weaknesses_when_focus_requested()
-    {
-        // Semeia uma prática concluída que torna WordChoice a fraqueza mais frequente.
-        var seedStub = new StubLlmProvider(SampleExercise(), CorrectionWith(
-            ErrorCategory.WordChoice, ErrorCategory.WordChoice, ErrorCategory.Spelling));
-        var seed = await Service(seedStub).CreatePracticeAsync(CreateRequest());
-        await Service(seedStub).CorrectPracticeAsync(seed.Id, "tradução");
-
-        // Cria uma nova pedindo pra focar nas fraquezas → o servidor resolve as categorias.
-        var focusStub = new StubLlmProvider(SampleExercise());
-        await Service(focusStub).CreatePracticeAsync(CreateRequest(focusOnWeaknesses: true));
-
-        var focus = focusStub.LastGenerationRequest!.FocusCategories;
-        Assert.NotNull(focus);
-        Assert.Equal(ErrorCategory.WordChoice, focus![0]); // mais frequente primeiro
-    }
-
-    [Fact]
-    public async Task CreatePracticeAsync_without_focus_passes_no_categories()
-    {
-        var stub = new StubLlmProvider(SampleExercise());
-        await Service(stub).CreatePracticeAsync(CreateRequest(focusOnWeaknesses: false));
-
-        Assert.Null(stub.LastGenerationRequest!.FocusCategories);
-    }
-
-    [Fact]
     public async Task CreatePracticeAsync_always_rolls_the_text_variety()
     {
-        // Sem foco, o resto do prompt é idêntico em toda geração — a variedade
-        // sorteada é a única coisa que impede o modelo de devolver sempre o mesmo texto.
+        // Com os mesmos parâmetros, só a variedade sorteada muda o prompt — é a única
+        // coisa que impede o modelo de devolver sempre o mesmo texto.
         var stub = new StubLlmProvider(SampleExercise());
-        await Service(stub).CreatePracticeAsync(CreateRequest(focusOnWeaknesses: false));
+        await Service(stub).CreatePracticeAsync(CreateRequest());
 
         var variety = stub.LastGenerationRequest!.Variety;
         Assert.NotNull(variety);
@@ -151,13 +124,17 @@ public sealed class PracticeServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CreatePracticeAsync_with_focus_but_no_history_passes_no_categories()
+    public async Task CreatePracticeAsync_passes_the_request_through_to_generation()
     {
-        // Foco pedido, mas sem histórico ainda → nada pra mirar.
+        // Origem e alvo são do mesmo tipo e vêm lado a lado: invertidos, a IA geraria no
+        // idioma errado e a prática continuaria gravada certa.
         var stub = new StubLlmProvider(SampleExercise());
-        await Service(stub).CreatePracticeAsync(CreateRequest(focusOnWeaknesses: true));
+        await Service(stub).CreatePracticeAsync(CreateRequest());
 
-        Assert.Null(stub.LastGenerationRequest!.FocusCategories);
+        var sent = stub.LastGenerationRequest!;
+        Assert.Equal(
+            new ExerciseGenerationRequest(Language.Portuguese, Language.English, 60, CefrLevel.B1, "cotidiano", sent.Variety),
+            sent);
     }
 
     [Fact]
@@ -473,7 +450,7 @@ public sealed class PracticeServiceTests : IDisposable
 
     /// <summary>
     /// Excluiu porque o texto não servia: os erros dele não podem continuar pesando
-    /// no perfil — que é o que direciona a próxima geração.
+    /// no perfil nem aparecendo na revisão da categoria.
     /// </summary>
     [Fact]
     public async Task A_deleted_practice_leaves_the_profile_and_the_category_review()

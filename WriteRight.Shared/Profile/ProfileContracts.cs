@@ -42,9 +42,9 @@ public sealed record SeverityCounts(int BreaksMeaning, int Understandable, int P
 /// <summary>
 /// Uma categoria no perfil de fraquezas. <see cref="Count"/> é o volume bruto
 /// (quantas vezes o erro apareceu); <see cref="Score"/> é o peso por severidade
-/// (Quebra o sentido ×3, Compreensível ×2, Lapidação ×1). A ordenação e a
-/// prioridade de estudo usam o <b>Score</b> — o que atrapalha vem antes do que é
-/// só frequente. O <see cref="Count"/> fica visível pra dar a noção de volume, e
+/// (Quebra o sentido ×3, Compreensível ×2, Lapidação ×1). A ordenação usa o
+/// <b>Score</b> — o que atrapalha vem antes do que é só frequente. O
+/// <see cref="Count"/> fica visível pra dar a noção de volume, e
 /// <see cref="BySeverity"/> mostra de onde o peso veio.
 /// </summary>
 public sealed record CategoryWeight(ErrorCategory Category, int Count, int Score, SeverityCounts BySeverity);
@@ -78,10 +78,9 @@ public sealed record PracticePoint(
 
 /// <summary>
 /// Perfil de fraquezas do usuário — duas visões do mesmo dado, ponderadas por
-/// severidade: <see cref="Lifetime"/> (todo o histórico; é o insumo do gerador
-/// adaptativo) e <see cref="Recent"/> (as últimas práticas, onde ele vaza agora) —
-/// mais a <see cref="Timeline"/>, uma linha por prática concluída, da mais antiga
-/// pra mais nova.
+/// severidade: <see cref="Lifetime"/> (todo o histórico) e <see cref="Recent"/> (as
+/// últimas práticas, onde ele vaza agora) — mais a <see cref="Timeline"/>, uma linha
+/// por prática concluída, da mais antiga pra mais nova.
 /// </summary>
 public sealed record ErrorProfile(
     ProfileView Lifetime,

@@ -5,9 +5,9 @@ using WriteRight.Shared.Taxonomy;
 namespace WriteRight.Api.Data;
 
 /// <summary>
-/// Um card de vocabulário, cunhado a partir de um erro real do usuário. Existe porque o
-/// loop adaptativo por CATEGORIA não alcança vocabulário: regra generaliza, item léxico
-/// não — e erro de vocabulário quase nunca se repete sozinho.
+/// Um card de vocabulário, cunhado a partir de um erro real do usuário. Existe porque
+/// CATEGORIA não alcança vocabulário: regra generaliza, item léxico não — e erro de
+/// vocabulário quase nunca se repete sozinho.
 ///
 /// <b>O conteúdo é COPIADO, não referenciado.</b> O card não é um espelho do erro: a
 /// reincidência reescreve o conteúdo inteiro com o fracasso mais recente, e lacuna,
