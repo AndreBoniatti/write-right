@@ -1,63 +1,421 @@
-.summary {
-    background: var(--wr-surface-2);
+/* Nova prática — um card só, com o caso comum a um clique: a tela abre com a
+   configuração da última prática, e cada escolha é um botão, não um dropdown.
+   Em tela larga, as escolhas à esquerda e, à direita, de onde pra onde + o botão;
+   assim o card cabe na altura de um notebook (1366×768) sem rolar a página. */
+
+.np {
+    --np-route-gap: 1.1rem;
+    max-width: 600px;
+    background: var(--wr-surface);
     border: 1px solid var(--wr-border);
     border-radius: var(--wr-radius);
-    padding: 1.35rem 1.4rem;
+    box-shadow: var(--wr-shadow-sm);
+    overflow: hidden;
 }
 
-.summary-eyebrow {
+.np--busy .np-body,
+.np--busy .np-dir {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity .2s ease;
+}
+
+/* ── Escolhas ───────────────────────────────────────────── */
+
+.np-body {
+    display: grid;
+    align-content: start;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    min-width: 0;
+}
+
+.np-field {
+    display: grid;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.np-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.np-name,
+.np-head label {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--wr-text-muted);
+}
+
+.np-head em {
+    font-style: normal;
+    font-weight: 500;
+    opacity: 0.75;
+}
+
+.np-readout {
+    font-size: 0.9rem;
+    font-weight: 650;
+    color: var(--wr-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.np-readout b {
+    color: var(--wr-primary);
+    font-weight: 700;
+}
+
+/* Nível: seis botões no lugar do dropdown */
+.np-levels {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+}
+
+.np-level {
+    height: 40px;
+    border-radius: var(--wr-radius-sm);
+    border: 1px solid var(--wr-border);
+    background: var(--wr-surface-2);
+    color: var(--wr-text-muted);
+    font: inherit;
+    font-weight: 650;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+
+.np-level:hover {
+    color: var(--wr-text);
+    border-color: var(--wr-primary);
+}
+
+.np-level[aria-pressed="true"] {
+    background: var(--wr-primary-soft);
+    color: var(--wr-primary);
+    border-color: var(--wr-primary);
+    box-shadow: 0 0 0 3px var(--wr-primary-soft);
+}
+
+/* Tamanho: régua com um entalhe por tamanho. O polegar tem 22px, então o centro
+   dele anda de 11px até a largura − 11px. A trilha pintada e os entalhes seguem
+   essa mesma conta, senão desalinham. */
+.np-ruler {
+    padding-top: 4px;
+}
+
+.np-ruler input {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 22px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.np-ruler input:focus-visible {
+    outline: 2px solid var(--wr-primary);
+    outline-offset: 4px;
+    border-radius: 999px;
+}
+
+.np-ruler input::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(to right,
+        var(--wr-primary) calc(11px + (100% - 22px) * var(--np-fill)),
+        var(--wr-surface-2) 0);
+}
+
+.np-ruler input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    box-sizing: border-box;
+    width: 22px;
+    height: 22px;
+    margin-top: -8px;
+    border-radius: 50%;
+    background: var(--wr-surface);
+    border: 2px solid var(--wr-primary);
+    box-shadow: 0 2px 8px rgba(106, 92, 255, 0.30);
+}
+
+.np-ruler input::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--wr-surface-2);
+}
+
+.np-ruler input::-moz-range-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--wr-primary);
+}
+
+.np-ruler input::-moz-range-thumb {
+    box-sizing: border-box;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--wr-surface);
+    border: 2px solid var(--wr-primary);
+    box-shadow: 0 2px 8px rgba(106, 92, 255, 0.30);
+}
+
+.np-ticks {
+    position: relative;
+    height: 1.25rem;
+    margin-top: 6px;
+}
+
+.np-ticks span {
+    position: absolute;
+    top: 0;
+    left: calc(11px + (100% - 22px) * var(--at));
+    width: 4px;
+    height: 4px;
+    margin-left: -2px;
+    border-radius: 50%;
+    background: var(--wr-border);
+}
+
+.np-ticks span.on {
+    background: color-mix(in srgb, var(--wr-primary) 55%, transparent);
+}
+
+.np-ticks i {
+    position: absolute;
+    top: 9px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-style: normal;
     font-size: 0.7rem;
+    line-height: 1;
+    color: var(--wr-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Nas pontas o número encosta pra dentro, sem passar da trilha. */
+.np-ticks span:first-child i {
+    left: 0;
+    transform: none;
+}
+
+.np-ticks span:last-child i {
+    left: auto;
+    right: 0;
+    transform: none;
+}
+
+/* Tema: uma linha de chips. Em tela estreita ela rola de lado em vez de quebrar.
+   O respiro de 3px é pro anel do campo "Outro…": o overflow cortaria ele. */
+.np-chips {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 3px;
+    margin: -3px;
+}
+
+.np-chips::-webkit-scrollbar {
+    display: none;
+}
+
+.np-chip {
+    flex: 0 0 auto;
+    padding: 0.38rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid var(--wr-border);
+    background: var(--wr-surface);
+    color: var(--wr-text-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 550;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+
+.np-chip:hover {
+    color: var(--wr-text);
+    border-color: var(--wr-primary);
+}
+
+.np-chip[aria-pressed="true"] {
+    background: var(--wr-primary-soft);
+    color: var(--wr-primary);
+    border-color: var(--wr-primary);
+}
+
+.np-chip--input {
+    flex: 1 1 8rem;
+    min-width: 8rem;
+    color: var(--wr-text);
+    border-color: var(--wr-primary);
+    box-shadow: 0 0 0 3px var(--wr-primary-soft);
+    outline: none;
+    cursor: text;
+}
+
+.np-chip--input::placeholder {
+    color: var(--wr-text-muted);
+    opacity: 0.7;
+}
+
+/* ── De onde pra onde + o botão ─────────────────────────── */
+
+.np-side {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 1.35rem;
+    padding: 1.5rem;
+    border-top: 1px solid var(--wr-border);
+    background: radial-gradient(130% 90% at 100% 0%, var(--wr-primary-soft), transparent 70%);
+}
+
+/* Origem e destino como num app de mapa: bolinha vazia, pontilhado, bolinha
+   cheia — e o inverter ao lado. */
+.np-dir {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.np-route {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: var(--np-route-gap);
+}
+
+.np-lang {
+    position: relative;
+    display: grid;
+    gap: 0.1rem;
+    padding-left: 1.5rem;
+}
+
+.np-lang::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 3px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--wr-primary);
+    background: var(--wr-surface);
+}
+
+.np-lang--to::before {
+    background: var(--wr-primary);
+}
+
+/* O pontilhado sai de baixo da primeira bolinha e para 2px antes da segunda. */
+.np-lang:first-child::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 15px;
+    bottom: calc(-1 * var(--np-route-gap) - 1px);
+    border-left: 2px dotted color-mix(in srgb, var(--wr-primary) 45%, transparent);
+}
+
+.np-lang small {
+    font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--wr-text-muted);
-    margin-bottom: 0.55rem;
 }
 
-.summary-lead {
-    font-size: 1.05rem;
-    line-height: 1.5;
+.np-lang strong {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     color: var(--wr-text);
-    margin-bottom: 0.6rem;
 }
 
-.summary-lead strong {
+/* O ícone é ⇄; deitado na rota vertical, vira ⇅. */
+.np-swap {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--wr-border);
+    background: var(--wr-surface);
     color: var(--wr-primary);
+    box-shadow: var(--wr-shadow-sm);
+    cursor: pointer;
+    transform: rotate(90deg);
+    transition: transform .35s cubic-bezier(.3, .7, .3, 1), border-color .15s ease;
+}
+
+.np-swap:hover {
+    border-color: var(--wr-primary);
+}
+
+.np-swap--turned {
+    transform: rotate(270deg);
+}
+
+.np-cta {
+    width: 100%;
+    height: 48px;
+    justify-content: center;
+    border-radius: 11px;
+    font-size: 1rem;
     font-weight: 650;
 }
 
-.summary-line {
-    color: var(--wr-text-muted);
-    margin-bottom: 0.35rem;
-    font-size: 0.92rem;
+.np-cta ::deep .wr-icon {
+    transition: transform .2s ease;
 }
 
-.summary-line strong {
-    color: var(--wr-text);
-    font-weight: 600;
+.np-cta:hover ::deep .wr-icon {
+    transform: translateX(3px);
 }
 
-.summary-hr {
-    border: 0;
-    border-top: 1px solid var(--wr-border);
-    opacity: 1;
-    margin: 1.15rem 0;
+/* Duas colunas a partir de onde as escolhas ainda cabem numa linha só ao lado
+   do painel (chips + o campo "Outro…"). */
+@media (min-width: 1200px) {
+    .np {
+        max-width: 940px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 290px;
+    }
+
+    .np-side {
+        border-top: 0;
+        border-left: 1px solid var(--wr-border);
+    }
 }
 
-.summary-steps {
-    margin: 0;
-    padding-left: 1.15rem;
-    color: var(--wr-text-muted);
-    font-size: 0.9rem;
-    line-height: 1.5;
+@media (max-width: 640.98px) {
+    .np-body,
+    .np-side {
+        padding: 1.1rem 1rem;
+    }
+
+    .np-levels {
+        gap: 4px;
+    }
 }
 
-.summary-steps li {
-    margin-bottom: 0.4rem;
-    padding-left: 0.2rem;
-}
-
-.summary-steps li::marker {
-    color: var(--wr-primary);
-    font-weight: 700;
+@media (prefers-reduced-motion: reduce) {
+    .np-swap,
+    .np-cta ::deep .wr-icon {
+        transition: none;
+    }
 }

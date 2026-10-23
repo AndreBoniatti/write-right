@@ -16,11 +16,11 @@ public sealed record CreatePracticeRequest(
 
 /// <summary>
 /// Tamanho aceito pro texto gerado, em palavras. No Shared porque a tela e o servidor
-/// aplicam a mesma régua: o <c>min</c>/<c>max</c> do campo não impede digitar 2000, e
-/// o servidor é quem recusa antes da chamada paga. Muito acima do teto, a resposta da
-/// geração estoura o limite de saída e chega cortada — cobrada e inútil. O piso é baixo
-/// de propósito: texto curto é barato, e há práticas reais de 8 palavras; ele só recusa
-/// pedido sem sentido.
+/// aplicam a mesma régua: as pontas da régua de tamanho da tela são estes limites, e o
+/// servidor, que não confia no cliente, recusa o que passar deles antes da chamada
+/// paga. Muito acima do teto, a resposta da geração estoura o limite de saída e chega
+/// cortada — cobrada e inútil. O piso é baixo de propósito: texto curto é barato, e há
+/// práticas reais de 8 palavras; ele só recusa pedido sem sentido.
 /// </summary>
 public static class PracticeLimits
 {

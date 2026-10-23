@@ -1,6 +1,10 @@
 @page "/practice/new"
+@using System.Globalization
+@using System.Text.Json
+@using System.Text.Json.Serialization
 @inject WriteRightApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>WriteRight — Nova prática</PageTitle>
 
@@ -14,127 +18,204 @@
     <div class="alert alert-danger">@error</div>
 }
 
-<div class="row g-4 align-items-stretch" style="max-width: 1040px;">
-    <div class="col-lg-7">
-        <div class="card p-3 h-100">
-            <div class="row g-3">
-                <div class="col-6">
-                    <label class="form-label">Traduzir de</label>
-                    <select class="form-select" @bind="Source">
-                        @foreach (var l in Enum.GetValues<Language>())
-                        {
-                            <option value="@l">@Ui.LanguageName(l)</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-6">
-                    <label class="form-label">para</label>
-                    <select class="form-select" @bind="Target">
-                        @foreach (var l in Enum.GetValues<Language>())
-                        {
-                            <option value="@l">@Ui.LanguageName(l)</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-6">
-                    <label class="form-label">Nº de palavras</label>
-                    <input type="number" class="form-control @(WordCountOk ? "" : "is-invalid")" @bind="wordCount" @bind:event="oninput"
-                           min="@PracticeLimits.MinWords" max="@PracticeLimits.MaxWords" />
-                    @if (!WordCountOk)
+<div class="np @(loading ? "np--busy" : "")">
+    <div class="np-body">
+        <div class="np-field" role="group" aria-labelledby="np-level">
+            <div class="np-head">
+                <span id="np-level" class="np-name">Nível</span>
+                <span class="np-readout"><b>@level</b> · @CefrLevels.Label(level)</span>
+            </div>
+            <div class="np-levels">
+                @foreach (var lv in Enum.GetValues<CefrLevel>())
+                {
+                    <button type="button" class="np-level" aria-pressed="@(lv == level ? "true" : "false")"
+                            title="@CefrLevels.Label(lv)" @onclick="() => level = lv">@lv</button>
+                }
+            </div>
+        </div>
+
+        <div class="np-field">
+            <div class="np-head">
+                <label for="np-size">Tamanho</label>
+                <span class="np-readout"><b>@Sizes[sizeIndex]</b> palavras</span>
+            </div>
+            <div class="np-ruler" style="--np-fill: @Fill">
+                <input id="np-size" type="range" min="0" max="@(Sizes.Length - 1)" step="1"
+                       @bind="sizeIndex" @bind:event="oninput" aria-valuetext="@($"{Sizes[sizeIndex]} palavras")" />
+                <div class="np-ticks" aria-hidden="true">
+                    @for (var i = 0; i < Sizes.Length; i++)
                     {
-                        <div class="invalid-feedback">Entre @PracticeLimits.MinWords e @PracticeLimits.MaxWords palavras.</div>
+                        <span class="@(i <= sizeIndex ? "on" : "")" style="--at: @At(i)">
+                            @if (Labelled.Contains(Sizes[i]))
+                            {
+                                <i>@Sizes[i]</i>
+                            }
+                        </span>
                     }
                 </div>
-                <div class="col-6">
-                    <label class="form-label">Nível (CEFR)</label>
-                    <select class="form-select" @bind="level">
-                        @foreach (var lv in Enum.GetValues<CefrLevel>())
-                        {
-                            <option value="@lv">@CefrLevels.Display(lv)</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-12">
-                    <label class="form-label">Tema (opcional)</label>
-                    <input class="form-control" @bind="theme" @bind:event="oninput" placeholder="ex.: viagem, trabalho, comida…" />
-                </div>
             </div>
-            <div class="mt-auto pt-3">
-                <button class="btn btn-primary" @onclick="Create" disabled="@(loading || !WordCountOk)">
-                    @if (loading) { <span class="wr-spinner" aria-hidden="true"></span> }
-                    @(loading ? "Gerando…" : "Gerar e começar")
-                </button>
-                <a class="btn btn-outline-secondary ms-2" href="">Cancelar</a>
+        </div>
+
+        <div class="np-field" role="group" aria-labelledby="np-theme">
+            <div class="np-head">
+                <span id="np-theme" class="np-name">Tema <em>· opcional</em></span>
+            </div>
+            <div class="np-chips">
+                <button type="button" class="np-chip" aria-pressed="@(themeChoice is null ? "true" : "false")"
+                        @onclick="() => themeChoice = null">Livre</button>
+                @foreach (var t in Themes)
+                {
+                    <button type="button" class="np-chip" aria-pressed="@(themeChoice == t ? "true" : "false")"
+                            @onclick="() => themeChoice = t">@t</button>
+                }
+                @* O campo ocupa o lugar do chip, na mesma linha, pra altura do card não mudar. *@
+                @if (themeChoice == Other)
+                {
+                    <input @ref="otherInput" class="np-chip np-chip--input" @bind="customTheme" @bind:event="oninput"
+                           placeholder="Escreva o tema" aria-label="Tema" />
+                }
+                else
+                {
+                    <button type="button" class="np-chip" aria-pressed="false" @onclick="ChooseOther">Outro…</button>
+                }
             </div>
         </div>
     </div>
 
-    <div class="col-lg-5">
-        <div class="summary h-100">
-            <div class="summary-eyebrow">O que você vai fazer</div>
-            <p class="summary-lead">
-                Traduzir um texto em <strong>@Ui.LanguageName(source)</strong>
-                (~@wordCount palavras, nível <strong>@CefrLevels.Display(level)</strong>)
-                para <strong>@Ui.LanguageName(target)</strong>.
-            </p>
-
-            @if (!string.IsNullOrWhiteSpace(theme))
-            {
-                <p class="summary-line">Tema: <strong>@theme</strong></p>
-            }
-
-            <hr class="summary-hr" />
-
-            <div class="summary-eyebrow">Como funciona</div>
-            <ol class="summary-steps">
-                <li>A IA gera o texto no idioma de origem.</li>
-                <li>Você escreve a tradução.</li>
-                <li>A correção classifica cada erro por categoria.</li>
-                <li>Os erros viram seu perfil, e os de vocabulário viram cards pra revisar.</li>
-            </ol>
+    @* De onde pra onde e o botão: o fim da leitura, como o resumo de um checkout. *@
+    <div class="np-side">
+        <div class="np-dir">
+            <div class="np-route">
+                <div class="np-lang">
+                    <small>Traduzir de</small>
+                    <strong>@Ui.LanguageName(source)</strong>
+                </div>
+                <div class="np-lang np-lang--to">
+                    <small>para</small>
+                    <strong>@Ui.LanguageName(target)</strong>
+                </div>
+            </div>
+            <button type="button" class="np-swap @(swapped ? "np-swap--turned" : "")" @onclick="Swap"
+                    title="Inverter idiomas" aria-label="Inverter idiomas">
+                <Icon Name="swap" Size="18" />
+            </button>
         </div>
+
+        <button class="btn btn-primary np-cta" @onclick="Create" disabled="@loading">
+            @if (loading)
+            {
+                <span class="wr-spinner" aria-hidden="true"></span>
+                <span>Gerando texto…</span>
+            }
+            else
+            {
+                <span>Gerar texto e começar</span>
+                <Icon Name="arrow-right" Size="18" />
+            }
+        </button>
     </div>
 </div>
 
 @code {
-    private Language source = Language.Portuguese;
-    private Language target = Language.English;
+    /// <summary>
+    /// Os entalhes da régua de tamanho. Mais juntos nos textos curtos, onde se pratica
+    /// de verdade; as pontas são a régua do servidor, então a tela não tem como pedir
+    /// um tamanho que ele recusaria.
+    /// </summary>
+    private static readonly int[] Sizes =
+        [PracticeLimits.MinWords, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 120, 150, PracticeLimits.MaxWords];
 
-    // Origem e alvo nunca podem ser iguais. Se você escolher um idioma que bate
-    // com o do outro campo, eles trocam (swap) — igual ao Google Tradutor.
-    private Language Source
-    {
-        get => source;
-        set
-        {
-            if (value == target) target = source;
-            source = value;
-        }
-    }
+    private static readonly int[] Labelled = [PracticeLimits.MinWords, 30, 60, 100, PracticeLimits.MaxWords];
 
-    private Language Target
-    {
-        get => target;
-        set
-        {
-            if (value == source) source = target;
-            target = value;
-        }
-    }
+    private static readonly string[] Themes = ["Viagem", "Trabalho", "Comida", "Saúde"];
 
-    private int wordCount = 60;
+    private const string Other = "";
 
     /// <summary>
-    /// A mesma régua do servidor. O <c>min</c>/<c>max</c> do campo não impede digitar
-    /// 2000 — sem isto o botão mandaria o pedido e voltaria um 400 sem explicação.
+    /// A configuração da última prática, no navegador. A tela abre com ela marcada porque
+    /// nível e tamanho quase sempre se repetem de uma prática pra outra. O tema não entra:
+    /// é o que se varia.
     /// </summary>
-    private bool WordCountOk => wordCount is >= PracticeLimits.MinWords and <= PracticeLimits.MaxWords;
+    private const string LastKey = "wr-last-practice";
 
+    private sealed record LastSettings(Language Source, Language Target, CefrLevel Level, int WordCount);
+
+    /// <summary>Enum como texto, como no banco e na API: número muda de sentido se a ordem do enum mudar.</summary>
+    private static readonly JsonSerializerOptions StorageJson = new() { Converters = { new JsonStringEnumConverter() } };
+
+    private Language source = Language.Portuguese;
+    private Language target = Language.English;
+    private bool swapped;
     private CefrLevel level = CefrLevel.B1;
-    private string? theme;
+    private int sizeIndex = SizeIndexFor(60);
+
+    /// <summary><c>null</c> = livre; <see cref="Other"/> = o campo de texto.</summary>
+    private string? themeChoice;
+    private string? customTheme;
+    private ElementReference otherInput;
+    private bool focusOther;
 
     private bool loading;
     private string? error;
+
+    /// <summary>Onde o entalhe <paramref name="i"/> fica na régua (0–1), pro CSS.</summary>
+    private static string At(int i) => ((double)i / (Sizes.Length - 1)).ToString("0.####", CultureInfo.InvariantCulture);
+
+    private string Fill => At(sizeIndex);
+
+    /// <summary>O entalhe de <paramref name="words"/> ou, se ele não existir, o mais próximo de cima.</summary>
+    private static int SizeIndexFor(int words)
+    {
+        var i = Array.FindIndex(Sizes, s => s >= words);
+        return i < 0 ? Sizes.Length - 1 : i;
+    }
+
+    private string? Theme => themeChoice == Other
+        ? (string.IsNullOrWhiteSpace(customTheme) ? null : customTheme.Trim())
+        : themeChoice;
+
+    // Leitura síncrona (só existe no WASM): com await, o primeiro render sairia com o
+    // padrão e trocaria pela configuração salva logo depois.
+    protected override void OnInitialized()
+    {
+        try
+        {
+            var json = ((IJSInProcessRuntime)JS).Invoke<string?>("localStorage.getItem", LastKey);
+            if (json is null) return;
+
+            var last = JsonSerializer.Deserialize<LastSettings>(json, StorageJson);
+            if (last is null || last.Source == last.Target
+                || !Enum.IsDefined(last.Source) || !Enum.IsDefined(last.Target) || !Enum.IsDefined(last.Level))
+                return;
+
+            (source, target, level) = (last.Source, last.Target, last.Level);
+            sizeIndex = SizeIndexFor(last.WordCount);
+        }
+        catch
+        {
+            // Sem localStorage ou valor ilegível: fica o padrão.
+        }
+    }
+
+    private void Swap()
+    {
+        (source, target) = (target, source);
+        swapped = !swapped;
+    }
+
+    // O campo só existe depois do render; o foco vai pra ele no OnAfterRenderAsync.
+    private void ChooseOther()
+    {
+        themeChoice = Other;
+        focusOther = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!focusOther) return;
+        focusOther = false;
+        await otherInput.FocusAsync();
+    }
 
     private async Task Create()
     {
@@ -142,11 +223,9 @@
         error = null;
         try
         {
-            var req = new CreatePracticeRequest(
-                source, target, wordCount, level,
-                string.IsNullOrWhiteSpace(theme) ? null : theme);
-
+            var req = new CreatePracticeRequest(source, target, Sizes[sizeIndex], level, Theme);
             var detail = await Api.CreatePracticeAsync(req);
+            await Remember(req);
             Nav.NavigateTo($"practice/{detail.Id}");
         }
         catch (Exception ex)
@@ -156,6 +235,20 @@
                 ? $"Não deu pra gerar o texto. {Ui.ErrorMessage(ex)} A chave da Anthropic foi configurada (user-secrets)?"
                 : $"Não deu pra gerar o texto. {Ui.ErrorMessage(ex)}";
             loading = false;
+        }
+    }
+
+    private async Task Remember(CreatePracticeRequest req)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(
+                new LastSettings(req.SourceLanguage, req.TargetLanguage, req.Level, req.WordCount), StorageJson);
+            await JS.InvokeVoidAsync("localStorage.setItem", LastKey, json);
+        }
+        catch
+        {
+            // Não lembrar não impede a prática.
         }
     }
 }

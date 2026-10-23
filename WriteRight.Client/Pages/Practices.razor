@@ -21,8 +21,15 @@
 }
 else if (practices.Count == 0)
 {
-    <div class="alert alert-info">
-        Nenhuma prática ainda. Clique em <strong>Nova prática</strong> pra começar!
+    @* O passo a passo só serve a quem nunca praticou, então mora no estado vazio. *@
+    <div class="wr-empty">
+        <strong>Nenhuma prática ainda. Clique em Nova prática pra começar.</strong>
+        <ol class="wr-empty__steps">
+            <li>A IA gera um texto no idioma de origem.</li>
+            <li>Você escreve a tradução.</li>
+            <li>A correção classifica cada erro por categoria.</li>
+            <li>Os erros viram seu perfil, e os de vocabulário viram cards pra revisar.</li>
+        </ol>
     </div>
 }
 else

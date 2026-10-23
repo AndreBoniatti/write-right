@@ -149,7 +149,7 @@ public sealed class PracticeServiceTests : IDisposable
     }
 
     /// <summary>
-    /// O min/max do campo não impede digitar 2000. A recusa vem ANTES da chamada:
+    /// A tela não pede fora da régua, mas a API não confia no cliente. A recusa vem ANTES da chamada:
     /// muito acima do teto, a geração estoura o limite de saída e volta cortada — paga
     /// e inútil. Nem chamada, nem gasto registrado.
     /// </summary>
