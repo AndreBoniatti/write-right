@@ -93,6 +93,10 @@ public sealed record DeckSummary(
     int FailedPractices);
 
 /// <summary>Card na listagem do deck — aqui a resposta aparece: é tela de leitura, não de teste.</summary>
+/// <param name="InTodaysQueue">
+/// Se a sessão de hoje entrega este card — a mesma fila de <see cref="DeckSummary.Due"/>.
+/// Vencido não basta: o irmão de uma frase que já teve card hoje espera o dia seguinte.
+/// </param>
 public sealed record DeckCard(
     int Id,
     string Prompt,
@@ -106,7 +110,8 @@ public sealed record DeckCard(
     double IntervalDays,
     int Reps,
     int Lapses,
-    bool IsLeech);
+    bool IsLeech,
+    bool InTodaysQueue);
 
 /// <summary>A listagem completa: contadores + os cards.</summary>
 public sealed record DeckView(DeckSummary Summary, IReadOnlyList<DeckCard> Cards);

@@ -549,6 +549,35 @@ public sealed class CardServiceTests : IDisposable
     }
 
     /// <summary>
+    /// O deck marca a fila de hoje com a MESMA regra da sessão. Sem isto ele chamava
+    /// de "hoje" todo card vencido — inclusive os irmãos que esperam a vez da frase —
+    /// e a lista prometia mais do que a sessão entrega.
+    /// </summary>
+    [Fact]
+    public async Task The_deck_marks_exactly_the_cards_in_todays_queue()
+    {
+        await SeedAndMintAsync(
+            "Marina arrived at the train station earlier than expected, so she decided to have a coffee at the bar.",
+            (ErrorCategory.LiteralTranslation, "early of expected", "earlier than expected", "mais cedo do que o previsto"),
+            (ErrorCategory.WordChoice, "then she decided", "so she decided", "então decidiu"),
+            (ErrorCategory.Collocation, "drink a coffee", "have a coffee", "tomar um café"));
+
+        var service = Service(out var ctx);
+        await using (ctx)
+        {
+            var queued = Assert.Single(await service.GetDueAsync());
+            var deck = await service.GetDeckAsync();
+
+            Assert.Equal(3, deck.Cards.Count);
+            Assert.Equal(queued.Id, Assert.Single(deck.Cards, c => c.InTodaysQueue).Id);
+
+            // Revisado o card da frase, os irmãos continuam vencidos, mas nenhum é de hoje.
+            await service.ReviewAsync(queued.Id, new CardReviewRequest("x", WasCorrect: true, CardRating.Easy));
+            Assert.DoesNotContain((await service.GetDeckAsync()).Cards, c => c.InTodaysQueue);
+        }
+    }
+
+    /// <summary>
     /// O resumo sozinho (o que o selo relê enquanto os cards estão sendo feitos) é o
     /// MESMO da tela do deck. Divergir faria o menu e o deck mostrarem números
     /// diferentes pro mesmo estado.

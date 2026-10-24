@@ -1,170 +1,329 @@
-/* Sessão de revisão — um card por vez, centralizado e estreito. A largura curta
-   é deliberada: a frente do card é uma frase que precisa ser lida inteira de um
-   golpe, e linha longa força varredura. */
+/* Sessão de revisão — um card por vez. A largura curta é deliberada: a frente do
+   card é uma frase que precisa ser lida inteira de um golpe, e linha longa força
+   varredura. Conferir não estica o card: a resposta entra na lacuna e a faixa do
+   veredito ocupa o lugar do campo, então a sessão cabe numa tela de notebook. */
 
-.wr-session {
-    max-width: 640px;
-    margin: 0 auto;
+.rv,
+.rv-done {
+    max-width: 760px;
+    background: var(--wr-surface);
+    border: 1px solid var(--wr-border);
+    border-radius: var(--wr-radius);
+    box-shadow: var(--wr-shadow-sm);
 }
 
-.wr-session__meter {
+/* ── Progresso ──────────────────────────────────────────── */
+
+.rv-progress {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.75rem;
-    font-size: 0.85rem;
+    gap: 0.9rem;
+    padding: 1rem 1.5rem 0;
+}
+
+.rv-bar {
+    flex: 1;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--wr-surface-2);
+    overflow: hidden;
+}
+
+.rv-bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--wr-primary);
+    transition: width .3s ease;
+}
+
+.rv-count {
+    font-size: 0.8rem;
     color: var(--wr-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
-.wr-session__last {
-    margin-top: 1rem;
-    font-size: 0.85rem;
-    text-align: center;
+/* ── A frase ────────────────────────────────────────────── */
+
+.rv-body {
+    display: grid;
+    gap: 1.25rem;
+    padding: 1.4rem 1.5rem 1.5rem;
 }
 
-.wr-card .card-body {
-    padding: 1.75rem;
-}
-
-/* A frase com a lacuna: maior que o corpo do texto porque é o objeto da tela,
-   não um detalhe dela. */
-.wr-card__prompt {
-    font-size: 1.2rem;
-    line-height: 1.9; /* folga pro contorno da lacuna não encostar na linha de cima */
-    margin-bottom: 1.25rem;
+/* Maior que o corpo do texto porque é o objeto da tela, não um detalhe dela. */
+.rv-sentence {
+    margin: 0;
+    font-size: 1.32rem;
+    line-height: 1.85; /* folga pro contorno da lacuna não encostar na linha de cima */
+    letter-spacing: -0.005em;
+    text-wrap: pretty;
 }
 
 /* A lacuna, com a dica no idioma de origem dentro dela. O contorno tracejado diz
    "espaço a preencher" e o itálico diz "isto não é o inglês da frase, é o que
    você tem que produzir" — as duas coisas sem precisar de legenda. */
-.wr-card__slot {
+.rv-slot {
     display: inline-block;
-    padding: 0.02em 0.5em;
-    margin: 0 0.1em;
+    padding: 0 0.5em;
+    margin: 0 0.08em;
     border: 1px dashed var(--wr-primary);
     border-radius: var(--wr-radius-sm);
     background: var(--wr-primary-soft);
     color: var(--wr-primary);
     font-style: italic;
     font-size: 0.92em;
-    line-height: 1.5;
+    line-height: 1.55;
 }
 
-.wr-card__input {
+/* Preenchida com a resposta: contorno cheio e texto reto — agora é inglês. */
+.rv-slot--filled {
+    border-style: solid;
+    font-style: normal;
+    font-weight: 650;
+}
+
+.rv-slot--ok {
+    border-color: var(--wr-success);
+    background: var(--wr-success-soft);
+    color: var(--wr-success);
+}
+
+.rv-slot--near {
+    border-color: var(--wr-warning);
+    background: var(--wr-warning-soft);
+    color: var(--wr-warning);
+}
+
+/* ── Resposta ───────────────────────────────────────────── */
+
+.rv-answer {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.rv-answer .form-control {
+    flex: 1;
+    min-width: 0;
     font-size: 1.05rem;
     padding: 0.7rem 0.9rem;
 }
 
-.wr-card__result {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    margin-top: 0.5rem;
+.rv-answer .btn {
+    min-width: 7.5rem;
+    justify-content: center;
 }
 
-/* O veredito: uma linha, sempre presente, antes das caixas. "Acertei?" é a
-   primeira pergunta de quem revela um card, e a resposta não pode depender de
-   interpretar a cor de fundo de uma caixa. */
-.wr-card__verdict {
+/* ── Faixa do veredito ──────────────────────────────────── */
+
+.rv-band {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.wr-card__verdict--ok { color: var(--wr-success); }
-.wr-card__verdict--bad { color: var(--wr-danger); }
-.wr-card__verdict--near { color: var(--wr-warning); }
-
-.wr-result {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    padding: 0.7rem 0.9rem;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.9rem 1.25rem;
+    padding: 0.85rem 1rem;
     border-radius: var(--wr-radius-sm);
 }
 
-.wr-result--ok { background: var(--wr-success-soft); }
-.wr-result--bad { background: var(--wr-danger-soft); }
+/* Recebe o foco depois de conferir só pra levar o teclado e o leitor de tela até
+   ela; não é controle, então não ganha anel. */
+.rv-band:focus { outline: none; }
 
-.wr-result__label {
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    opacity: 0.85;
+.rv-band--ok { background: var(--wr-success-soft); }
+.rv-band--bad { background: var(--wr-danger-soft); }
+.rv-band--near { background: var(--wr-warning-soft); }
+
+.rv-verdict {
+    display: grid;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1 1 16rem;
 }
 
-.wr-result--ok .wr-result__label { color: var(--wr-success); }
-.wr-result--bad .wr-result__label { color: var(--wr-danger); }
-
-.wr-result__text {
-    font-size: 1.05rem;
-    font-weight: 550;
+.rv-verdict strong {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 1rem;
+    font-weight: 650;
 }
 
-/* As outras respostas aceitas: na mesma caixa (são certas também), mas abaixo e
-   menores — a resposta do card continua sendo a primeira coisa que se lê. */
-.wr-result__also {
-    font-size: 0.82rem;
-    opacity: 0.8;
-}
+.rv-band--ok .rv-verdict strong { color: var(--wr-success); }
+.rv-band--bad .rv-verdict strong { color: var(--wr-danger); }
+.rv-band--near .rv-verdict strong { color: var(--wr-warning); }
 
-/* A origem: a única linha de prosa da revisão, e o que faz o card ser SEU e não
-   de uma lista genérica. A borda separa o que aconteceu agora (veredito, as duas
-   respostas) de onde o card nasceu. */
-.wr-card__origin {
-    margin: 0.3rem 0 0;
-    padding-top: 0.8rem;
-    border-top: 1px solid var(--wr-border);
-    font-size: 0.85rem;
+.rv-verdict span {
+    font-size: 0.86rem;
+    line-height: 1.45;
     color: var(--wr-text-muted);
 }
 
-
-/* A pergunta do "quase". Sem cor própria de propósito: o âmbar já foi gasto no
-   veredito lá em cima, e repeti-lo aqui faria a tela ter dois avisos onde há um. */
-.wr-card__near {
-    margin: 1.1rem 0 0.5rem;
-    font-weight: 550;
+.rv-verdict s {
+    color: var(--wr-danger);
+    text-decoration-thickness: 1.5px;
 }
 
-.wr-card__actions {
+.rv-verdict em {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--wr-text);
+}
+
+.rv-actions {
     display: flex;
-    gap: 0.6rem;
-    margin-top: 1.25rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
-.wr-card__actions .btn { flex: 1; justify-content: center; }
+/* Na faixa colorida, o botão contornado precisa de fundo próprio pra não sumir. */
+.rv-actions .btn-outline-secondary {
+    background: var(--wr-surface);
+}
 
 /* O intervalo dentro do botão: presente, mas subordinado ao rótulo — quem decide
    é "difícil ou fácil", o prazo só informa a consequência. */
-.wr-card__when {
-    opacity: 0.7;
+.rv-when {
+    opacity: 0.75;
     font-weight: 450;
     font-size: 0.85em;
 }
 
-/* Explica os dois botões levarem à mesma data nas primeiras revisões. */
-.wr-card__equal {
-    margin: 0.7rem 0 0;
-    font-size: 0.82rem;
-    line-height: 1.5;
-    color: var(--wr-text-muted);
-    text-align: center;
-}
-
-/* Descartar: presente em todo card revelado, mas discreto — é válvula, não fluxo. */
-.wr-card__discard {
+/* De onde o card veio e o descarte: a linha mais discreta do card. */
+.rv-foot {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
+    justify-content: space-between;
     flex-wrap: wrap;
-    margin-top: 1rem;
+    gap: 0.5rem 1rem;
+    margin-top: -0.35rem;
     font-size: 0.82rem;
     color: var(--wr-text-muted);
+}
+
+.rv-foot strong {
+    color: var(--wr-text);
+    font-weight: 600;
+}
+
+/* Descartar: presente em todo card revelado, mas discreto — é válvula, não fluxo.
+   Encostado à direita mesmo quando a origem não aparece. */
+.rv-discard {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.rv-discard .wr-linkish {
+    font-size: 0.82rem;
+}
+
+/* ── Fim da sessão ──────────────────────────────────────── */
+
+.rv-done {
+    display: grid;
+    gap: 1.2rem;
+    padding: 1.6rem 1.5rem 1.5rem;
+    background-image: radial-gradient(90% 120% at 0% 0%, var(--wr-primary-soft), transparent 60%);
+}
+
+.rv-done__head {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.rv-done__mark {
+    flex: none;
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--wr-primary-soft);
+    color: var(--wr-primary);
+}
+
+.rv-done__head h2 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+}
+
+.rv-done__head p {
+    margin: 0.15rem 0 0;
+    color: var(--wr-text-muted);
+}
+
+.rv-done__head b {
+    color: var(--wr-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.rv-done__group {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.rv-done__group small {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--wr-text-muted);
+}
+
+.rv-done__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.rv-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.32rem 0.7rem;
+    border-radius: 999px;
+    background: var(--wr-danger-soft);
+    color: var(--wr-danger);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.rv-chip--more {
+    background: var(--wr-surface-2);
+    color: var(--wr-text-muted);
+}
+
+.rv-done__when {
+    padding-top: 1rem;
+    border-top: 1px solid var(--wr-border);
+}
+
+.rv-done__returns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.4rem;
+    font-size: 0.92rem;
+}
+
+.rv-done__returns b {
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640.98px) {
+    .rv-progress { padding: 0.9rem 1rem 0; }
+    .rv-body { padding: 1.1rem 1rem 1.2rem; }
+    .rv-sentence { font-size: 1.12rem; }
+    .rv-answer { flex-direction: column; }
+    .rv-done { padding: 1.3rem 1rem 1.2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rv-bar span { transition: none; }
 }

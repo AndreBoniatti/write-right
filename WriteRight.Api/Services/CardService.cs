@@ -289,6 +289,7 @@ public sealed class CardService
     {
         var cards = await _db.Cards.ToListAsync(ct);
         var summary = await SummarizeAsync(cards, ct);
+        var queued = Queue(cards, DateTimeOffset.UtcNow).Select(c => c.Id).ToHashSet();
 
         var rows = cards
             .OrderByDescending(c => c.CreatedAt)
@@ -297,7 +298,8 @@ public sealed class CardService
                 c.Id, c.Prompt, c.Answer, c.Alternatives, c.Hint, c.YourAttempt,
                 c.Category, c.State,
                 c.State == CardState.New ? null : c.DueAt,
-                c.IntervalDays, c.Reps, c.Lapses, CardScheduler.IsLeech(c.Lapses)))
+                c.IntervalDays, c.Reps, c.Lapses, CardScheduler.IsLeech(c.Lapses),
+                queued.Contains(c.Id)))
             .ToList();
 
         return new DeckView(summary, rows);

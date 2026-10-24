@@ -5,9 +5,23 @@
 
 <PageTitle>WriteRight — Meu deck</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mb-0">Meu deck</h1>
-    <a class="btn btn-primary" href="cards">Revisar</a>
+<div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
+    <div>
+        <h1 class="mb-0">Meu deck</h1>
+        @if (deck is { Summary.Total: > 0 })
+        {
+            <p class="dk-sub">@deck.Summary.Total @(deck.Summary.Total == 1 ? "card" : "cards"), todos dos seus erros</p>
+        }
+    </div>
+    @* "Pra revisar" mora no botão: é trabalho de agora, não um estado do card — e
+       se sobrepõe aos outros (card novo também está vencido). *@
+    <a class="btn btn-primary" href="cards">
+        Revisar
+        @if (deck is { Summary.Due: > 0 })
+        {
+            <span class="dk-due">@deck.Summary.Due</span>
+        }
+    </a>
 </div>
 
 @if (error is not null)
@@ -25,30 +39,36 @@ else if (deck is null)
 }
 else
 {
-    @* Os quatro do meio são uma PARTIÇÃO do deck, na ordem em que um card os
+    @* Os quatro estados são uma PARTIÇÃO do deck, na ordem em que um card os
        percorre: novo → aprendendo → em revisão → aprendido. Somados dão o total, e é
-       isso que responde "estou progredindo?". "Aprendendo" faltava, e era justamente
-       onde ficam os cards com progresso de verdade — a fileira pulava de "novos" pra
-       um estado que só chega no segundo acerto, então mostrava zero em tudo que
-       importava. "Pra revisar" fica de fora da soma de propósito: é trabalho de agora,
-       e se sobrepõe aos outros (card novo também está vencido). *@
-    <div class="wr-deck-stats">
-        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Due</span><span class="wr-stat__l">pra revisar</span></div>
-        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.New</span><span class="wr-stat__l">novos</span></div>
-        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Learning</span><span class="wr-stat__l">aprendendo</span></div>
-        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Review</span><span class="wr-stat__l">em revisão</span></div>
-        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Retired</span><span class="wr-stat__l">aprendidos</span></div>
-        <div class="wr-stat"><span class="wr-stat__n">@deck.Summary.Total</span><span class="wr-stat__l">no total</span></div>
+       isso que responde "estou progredindo?". Cada um é também o filtro da lista:
+       com 50 cards, "quais estão em revisão?" é pergunta de um clique. *@
+    <div class="dk-pipe" role="group" aria-label="Filtrar por estado">
+        @for (var i = 0; i < Pipeline.Length; i++)
+        {
+            var state = Pipeline[i];
+            var n = Count(state);
+            if (i > 0)
+            {
+                <span class="dk-chev" aria-hidden="true"><Icon Name="chevron-right" Size="16" /></span>
+            }
+            <button type="button" class="dk-step @(n == 0 ? "dk-step--zero" : "")"
+                    aria-pressed="@(filter == state ? "true" : "false")" @onclick="() => Toggle(state)">
+                <b>@n</b>
+                <span>@PipelineLabel(state)</span>
+            </button>
+        }
     </div>
+    <p class="dk-note">Cada acerto leva o card um passo pra direita; errar volta ele pra aprendendo. Clique num estado pra ver só ele.</p>
 
     @* Os cards nascem fora da correção, então falha ali não aparece em lugar nenhum
        — a não ser aqui. Sem este aviso, uma prática sem cards seria indistinguível
        de uma prática sem nada que virasse card. *@
     @if (deck.Summary.FailedPractices > 0)
     {
-        <div class="alert alert-warning mt-3 d-flex align-items-center gap-3 flex-wrap">
+        <div class="alert alert-warning d-flex align-items-center gap-3 flex-wrap">
             <span>
-                <strong>Os cards de @deck.Summary.FailedPractices prática(s) não puderam ser criados.</strong>
+                <strong>Os cards de @Ui.Plural(deck.Summary.FailedPractices, "prática", "práticas") não puderam ser criados.</strong>
                 Normalmente é a IA sobrecarregada.
             </span>
             <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="Retry" disabled="@busy">
@@ -60,24 +80,24 @@ else
        ainda estão na fila. Some sozinho — ver OnDueCardsChanged. *@
     @if (deck.Summary.PendingPractices > 0)
     {
-        <p class="text-muted small mt-3 mb-0 d-flex align-items-center gap-2" role="status">
+        <p class="text-muted small mb-3 d-flex align-items-center gap-2" role="status">
             <span class="wr-spinner" aria-hidden="true"></span>
-            Preparando os cards de @deck.Summary.PendingPractices prática(s) — eles aparecem aqui em alguns segundos.
+            Preparando os cards de @Ui.Plural(deck.Summary.PendingPractices, "prática", "práticas") — eles aparecem aqui em alguns segundos.
         </p>
     }
 
     @if (deck.Summary.Leeches > 0)
     {
-        <div class="alert alert-warning mt-3">
-            <strong>@deck.Summary.Leeches card(s) travado(s).</strong>
-            Você já esqueceu cada um deles @CardScheduler.LeechLapses vezes ou mais — revisar de
-            novo provavelmente não resolve. Vale descartar e reencontrar o item numa prática.
+        <div class="alert alert-warning">
+            <strong>@Ui.Plural(deck.Summary.Leeches, "card travado", "cards travados").</strong>
+            Você já esqueceu @(deck.Summary.Leeches == 1 ? "ele" : "cada um deles") @CardScheduler.LeechLapses vezes ou
+            mais — revisar de novo provavelmente não resolve. Vale descartar e reencontrar o item numa prática.
         </div>
     }
 
     @if (deck.Cards.Count == 0)
     {
-        <div class="alert alert-info mt-3">
+        <div class="alert alert-info">
             Nenhum card ainda. Eles nascem sozinhos dos seus erros quando você corrige
             uma prática — só os de vocabulário (palavra, colocação, falso cognato), e só
             quando a resposta é inequívoca. Erro de gramática não vira card.
@@ -85,76 +105,129 @@ else
     }
     else
     {
-        <div class="list-group mt-3">
-            @foreach (var c in deck.Cards)
+        var found = Filtered();
+        var discarded = Count(CardState.Discarded);
+
+        <div class="dk-tools">
+            <input class="form-control" type="search" placeholder="Buscar palavra, em inglês ou português"
+                   aria-label="Buscar card" autocomplete="off"
+                   @bind="query" @bind:event="oninput" @bind:after="ResetPage" />
+            <span class="dk-count">@CountText(found.Count)</span>
+            @* Descartado não é estado da esteira: saiu dela. Fica fora da lista e do
+               total, a um clique pra quem quiser conferir o que tirou. *@
+            @if (discarded > 0)
             {
-                <div class="list-group-item @(c.State == CardState.Discarded ? "wr-deck-card--out" : "")">
-                    <div class="d-flex justify-content-between align-items-start gap-3">
-                        <div class="flex-grow-1">
-                            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-                                <span class="@StateClass(c.State)">@StateLabel(c.State)</span>
-                                <span class="wr-badge wr-badge--muted">@ErrorCatalog.Info(c.Category).LabelPt</span>
-                                @if (c.IsLeech && c.State != CardState.Discarded)
-                                {
-                                    <span class="wr-badge wr-badge--danger">travado</span>
-                                }
-                            </div>
+                <button type="button" class="wr-linkish" @onclick="() => Toggle(CardState.Discarded)">
+                    @(filter == CardState.Discarded ? "Voltar pros ativos" : discarded == 1 ? "1 descartado" : $"{discarded} descartados")
+                </button>
+            }
+        </div>
 
-                            <div class="wr-deck-card__prompt">@c.Prompt</div>
-                            <div class="wr-deck-card__answer">
-                                @c.Answer
-                                @if (c.Alternatives.Count > 0)
-                                {
-                                    <span class="wr-deck-card__also">· também vale: @string.Join(", ", c.Alternatives)</span>
-                                }
-                            </div>
+        <div class="dk-list">
+            @if (found.Count == 0)
+            {
+                <div class="dk-empty">
+                    @(!string.IsNullOrWhiteSpace(query) ? $"Nenhum card com “{query.Trim()}”."
+                      : filter is null ? "Nenhum card ativo."
+                      : "Nenhum card neste estado.")
+                </div>
+            }
+            @foreach (var c in found.Take(shown))
+            {
+                <div class="dk-row @(c.State == CardState.Discarded ? "dk-row--out" : "")">
+                    <span class="dk-when @(c.InTodaysQueue ? "dk-when--today" : "")"
+                          title="@(WaitsForSibling(c) ? "Espera o outro card da mesma frase: cada frase entrega um card por dia." : null)">@When(c)</span>
 
-                            <div class="wr-deck-card__hint">@c.Hint</div>
-
-                            <div class="text-muted small mt-2">
-                                @if (c.DueAt is { } due)
-                                {
-                                    <span>Volta em @due.ToLocalTime().ToString("dd/MM/yyyy") · </span>
-                                }
-                                <span>@c.Reps revisão(ões)</span>
-                                @if (c.Lapses > 0)
-                                {
-                                    <span> · @c.Lapses esquecimento(s)</span>
-                                }
-                            </div>
+                    @* A frase com a resposta no lugar da lacuna: aqui é leitura, não
+                       teste, e a palavra só faz sentido dentro da frase. *@
+                    <div class="dk-body">
+                        <div class="dk-sentence">
+                            @if (Cloze.Split(c.Prompt) is { } partes)
+                            {
+                                @(Lead(partes.Before))<mark>@c.Answer</mark>@(Tail(partes.After))
+                            }
+                            else
+                            {
+                                @c.Prompt
+                            }
                         </div>
-
-                        @if (c.State != CardState.Discarded)
-                        {
-                            <div class="text-nowrap">
-                                @if (discardingId == c.Id)
-                                {
-                                    <span class="small text-muted me-1">Descartar?</span>
-                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDiscard(c.Id)" disabled="@busy">Sim</button>
-                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => discardingId = null" disabled="@busy">Não</button>
-                                }
-                                else
-                                {
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => discardingId = c.Id"
-                                            title="Card ruim (trecho sem resposta única, erro de digitação)">
-                                        <Icon Name="trash" Size="14" />
-                                    </button>
-                                }
-                            </div>
-                        }
+                        <div class="dk-meta">
+                            @if (filter is null)
+                            {
+                                <span>@StateLabel(c.State) · </span>
+                            }
+                            @c.Hint · você escreveu <s>@c.YourAttempt</s>
+                            @if (c.Alternatives.Count > 0)
+                            {
+                                <span> · também vale @string.Join(", ", c.Alternatives)</span>
+                            }
+                            @if (c.IsLeech && c.State != CardState.Discarded)
+                            {
+                                <span class="dk-leech"> · travado</span>
+                            }
+                        </div>
                     </div>
+
+                    @if (c.State != CardState.Discarded)
+                    {
+                        <div class="dk-actions">
+                            @if (discardingId == c.Id)
+                            {
+                                <span class="small text-muted">Descartar?</span>
+                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDiscard(c.Id)" disabled="@busy">Sim</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => discardingId = null" disabled="@busy">Não</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="dk-del" @onclick="() => discardingId = c.Id"
+                                        title="Descartar card (trecho sem resposta única, erro de digitação)" aria-label="Descartar card">
+                                    <Icon Name="trash" Size="16" />
+                                </button>
+                            }
+                        </div>
+                    }
                 </div>
             }
         </div>
+
+        @if (found.Count > shown)
+        {
+            var rest = found.Count - shown;
+            <div class="dk-more">
+                <button class="btn btn-outline-secondary" @onclick="() => shown += PageSize">
+                    Mostrar mais @Math.Min(rest, PageSize) <span class="dk-rest">faltam @rest</span>
+                </button>
+            </div>
+        }
     }
 }
 
 @code {
+    /// <summary>Linhas por vez. O deck só cresce, e a lista inteira de uma vez virava
+    /// uma parede a partir de umas dezenas de cards.</summary>
+    private const int PageSize = 20;
+
+    /// <summary>
+    /// Quanto da frase a linha mostra de cada lado da resposta. Cortar só no fim da
+    /// linha escondia a resposta das frases longas, principalmente no celular; com o
+    /// recorte em volta dela, a resposta aparece em qualquer largura.
+    /// </summary>
+    private const int ContextChars = 50;
+
+    /// <summary>A esteira, na ordem em que um card a percorre.</summary>
+    private static readonly CardState[] Pipeline =
+        [CardState.New, CardState.Learning, CardState.Review, CardState.Retired];
+
     private DeckView? deck;
     private bool loading = true;
     private bool busy;
     private int? discardingId;
     private string? error;
+
+    /// <summary>Estado escolhido na esteira (ou os descartados). Null = todos os ativos.</summary>
+    private CardState? filter;
+    private string query = "";
+    private int shown = PageSize;
 
     protected override Task OnInitializedAsync()
     {
@@ -213,15 +286,106 @@ else
         StateHasChanged();
     });
 
+    private int Count(CardState state) => state switch
+    {
+        CardState.New => deck!.Summary.New,
+        CardState.Learning => deck!.Summary.Learning,
+        CardState.Review => deck!.Summary.Review,
+        CardState.Retired => deck!.Summary.Retired,
+        _ => deck!.Cards.Count(c => c.State == state),
+    };
+
+    private void Toggle(CardState state)
+    {
+        filter = filter == state ? null : state;
+        ResetPage();
+    }
+
+    private void ResetPage() => shown = PageSize;
+
+    /// <summary>
+    /// Os cards do filtro e da busca, na ordem em que voltam: os da sessão de hoje
+    /// primeiro, depois por data, e os que não voltam (aprendidos, descartados) por
+    /// último. A busca ignora acento e maiúscula e olha a frase, a resposta, a dica e o
+    /// que você escreveu — "tecnico" acha "técnico", "faucet" acha a frase.
+    /// </summary>
+    private List<DeckCard> Filtered()
+    {
+        var q = AnswerMatch.Normalize(query);
+        return deck!.Cards
+            .Where(c => filter is { } f ? c.State == f : c.State != CardState.Discarded)
+            .Where(c => q.Length == 0
+                || new[] { c.Prompt, c.Answer, c.Hint, c.YourAttempt }.Concat(c.Alternatives)
+                    .Any(t => AnswerMatch.Normalize(t).Contains(q, StringComparison.Ordinal)))
+            .OrderBy(c => c.State is CardState.Retired or CardState.Discarded)
+            .ThenByDescending(c => c.InTodaysQueue)
+            .ThenBy(c => c.DueAt ?? DateTimeOffset.MinValue) // card novo não tem data: nasce vencido
+            .ThenByDescending(c => c.Id)
+            .ToList();
+    }
+
+    private string CountText(int found)
+    {
+        var total = filter is { } f ? Count(f) : deck!.Summary.Total;
+        if (!string.IsNullOrWhiteSpace(query)) return $"{found} de {total}";
+        return total == 1 ? "1 card" : $"{total} cards";
+    }
+
+    /// <summary>
+    /// Vencido mas fora da fila de hoje: o irmão de uma frase que já entregou um card
+    /// hoje. Chamá-lo de "hoje" faria a lista prometer mais do que a sessão entrega.
+    /// </summary>
+    private static bool WaitsForSibling(DeckCard c) =>
+        !c.InTodaysQueue
+        && c.State is not (CardState.Retired or CardState.Discarded)
+        && (c.DueAt is not { } due || due <= DateTimeOffset.Now); // novo: sem data, nasce vencido
+
+    private static string When(DeckCard c)
+    {
+        if (c.State is CardState.Retired or CardState.Discarded) return "—";
+        if (c.InTodaysQueue) return "hoje";
+        if (WaitsForSibling(c)) return "em breve";
+
+        var local = c.DueAt!.Value.ToLocalTime();
+        // Vence mais tarde hoje: ainda não está na fila, então a hora, e não "hoje".
+        if (local.Date == DateTime.Today) return local.ToString("HH:mm");
+        return local.Date == DateTime.Today.AddDays(1) ? "amanhã" : Ui.ShortDate(c.DueAt.Value);
+    }
+
+    /// <summary>O fim do trecho antes da resposta, cortado numa palavra inteira.</summary>
+    private static string Lead(string before)
+    {
+        if (before.Length <= ContextChars) return before;
+        var cut = before[^ContextChars..];
+        var space = cut.IndexOf(' ');
+        return "…" + (space >= 0 ? cut[(space + 1)..] : cut);
+    }
+
+    /// <summary>O começo do trecho depois da resposta, cortado numa palavra inteira.</summary>
+    private static string Tail(string after)
+    {
+        if (after.Length <= ContextChars) return after;
+        var cut = after[..ContextChars];
+        var space = cut.LastIndexOf(' ');
+        return (space > 0 ? cut[..space] : cut) + "…";
+    }
+
     private async Task ConfirmDiscard(int id)
     {
         busy = true;
         error = null;
         try
         {
-            await Api.DiscardCardAsync(id);
+            if (!await Api.DiscardCardAsync(id))
+            {
+                error = "Não foi possível descartar o card.";
+                return;
+            }
+
             discardingId = null;
-            await Load();
+            // Relê por baixo, sem o "Carregando…" do Load: numa lista longa, trocar a
+            // página inteira jogava a rolagem pro topo a cada descarte.
+            await Fetch();
         }
         catch (Exception ex)
         {
@@ -256,22 +420,22 @@ else
         }
     }
 
-    private static string StateLabel(CardState s) => s switch
+    private static string PipelineLabel(CardState s) => s switch
     {
-        CardState.New => "Novo",
-        CardState.Learning => "Aprendendo",
-        CardState.Review => "Em revisão",
-        CardState.Retired => "Aprendido",
-        CardState.Discarded => "Descartado",
+        CardState.New => "novos",
+        CardState.Learning => "aprendendo",
+        CardState.Review => "em revisão",
+        CardState.Retired => "aprendidos",
         _ => s.ToString(),
     };
 
-    private static string StateClass(CardState s) => s switch
+    /// <summary>O estado de um card só, na linha da lista sem filtro.</summary>
+    private static string StateLabel(CardState s) => s switch
     {
-        CardState.New => "wr-badge wr-badge--info",
-        CardState.Learning => "wr-badge wr-badge--warning",
-        CardState.Review => "wr-badge wr-badge--info",
-        CardState.Retired => "wr-badge wr-badge--success",
-        _ => "wr-badge wr-badge--muted",
+        CardState.New => "novo",
+        CardState.Learning => "aprendendo",
+        CardState.Review => "em revisão",
+        CardState.Retired => "aprendido",
+        _ => s.ToString(),
     };
 }

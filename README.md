@@ -22,9 +22,9 @@ It's a personal tool first (I use it to study English) and a portfolio piece sec
 
 ![Weakness profile: totals and the category with the most weight, a chart of errors per 10 words for each practice with a rolling average, and the categories ranked by severity weight with bars split by severity](docs/screenshots/perfil.png)
 
-**Vocabulary review.** A card minted from a real mistake: the corrected sentence with the answer blanked out, the source-language phrase as the hint, and — on a miss — what you actually wrote.
+**Vocabulary review.** A card minted from a real mistake: the corrected sentence with the answer blanked out and the source-language phrase as the hint. On a miss, the answer fills the blank and what you actually wrote comes back struck through — here, the very mistake that created the card.
 
-![Vocabulary review: a cloze sentence with the source-language hint, the revealed answer, and your own wrong answer below it](docs/screenshots/deck.png)
+![Vocabulary review: the revealed answer filling the blank in the sentence, and a verdict band with your wrong answer struck through, flagged as the same mistake that created the card](docs/screenshots/deck.png)
 
 ## The idea: an error memory
 
