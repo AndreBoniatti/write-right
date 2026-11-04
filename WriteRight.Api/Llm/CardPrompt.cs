@@ -12,7 +12,7 @@ namespace WriteRight.Api.Llm;
 /// preposição ("wait for"). Aqui o modelo responde a pergunta certa, sobre o erro em
 /// si, e pode responder "não vira card".
 ///
-/// <b>Este texto foi medido; mexa medindo.</b>
+/// <b>Este texto foi medido; mexa medindo</b> (a medição está em <c>docs/decisions/adr-005-*</c>).
 /// <list type="bullet">
 /// <item>Sem <c>alsoCorrect</c>, o modelo recusa todo item com sinônimo
 /// ("advogado" → lawyer/attorney) e perde boa parte dos cards bons.</item>

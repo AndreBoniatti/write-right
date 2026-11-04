@@ -29,14 +29,14 @@ public sealed class AnthropicLlmProvider : ILlmProvider
     ///
     /// <b>Medium</b> porque, nas correções reais, custou bem menos que <c>High</c> e
     /// respondeu na metade do tempo com a mesma cobertura de erros. NÃO vai na geração:
-    /// o Haiku 4.5 não suporta o parâmetro.
+    /// o Haiku 4.5 não suporta o parâmetro. Medição: <c>docs/decisions/adr-003-*</c>.
     /// </summary>
     private static readonly Effort ReasoningEffort = Effort.Medium;
 
     /// <summary>
     /// Effort do desenho de cards: <b>High</b>. Aqui a pergunta central é "existe outra
     /// resposta igualmente certa?", um julgamento contra si mesmo, que é onde deliberar
-    /// rende.
+    /// rende. Medição: <c>docs/decisions/adr-003-*</c>.
     /// </summary>
     private static readonly Effort CardEffort = Effort.High;
 
